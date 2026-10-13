@@ -365,7 +365,9 @@ async function inElectron() {
   try {
     await invoke('project:scan', project);
     const server = await invoke('dev:start', project);
-    const canvas = await openCanvas(BrowserWindow, `${server.url}/`);
+    // The canvas hash enables Stacki's DOM patcher; without it Vite correctly
+    // reloads a normal browser page and the instrumentation disappears.
+    const canvas = await openCanvas(BrowserWindow, `${server.url}/#avb-design`);
     const rows = await runEdits(invoke, canvas, project);
     if (!report(version, rows)) {
       process.exitCode = 1;
