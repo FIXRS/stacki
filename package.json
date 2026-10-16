@@ -1,8 +1,9 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "description": "Stacki — a visual builder for Astro projects, with live preview and publishing.",
+  "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
   "imports": {
     "#dist/*": "./dist/*"
@@ -34,6 +35,7 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
     "dist:mac:unsigned": "npm run build && node dist/scripts/release/distMacUnsigned.js",
     "test": "npm run build:scripts && node dist/scripts/gate/runTests.js",
     "performance:report": "npm run build:runtime && node dist/scripts/reports/performanceReport.js",
@@ -176,6 +178,31 @@
           ]
         }
       ]
+    },
+    "linux": {
+      "category": "Development",
+      "icon": "resources/icon.png",
+      "executableName": "stacki",
+      "executableArgs": [
+        "--enable-sandbox"
+      ],
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "deb": {
+      "afterInstall": "dist/resources/linuxAfterInstall.tpl"
     },
     "nsis": {
       "oneClick": false,

@@ -3,6 +3,7 @@
 import fileSystemPromises = require('node:fs/promises');
 import path = require('node:path');
 import { repositoryRoot } from '../lib/repoRoot';
+import { writeLinuxInstaller } from '../release/linuxInstaller';
 
 const root = repositoryRoot();
 // An explicit inventory bounds the copy and excludes signing material.
@@ -23,6 +24,7 @@ async function main(): Promise<void> {
     await fileSystemPromises.mkdir(path.dirname(target), { recursive: true });
     await fileSystemPromises.copyFile(path.resolve(root, file), target);
   }
+  writeLinuxInstaller(root);
 }
 
 void main().catch((error: unknown) => {

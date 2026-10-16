@@ -6,6 +6,7 @@ import path = require('node:path');
 import type { AfterPackContext } from 'app-builder-lib';
 import { Arch } from 'builder-util';
 import { fixNodePtyPermissions } from '../install/fixNodePtyPermissions';
+import { verifyLinuxNativeBinding } from './linuxNativeBinding';
 
 function windowsArchitecture(architecture: Arch): 'arm64' | 'x64' {
   if (architecture === Arch.arm64) {
@@ -24,6 +25,15 @@ export default function afterPack(context: AfterPackContext): void {
       ? path.join(context.appOutDir, `${appName}.app`, 'Contents', 'Resources', 'app.asar.unpacked')
       : path.join(context.appOutDir, 'resources', 'app.asar.unpacked');
   const nodePtyDirectory = path.join(unpacked, 'node_modules', 'node-pty');
+
+  if (context.electronPlatformName === 'linux') {
+    if (context.arch !== Arch.x64) {
+      throw new Error('The Linux release currently supports x64.');
+    }
+    verifyLinuxNativeBinding(nodePtyDirectory);
+    console.log('  • afterPack: verified the Linux x64 node-pty native binding');
+    return;
+  }
 
   if (context.electronPlatformName === 'win32') {
     const architecture = windowsArchitecture(context.arch);

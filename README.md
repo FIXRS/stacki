@@ -2,7 +2,7 @@
 
 Visual Builder for Astro.
 
-A Mac & Windows desktop app for editing [Astro](https://astro.build) projects visually.
+A Mac, Windows, and Linux desktop app for editing [Astro](https://astro.build) projects visually.
 
 MIT licensed — fork it, build on it, ship your own version.
 
@@ -41,6 +41,7 @@ needs no Apple Developer account and no certificates:
 ```bash
 npm run dist:mac:unsigned   # .dmg + .zip, no signing (build on macOS)
 npm run dist:win            # NSIS installer (build on Windows)
+npm run dist:linux          # x64 .AppImage + .deb (build on Linux)
 ```
 
 Output lands in `release/`. macOS will warn the first time you open an
@@ -56,10 +57,48 @@ npm run dist:mac   # requires a Developer ID cert + notarization credentials
 
 Official builds are published by CI, not from anyone's laptop. Pushing a
 `v*` tag runs `.github/workflows/release.yml`, which builds a signed and
-notarized macOS universal build plus a Windows installer, uploads them to
-the `stacki-releases` repo, and only makes the release visible once both
-platforms have landed. Shipped apps auto-update from that feed via
+notarized macOS universal build, a Windows installer, and Linux x64 AppImage
+and Debian packages. It uploads them to the `stacki-releases` repo and only
+makes the release visible once every platform has landed and the Linux
+packages pass installed-app smoke tests. Shipped apps auto-update from that feed via
 `electron-updater`.
+
+## Linux installation
+
+Download the `.deb` or `.AppImage` from the
+[latest release](https://github.com/flowtricks/stacki-releases/releases/latest).
+Official Linux builds support x86-64 desktops. The native terminal is built on
+Ubuntu 22.04; installed packages are tested on Ubuntu 22.04 and 24.04.
+
+On Ubuntu or Debian, install the `.deb` with your package manager:
+
+```bash
+sudo apt install ./stacki_VERSION_amd64.deb
+```
+
+Replace `VERSION` with the downloaded version. Open Stacki from the application
+menu or run `stacki`. The installer configures Chromium's sandbox helper, including
+on Ubuntu 24.04. Updates use the same in-app update menu and may request your
+administrator password to replace the installed package.
+
+For other compatible glibc-based distributions, make the AppImage executable
+and launch it:
+
+```bash
+chmod +x Stacki-VERSION.AppImage
+./Stacki-VERSION.AppImage
+```
+
+Keep it in a writable folder so automatic updates can replace it. AppImages
+need FUSE 2 and permission to create unprivileged user namespaces. On systems
+that restrict those namespaces, use the Debian package where supported.
+Chromium's sandbox remains enabled in both formats. Linux desktops need X11
+or XWayland; native Wayland and ARM64 packages are not currently tested.
+
+Building from source on Linux additionally needs Python 3, make, and a C++
+compiler for `node-pty` (`sudo apt install build-essential python3` on Ubuntu).
+Use Node.js 22.18 or newer to build Stacki. Build installers on Linux itself so
+the terminal contains a Linux native module, rather than a Mac or Windows binary.
 
 The install script backports the temporary-keychain password fix from
 [electron-builder #10172](https://github.com/electron-userland/electron-builder/pull/10172)
