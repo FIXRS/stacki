@@ -129,6 +129,8 @@ jobs:
           test ! -e squashfs-root/resources/package-type
           test -f squashfs-root/resources/app-update.yml
           if grep -q -- --no-sandbox squashfs-root/*.desktop; then exit 1; fi
+          # Extraction bypasses the FUSE runtime that normally sets APPDIR.
+          export APPDIR="$(realpath squashfs-root)"
           xvfb-run --auto-servernum node ../dist/scripts/release/linuxSmoke.js \
             squashfs-root/AppRun
       - uses: actions/upload-artifact@v4
