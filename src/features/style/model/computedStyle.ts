@@ -9,29 +9,48 @@
 //
 // So the page is asked, the same way colours are (see computedColor.ts): the canvas
 // runs getComputedStyle on the selected element and hands back the values. Controls
-// use it to HIGHLIGHT an option — never to claim the property is set, which stays the
-// resolved model's call (the label is dim either way).
+// use it to highlight options and show inherited source metadata. It never claims
+// that the selected selector owns the property; editing still uses the resolved model.
 
 import { useEffect, useRef, useState } from 'react';
 import { hasCanvas, onCanvasReady, queryCanvas } from '../../../editor/canvasQuery';
 import { findNode, getHost, onHostChange } from './host';
 import { createQueryCache } from './queryCache';
+import { textStyleContext } from './styleQuery';
 
-const cache = createQueryCache(async (path, props) => {
+const AUTHORED_PREFIX = 'authored:';
+const SOURCE_LABEL_PREFIX = 'source-label:';
+const SOURCE_PATH_PREFIX = 'source-path:';
+const PREFIXES = [AUTHORED_PREFIX, SOURCE_LABEL_PREFIX, SOURCE_PATH_PREFIX];
+const cache = createQueryCache(async (path, keys) => {
   const expected = selectedTag();
-  const answer = await queryCanvas(path, [], [], props);
+  const propertyOf = (key: string) => {
+    const prefix = PREFIXES.find((prefix) => key.startsWith(prefix));
+    return prefix ? key.slice(prefix.length) : key;
+  };
+  const props = [...new Set(keys.map(propertyOf))];
+  const answer = await queryCanvas(path, [], [], props, textStyleContext(path));
   const tag = answer?.identity?.tag;
   if (tag && expected && tag !== expected) {
     return undefined;
   }
-  return answer?.computedProps
-    ? Object.fromEntries(
-        Object.entries(answer.computedProps).map(([key, value]) => [
-          key,
-          typeof value === 'string' ? value.trim() : undefined,
-        ]),
-      )
-    : undefined;
+  return Object.fromEntries(
+    keys.map((key) => {
+      const property = propertyOf(key);
+      const source = answer?.inheritedSources?.[property];
+      if (key.startsWith(SOURCE_LABEL_PREFIX)) {
+        return [key, source?.label];
+      }
+      if (key.startsWith(SOURCE_PATH_PREFIX)) {
+        return [key, source?.path];
+      }
+      const computed = answer?.computedProps[property];
+      const value = key.startsWith(AUTHORED_PREFIX)
+        ? answer?.authoredProps[property] || computed
+        : computed;
+      return [key, value?.trim()];
+    }),
+  );
 });
 
 function currentCache() {
@@ -145,6 +164,20 @@ function useComputedAnswer(prop: string): Answer {
  */
 export function useComputedValue(prop: string): string {
   return useComputedAnswer(prop).value;
+}
+
+/** Preserve the winning declaration's units and variables in empty text fields.
+ * Computed values remain the fallback for browser defaults and inaccessible CSS. */
+export function useStyleHint(prop: string): string {
+  return useComputedAnswer(prop ? `${AUTHORED_PREFIX}${prop}` : '').value;
+}
+
+/** Source metadata shares the value cache, so selection and history changes
+ * invalidate hints and provenance together, including late replies. */
+export function useInheritedSource(prop: string) {
+  const label = useComputedAnswer(prop ? `${SOURCE_LABEL_PREFIX}${prop}` : '').value;
+  const path = useComputedAnswer(prop ? `${SOURCE_PATH_PREFIX}${prop}` : '').value;
+  return label ? { label, ...(path ? { path } : {}) } : undefined;
 }
 
 /**

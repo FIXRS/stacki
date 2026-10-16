@@ -9,6 +9,7 @@ import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
+import { useComputedValue } from './model/computedStyle';
 import { panelBounds } from './model/panelBox';
 import ProvenanceList from './ProvenanceList';
 import type { Contributor, ResolvedProp } from './model/resolved';
@@ -87,6 +88,7 @@ export function PropLabel({
     <FieldLabel
       className={`embed-editor_size-label ${display.overridden ? 'is-overridden' : ''}`}
       active={display.isSelected}
+      {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear}
       resetLabel="Clear"
@@ -171,9 +173,10 @@ export function TextField(props: TextFieldProps) {
   const display = displayOf(read(prop));
   const external = display.present ? joinImportant(display) : '';
   const [shown, noteLive] = useLiveColor(external);
+  const computed = useComputedValue(swatchLabel && !shown ? prop : '');
   const ownSwatch = swatchLabel ? (
     <ColorSwatch
-      value={shown}
+      value={shown || computed}
       busy={busy}
       ariaLabel={swatchLabel}
       onChange={(color, live) => {

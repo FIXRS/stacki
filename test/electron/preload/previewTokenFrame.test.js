@@ -50,6 +50,8 @@ async function frame(html) {
     navigator: window.navigator,
     MutationObserver: window.MutationObserver,
     Element: window.Element,
+    HTMLStyleElement: window.HTMLStyleElement,
+    getComputedStyle: window.getComputedStyle.bind(window),
     Node: window.Node,
     MouseEvent: window.MouseEvent,
     requestAnimationFrame: window.requestAnimationFrame.bind(window),
@@ -93,6 +95,103 @@ function expectedToken(stamps) {
   assert.ok(manifest.ok);
   return createHash('sha256').update(canonicalManifest(manifest.value)).digest('hex');
 }
+
+test('text style queries read their rendered parent without borrowing its selectors', async () => {
+  const { window, sent } = await frame(
+    '<!doctype html><html><body><h2 class="heading" ' +
+      'style="color:rgb(12, 34, 56);font-size:48px;text-align:center;letter-spacing:2px">' +
+      '<!--avb-s:0.0-->Heading text<!--avb-e:0.0-->' +
+      '<strong style="color:rgb(80, 90, 100);font-size:24px">' +
+      '<!--avb-s:0.1.0-->Strong text<!--avb-e:0.1.0--></strong>' +
+      '<!--avb-s:0.2-->   <!--avb-e:0.2--></h2></body></html>',
+  );
+  const query = (path) => {
+    const event = new window.MessageEvent('message', {
+      data: {
+        type: 'avb:query',
+        id: 1,
+        path,
+        selectors: ['.heading', 'h2'],
+        props: ['color', 'font-size', 'text-align', 'letter-spacing'],
+        compute: ['currentColor'],
+      },
+    });
+    Object.defineProperty(event, 'source', { value: window.parent });
+    window.dispatchEvent(event);
+    return sent.filter((message) => message.type === 'avb:query-result').at(-1);
+  };
+  const heading = query('0.0');
+  assert.equal(heading.found, true);
+  assert.deepEqual(heading.computedProps, {
+    color: 'rgb(12, 34, 56)',
+    'font-size': '48px',
+    'text-align': 'center',
+    'letter-spacing': '2px',
+  });
+  assert.equal(heading.computed.currentColor, 'rgb(12, 34, 56)');
+  assert.equal(heading.identity, undefined, 'the parent is not the selected text’s identity');
+  assert.deepEqual(heading.matched, { '.heading': false, h2: false });
+  const strong = query('0.1.0');
+  assert.equal(strong.computedProps.color, 'rgb(80, 90, 100)');
+  assert.equal(strong.computedProps['font-size'], '24px', 'the nearest rendered parent wins');
+  assert.equal(query('0.2').found, false, 'whitespace alone is not a style target');
+  assert.equal(query('missing').found, false, 'unknown paths cannot borrow root styles');
+  window.document.documentElement.style.color = 'rgb(1, 2, 3)';
+  const root = query('');
+  assert.equal(root.computed.currentColor, 'rgb(1, 2, 3)', 'page color queries use the root');
+  assert.equal(root.found, false, 'the root is not a selected style target');
+  assert.deepEqual(root.computedProps, {}, 'node properties require a selected style target');
+  window.close();
+});
+
+// Inline serialization tags the strong element but deliberately adds no text
+// markers or wrappers. Slot helpers may also strip every comment from this HTML.
+test('unmarked text reads parent styles without changing its edit target', async () => {
+  const { window, sent } = await frame(
+    '<!doctype html><html><body><h1 data-avb-p="src/Heading.astro|0" ' +
+      'class="heading" style="font-size:48px;font-family:Georgia;color:rgb(12,34,56)">' +
+      'Plain text<strong data-avb-p="src/Heading.astro|0.1">Strong text</strong>' +
+      '</h1></body></html>',
+  );
+  const query = (path, textParentPath) => {
+    const event = new window.MessageEvent('message', {
+      data: {
+        type: 'avb:query',
+        id: 1,
+        path,
+        textParentPath,
+        props: ['font-size', 'font-family', 'color'],
+        compute: ['currentColor'],
+        selectors: ['.heading', 'h1'],
+      },
+    });
+    Object.defineProperty(event, 'source', { value: window.parent });
+    window.dispatchEvent(event);
+    return sent.filter((message) => message.type === 'avb:query-result').at(-1);
+  };
+  const path = 'src/Heading.astro|0.0';
+  const parent = 'src/Heading.astro|0';
+  assert.equal(query(path).found, false, 'ordinary missing-element queries cannot use a parent');
+  const text = query(path, parent);
+  assert.equal(text.found, true);
+  assert.equal(text.computedProps['font-size'], '48px');
+  assert.equal(text.computedProps['font-family'], 'Georgia');
+  assert.equal(text.computed.currentColor, 'rgb(12, 34, 56)');
+  assert.equal(text.identity, undefined, 'text never becomes the parent element');
+  assert.deepEqual(text.matched, { '.heading': false, h1: false });
+  const sibling = query('src/Heading.astro|0.1');
+  assert.equal(sibling.found, true);
+  assert.equal(sibling.identity.tag, 'strong');
+  for (const invalid of [123, [], {}, 'other|0', 'src/Heading.astro|0.1', 'x'.repeat(9000)]) {
+    assert.equal(query(path, invalid).found, false, 'invalid parent contexts are rejected');
+  }
+  assert.equal(
+    query('src/Heading.astro|0.0.1', parent).found,
+    false,
+    'only the immediate parent may supply text styles',
+  );
+  window.close();
+});
 
 test('the frame announces the token shared computes; events carry it', async () => {
   const { window, sent } = await frame(

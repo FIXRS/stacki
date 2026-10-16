@@ -99,6 +99,7 @@ export function PopLabel({
     <FieldLabel
       className={`embed-editor_size-label ${display.overridden ? 'is-overridden' : ''}`}
       active={active ?? display.isSelected}
+      {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear ?? (() => clearProp(prop))}
       resetLabel="Clear"

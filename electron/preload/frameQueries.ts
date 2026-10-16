@@ -2,8 +2,10 @@
 // it tracks, scrolling a node into view and the viewport height to freeze; and
 // starting the frame once the document is ready.
 
-import { isElement } from './frameBasics';
+import { isElement, isText } from './frameBasics';
+import { queryAuthoredStyles } from './frameStyleSources';
 import { list, pathText, text } from '../../shared/core/boundary';
+import { LIMITS } from '../../shared/core/limits';
 import { freezeViewportHeight, report } from './frameViewport';
 import {
   PATH_ATTR,
@@ -183,7 +185,9 @@ function applyClassPatch(data: Record<string, unknown>): void {
 }
 
 const answerQuery = (data: Record<string, unknown>, id: number) => {
-  const els = typeof data['path'] === 'string' ? elementsForPath(data['path']) : [];
+  const path = typeof data['path'] === 'string' ? data['path'] : '';
+  const els = path ? elementsForPath(path) : [];
+  const styleHost = els[0] ?? answerQueryTextHost(path, data['textParentPath']);
   const wanted = (Array.isArray(data['compute']) ? data['compute'] : []).filter(
     (value): value is string => typeof value === 'string',
   );
@@ -193,10 +197,10 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
   // leans on are declared on :root, which is this element. Only `compute`
   // takes this: the reads below are ABOUT a node, and answering them from
   // the root would be answering a different question.
-  const host = els[0] || document.documentElement;
+  const host = styleHost ?? document.documentElement;
   const computed = wanted.length && host ? computeValues(host, wanted) : {};
   const props = Array.isArray(data['props']) ? data['props'] : [];
-  const computedProps = props.length && els[0] ? computeProperties(els[0], props) : {};
+  const computedProps = props.length && styleHost ? computeProperties(styleHost, props) : {};
   const selectors = (Array.isArray(data['selectors']) ? data['selectors'] : []).filter(
     (value): value is string => typeof value === 'string',
   );
@@ -215,15 +219,71 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
       type: 'avb:query-result',
       id,
       ready: mapped,
-      found: els.length > 0,
+      found: styleHost !== undefined,
       computed,
       computedProps,
+      ...(styleHost
+        ? queryAuthoredStyles(
+            styleHost,
+            props.filter((prop): prop is string => typeof prop === 'string'),
+            els[0] ? 'element' : 'text',
+          )
+        : {}),
       identity: els[0] ? identityOf(els[0]) : undefined,
       matched,
     },
     '*',
   );
 };
+
+// A text run inherits its rendered parent's style, including styles inside a
+// component that the source tree cannot see. This host is only for computed
+// reads: attributing its selectors or classes to the text would target edits
+// at the parent instead of the selected node.
+function answerQueryTextHost(path: string, parent: unknown): Element | undefined {
+  const runs = runsOf(path) ?? [];
+  if (runs.length > LIMITS.treeNodesMax) {
+    return undefined;
+  }
+  let visited = 0;
+  for (const run of runs) {
+    for (const node of run) {
+      visited += 1;
+      if (visited > LIMITS.treeNodesMax) {
+        return undefined;
+      }
+      if (isText(node)) {
+        if (node.isConnected) {
+          if (node.data.trim().length > 0) {
+            return node.parentElement ?? undefined;
+          }
+        }
+      }
+    }
+  }
+  return runs.length === 0 ? answerQueryTextParent(path, parent) : undefined;
+}
+
+// The renderer must opt in for a known text node. Merely failing to locate an
+// element must never substitute some ancestor's styles or editing identity.
+function answerQueryTextParent(path: string, input: unknown): Element | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  let parent: string;
+  try {
+    parent = pathText(input);
+  } catch {
+    return undefined;
+  }
+  if (!path.startsWith(`${parent}.`)) {
+    return undefined;
+  }
+  if (!/^\d+$/.test(path.slice(parent.length + 1))) {
+    return undefined;
+  }
+  return elementsWithPath(parent)[0];
+}
 
 // What a value actually resolves to ON THIS ELEMENT. `var(--background)`
 // means nothing in the app's own document — the panel painted it there

@@ -11,7 +11,7 @@
 import { assert } from '../core/assert';
 import type { Operation, Placement, RejectionReason } from './intent';
 import { stripEdits, scopeAt, type SourceReplacement } from './loopScope';
-import type { Plan, PostKind, Splice } from './planner';
+import type { ByteRelocation, Plan, PostKind, Splice } from './planner';
 import {
   blankText,
   closeTagStart,
@@ -327,7 +327,7 @@ function planMarkdownRelocation(
   if (removal === undefined) {
     return err('unsupported-operation');
   }
-  return relocationSplices(bytes, insertion, removal);
+  return relocationSplices(bytes, insertion, removal, { span: moved.span, text });
 }
 
 function planRelocation(
@@ -347,7 +347,10 @@ function planRelocation(
     return insertion;
   }
   const removal = { range: removalRange(bytes, current, source.current), text: '' };
-  return relocationSplices(bytes, insertion.value, removal);
+  return relocationSplices(bytes, insertion.value, removal, {
+    span: source.current.span,
+    text: text.value,
+  });
 }
 
 // The insertion and the removal of one move, refused when the new place lies
@@ -356,6 +359,7 @@ function relocationSplices(
   bytes: ByteString,
   insertion: Pick<Insertion, 'range' | 'text'>,
   removal: { readonly range: ByteSpan; readonly text: string },
+  moved: { readonly span: ByteSpan; readonly text: string },
 ): Result<Plan, RejectionReason> {
   const into = insertion.range;
   const out = removal.range;
@@ -367,7 +371,42 @@ function relocationSplices(
   const insert = spliceAt(bytes, into, insertion.text);
   const remove = spliceAt(bytes, out, removal.text);
   const splices = into.end <= out.start ? [insert, remove] : [remove, insert];
-  return ok({ splices, postKinds: [], candidate: 'must-parse' });
+  const relocation = relocationOf(bytes, insertion, remove, moved);
+  return ok({ splices, relocation, postKinds: [], candidate: 'must-parse' });
+}
+
+// Only the move planner may supply this provenance. Searching its insertion
+// locates the original subtree within formatting added at the destination;
+// it never searches the document for a substitute. Rewritten loop bindings or
+// Markdown prefixes have no unchanged byte image and keep the existing refusal.
+function relocationOf(
+  bytes: ByteString,
+  insertion: Pick<Insertion, 'range' | 'text'>,
+  removal: Splice,
+  moved: { readonly span: ByteSpan; readonly text: string },
+): ByteRelocation | undefined {
+  const source = moved.span;
+  assert(removal.range.start <= source.start, 'The move removes its source start');
+  assert(source.end <= removal.range.end, 'The move removes its source end');
+  const original = textOf(bytes, source);
+  assert(original.length > 0, 'A moved subtree has source text');
+  if (original !== moved.text) {
+    return undefined;
+  }
+  const offset = insertion.text.indexOf(original);
+  if (offset < 0) {
+    return undefined;
+  }
+  if (insertion.text.indexOf(original, offset + 1) !== -1) {
+    return undefined;
+  }
+  const shift =
+    removal.range.end <= insertion.range.start
+      ? removal.replacementBytes.length - removal.expectedBytes.length
+      : 0;
+  const start = insertion.range.start + shift + encodeUtf8(insertion.text.slice(0, offset)).length;
+  const target = toByteSpan(start, start + source.end - source.start);
+  return { source, target };
 }
 
 // Whether an insertion lands inside a removal: a point strictly inside it, or

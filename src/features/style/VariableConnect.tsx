@@ -8,6 +8,7 @@ import { insertBinding } from './model/insertBinding';
 import { PlusIcon } from './VariableIcons';
 import { varTypeAllowed, useSharedVars } from './sharedVars';
 import { VariablePicker } from './VariablePicker';
+import VariableHint from './VariableHint';
 import { type Chip, CHIP_MARK, fieldText, serializeTokens, TokenField } from './TokenField';
 import './embedEditor.css';
 import {
@@ -76,7 +77,7 @@ export default function VariableConnect(props: VariableConnectProps) {
   const { onPick, disabled, ariaLabel = 'Connect to variable', prop } = props;
   const connect = useVariableConnect(props);
   const { open, setOpen, big, setBig, value, applied, showToken, field, wrapRef } = connect;
-  const { editorRef, dotRef, chipText, liveValue, caretRef, readCaret } = connect;
+  const { editorRef, dotRef, chipText, liveValue, caretRef, readCaret, hintValue } = connect;
   const anchor = showToken ? editorRef.current : dotRef.current;
   const extraClassName = props.className ? ` ${props.className}` : '';
   const tokenClassName = showToken ? ' is-token' : '';
@@ -103,6 +104,7 @@ export default function VariableConnect(props: VariableConnectProps) {
           value={value}
           chips={applied.chips}
           chipText={chipText}
+          hintValue={hintValue}
           field={field}
           editorRef={editorRef}
           setActive={connect.setActive}
@@ -153,7 +155,11 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
   const dotRef = useRef<HTMLButtonElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const value = childValue(children);
-  const applied = useAppliedVariable({ value, open, prop });
+  const placeholder = childPlaceholder(children);
+  // A variable hint uses the same catalog and chips, but stays outside the
+  // editable value so reading or focusing it cannot create a local declaration.
+  const hintValue = value === '' && /var\(/i.test(placeholder) ? placeholder : '';
+  const applied = useAppliedVariable({ value: value || hintValue, open, prop });
   // Render the token editor while a variable is applied, or while it still has focus.
   const showToken = applied.isVar || active || !!code;
   const field = useWrappedField(children);
@@ -173,6 +179,7 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
     showToken,
     field,
     chipText,
+    hintValue: applied.isVar ? hintValue : '',
     liveValue,
     caretRef,
     readCaret,
@@ -189,6 +196,7 @@ function ConnectTokenField({
   value,
   chips,
   chipText,
+  hintValue,
   field,
   editorRef,
   setActive,
@@ -199,6 +207,7 @@ function ConnectTokenField({
   value: string;
   chips: Chip[];
   chipText: string;
+  hintValue: string;
   field: WrappedField;
   editorRef: RefObject<HTMLDivElement>;
   setActive: (active: boolean) => void;
@@ -206,21 +215,32 @@ function ConnectTokenField({
 }) {
   const { disabled, code, stepMin } = connect;
   return (
-    <TokenField
-      value={value}
-      chips={chips}
-      chipBare={chipText}
-      chipVar={chipText}
-      onDraft={connect.onDraft ?? ((next) => pushDraft(field, next))}
-      className={`${field.childClass} embed-editor_varconnect-editor`}
-      ariaLabel={ariaLabel}
-      placeholder={childPlaceholder(connect.children)}
-      {...(disabled === undefined ? {} : { disabled })}
-      editorRef={editorRef}
-      {...tokenFieldHandlers({ field, setActive, disabled, setOpen })}
-      {...(code === undefined ? {} : { code })}
-      {...(stepMin === undefined ? {} : { stepMin })}
-    />
+    <>
+      <TokenField
+        value={value}
+        chips={hintValue ? [] : chips}
+        chipBare={chipText}
+        chipVar={chipText}
+        onDraft={connect.onDraft ?? ((next) => pushDraft(field, next))}
+        className={`${field.childClass} embed-editor_varconnect-editor`}
+        ariaLabel={ariaLabel}
+        placeholder={hintValue ? '' : childPlaceholder(connect.children)}
+        {...(disabled === undefined ? {} : { disabled })}
+        editorRef={editorRef}
+        {...tokenFieldHandlers({ field, setActive, disabled, setOpen })}
+        {...(code === undefined ? {} : { code })}
+        {...(stepMin === undefined ? {} : { stepMin })}
+      />
+      {hintValue ? (
+        <VariableHint
+          value={hintValue}
+          chips={chips}
+          className={field.childClass}
+          disabled={disabled ?? false}
+          onPick={() => setOpen(true)}
+        />
+      ) : undefined}
+    </>
   );
 }
 
@@ -605,7 +625,8 @@ function bigEditorTriggers({
       if (
         target instanceof Element &&
         target.closest(
-          '.embed-editor_varconnect-dot, .u-color-swatch, .embed-editor_varpicker, .var-custom',
+          '.embed-editor_varconnect-dot, .embed-editor_varconnect-hint, ' +
+            '.u-color-swatch, .embed-editor_varpicker, .var-custom',
         )
       ) {
         return;

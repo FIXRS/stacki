@@ -261,7 +261,11 @@ refusal is `rejected` with the actor's reason and the checksum on disk. An edit
 authored before the actor's own recent commits is rebased exactly
 (`shared/engine/rebase.ts`); one authored before an outside write is mapped through the
 diff from a retained snapshot; one whose bytes are gone is refused. Every
-operation is planned (`shared/engine/planner.ts`, `planTree.ts`, `planText.ts`,
+unchanged subtree moved by the planner carries its before/after byte spans in
+the commit log, so queued edits follow that subtree and its descendants even
+among identical siblings. Moves that rewrite loop bindings or Markdown prefixes
+do not claim an unchanged byte image. Deleted nodes still reject later edits.
+Every operation is planned (`shared/engine/planner.ts`, `planTree.ts`, `planText.ts`,
 `planSupport.ts`, `loopScope.ts`, `inlineStyle.ts`); `remove-node` and
 `revert-splices` joined the union. `page:read` reads through the page's actor.
 
@@ -338,6 +342,32 @@ and that module reads and returns strings — it writes nothing, and no app
 module imports it (`test/electron/previewServer/previewBridge.test.ts` holds both, and runs
 the real generated plugin over a project whose bytes it compares before and
 after). The generated config itself lives in `node_modules/.avb`.
+
+Style queries (`avb:query`) read computed properties from the rendered element.
+A plain text node uses the parent of its live marker run for computed properties
+and color resolution only. For inline text without markers, the renderer may
+explicitly supply `textParentPath` after identifying a nonempty text node in its
+current selection. The frame validates that this names the immediate parent and
+uses only that parent's exact, focused DOM mapping for style reads. Ordinary
+missing-element queries never opt into this fallback. It does not borrow the
+parent's identity, classes,
+or selector matches, so reading inherited values cannot retarget visual edits.
+Replies also carry optional `authoredProps`, a bounded string map validated by
+`parseCanvasReply`. Unset text fields prefer the winning declaration's original
+units and expressions; swatches and option highlights keep using computed values.
+The frame temporarily mirrors declarations into registered custom properties so
+Chromium resolves specificity, layers, conditional rules, and inheritance. Reads
+restore the styles synchronously, and those temporary mutations do not invalidate
+the canvas. Inaccessible stylesheets or exhausted inspection limits fall back to
+computed values. Displaying a hint never authors an override or borrows the parent's
+edit target. Replies may also carry `inheritedSources`, parsed with the shared
+`properties/styleSource.ts` contract. Each source names the supplying DOM ancestor
+and its optional preview path. A noninheriting twin of each probe distinguishes a
+local declaration from inheritance, including the same rule applying at both levels.
+Plain text counts its rendered host as a parent. Labels use this metadata for orange
+provenance and can select a source only if its path resolves in the current tree;
+browser defaults and unavailable sources remain unmarked. Source metadata shares
+the value cache's selection and history invalidation and never becomes editable CSS.
 
 - `previewToken.ts` — every marked file also carries one stamp for the exact
   bytes it was marked from. It is written as

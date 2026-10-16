@@ -21,6 +21,8 @@ const valid = {
   matched: { '.card': true, '[': undefined },
   computed: { 'var(--color)': 'rgb(0, 0, 0)' },
   computedProps: { display: 'block' },
+  authoredProps: { 'font-size': 'var(--heading-size)' },
+  inheritedSources: { 'font-size': { label: '.heading', path: '0' } },
 };
 assert.equal(parseCanvasReply(valid).ok, true);
 assert.equal(
@@ -46,6 +48,15 @@ for (const input of [
   { ...valid, matched: { '.card': 'yes' } },
   { ...valid, computed: { color: 123 } },
   { ...valid, computedProps: { color: false } },
+  { ...valid, inheritedSources: { color: { label: 123 } } },
+  { ...valid, inheritedSources: { color: { label: '.parent', path: 42 } } },
+  {
+    ...valid,
+    inheritedSources: { color: { label: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
+  },
+  { ...valid, inheritedSources: PLATFORM_NULL },
+  { ...valid, authoredProps: { 'font-size': 16 } },
+  { ...valid, authoredProps: { color: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
   { ...valid, identity: { ...valid.identity, classes: Array(100001).fill('a') } },
   { ...valid, identity: { ...valid.identity, tag: 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
 ]) {
@@ -67,6 +78,8 @@ async function main() {
     matched: valid.matched,
     computed: valid.computed,
     computedProps: valid.computedProps,
+    authoredProps: valid.authoredProps,
+    inheritedSources: valid.inheritedSources,
   });
 
   const cancelled = canvas.queryCanvas('1');

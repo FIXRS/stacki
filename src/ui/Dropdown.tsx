@@ -12,7 +12,6 @@ const POPUP_MIN = 120;
 const POPUP_PADDING_HEIGHT = 8;
 const OPTION_HEIGHT = 26;
 const SEARCH_HEIGHT = 36;
-const HOVER_PREVIEW_DELAY_MS = 100;
 export function popupBox(
   rectangle: Pick<DOMRect, 'top' | 'bottom'>,
   wanted: number,
@@ -147,14 +146,16 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
   };
 }
 
+// One frame lets an immediate press commit before hover preview rerenders its row.
+// Waiting longer makes the canvas feel stale as the pointer crosses options.
 function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Actions<T> {
   const { setOpen, setHighlight, setQuery, committed, previewed, triggerRef, visible } = state;
   const { value, options, onChange, livePreview = true } = props;
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hoverFrame = useRef<number | undefined>(undefined);
   const cancelHover = useCallback((): void => {
-    if (hoverTimer.current !== undefined) {
-      clearTimeout(hoverTimer.current);
-      hoverTimer.current = undefined;
+    if (hoverFrame.current !== undefined) {
+      window.cancelAnimationFrame(hoverFrame.current);
+      hoverFrame.current = undefined;
     }
   }, []);
   useEffect(() => () => cancelHover(), [cancelHover]);
@@ -199,9 +200,7 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       setHighlight(index);
       const option = visible[index];
       if (option && livePreview) {
-        // A press that follows pointer entry should commit before a preview write
-        // can rerender the panel and remove the row beneath the pointer.
-        hoverTimer.current = setTimeout(() => previewOption(option), HOVER_PREVIEW_DELAY_MS);
+        hoverFrame.current = window.requestAnimationFrame(() => previewOption(option));
       }
     },
     pick: (option) => {

@@ -50,8 +50,8 @@ const check = (what, condition, detail) => {
           contents: `
               export async function streamProjectVariables(onAdd) {
                 onAdd({
-                  name: 'brand', collection: 'Colors', group: '', value: '#f00',
-                  binding: 'var(--brand)', kind: 'Color',
+                  name: 'brand', collection: 'Sizes', group: '', value: '1rem',
+                  binding: 'var(--brand)', type: 'Size',
                 });
                 return [];
               }
@@ -116,6 +116,7 @@ const check = (what, condition, detail) => {
   };
 
   const mount = async (value, options = {}) => {
+    const { placeholder, ...connectOptions } = options;
     const host = document.createElement('div');
     host.className = 'embed-editor_root';
     document.body.appendChild(host);
@@ -129,9 +130,9 @@ const check = (what, condition, detail) => {
             onPick: (value) => picked.push(value),
             ariaLabel: 'Height',
             prop: 'height',
-            ...options,
+            ...connectOptions,
           },
-          React.createElement('input', { className: 'u-input', value, onChange() {} }),
+          React.createElement('input', { className: 'u-input', value, placeholder, onChange() {} }),
         ),
       );
     });
@@ -145,6 +146,38 @@ const check = (what, condition, detail) => {
   const bigOpen = (host) => !!document.querySelector('.var-custom');
   const pickerOpen = (host) =>
     !!host.querySelector('[role="dialog"], .embed-editor_varconnect-panel');
+
+  // Inherited chips open the same picker, but remain outside the draft until
+  // the user explicitly chooses a binding. Overflow must not steal the press.
+  {
+    const { host, picked, done } = await mount('', {
+      placeholder: 'var(--brand)',
+      prop: 'height',
+      code: true,
+    });
+    setOverflow(host, true);
+    const chip = host.querySelector('.embed-editor_varconnect-hint button');
+    assert.ok(chip);
+    assert.match(chip.textContent, /brand/);
+    const editor = host.querySelector('.embed-editor_varconnect-editor');
+    assert.equal(editor.textContent, '');
+    await act(async () => {
+      editor.focus();
+      editor.blur();
+    });
+    assert.equal(host.querySelector('input').value, '');
+    assert.deepEqual(picked, []);
+    await act(async () => clickIt(chip));
+    assert.equal(bigOpen(host), false);
+    const picker = document.querySelector('.embed-editor_varpicker');
+    assert.ok(picker, 'the inherited chip opens the variable picker');
+    assert.deepEqual(picked, [], 'opening the picker never creates a local override');
+    const option = picker.querySelector('.embed-editor_varpicker-item');
+    assert.ok(option);
+    await act(async () => clickIt(option));
+    assert.deepEqual(picked, ['var(--brand)'], 'only an explicit choice writes a binding');
+    await done();
+  }
 
   // --- Pressing the dot, on a value too long for its field ------------------
   //

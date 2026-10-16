@@ -9,6 +9,7 @@ import {
   optional,
   text,
 } from '../../shared/core/boundary';
+import { parseStyleSource } from '../../shared/properties/styleSource';
 import { err, ok, type Result } from '../../shared/core/result';
 
 const identity = object({
@@ -25,6 +26,8 @@ const reply = object({
   matched: optional(dictionary(optional(boolean))),
   computed: optional(dictionary(optional(text))),
   computedProps: optional(dictionary(optional(text))),
+  authoredProps: optional(dictionary(optional(text))),
+  inheritedSources: optional(dictionary(parseStyleSource)),
 });
 export type CanvasReply = ReturnType<typeof reply>;
 // An answer's maps are the reply's own: a value the page could not resolve
@@ -34,6 +37,8 @@ export type CanvasAnswer = {
   readonly matched: NonNullable<CanvasReply['matched']>;
   readonly computed: NonNullable<CanvasReply['computed']>;
   readonly computedProps: NonNullable<CanvasReply['computedProps']>;
+  readonly authoredProps: NonNullable<CanvasReply['authoredProps']>;
+  readonly inheritedSources: NonNullable<CanvasReply['inheritedSources']>;
 };
 
 export function parseCanvasReply(input: unknown): Result<CanvasReply> {

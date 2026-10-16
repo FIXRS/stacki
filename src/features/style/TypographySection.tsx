@@ -1,4 +1,4 @@
-import { useHighlight } from './model/computedStyle';
+import { useComputedValue, useHighlight } from './model/computedStyle';
 import { displayOf } from './model/styleDisplay';
 import {
   AlignLeftIcon,
@@ -62,9 +62,22 @@ function AlignRow({
   const current = useHighlight(
     display.present ? display.value.trim().toLowerCase() : '',
     'text-align',
-    ALIGN_SEGS.map((segment) => segment.value),
+    [...ALIGN_SEGS.map((segment) => segment.value), 'start', 'end'],
     'left',
   );
+  const direction = useComputedValue(
+    current === 'start' ? 'direction' : current === 'end' ? 'direction' : '',
+  );
+  const aligned =
+    current === 'start'
+      ? direction === 'rtl'
+        ? 'right'
+        : 'left'
+      : current === 'end'
+        ? direction === 'rtl'
+          ? 'left'
+          : 'right'
+        : current;
   return (
     <div className="embed-editor_size-row">
       <PropLabel
@@ -79,7 +92,7 @@ function AlignRow({
       />
       <SegBar
         segs={ALIGN_SEGS}
-        current={current}
+        current={aligned}
         ariaLabel="Text align"
         prop="text-align"
         busy={busy}
@@ -107,7 +120,8 @@ function DecorRow(props: Props) {
   // longhand an embed might use.
   const display = displayOf(read('text-decoration'));
   const raw = display.present ? display.value : displayOf(read('text-decoration-line')).value;
-  const parts = parseDecoration(raw);
+  const computed = useComputedValue(raw ? '' : 'text-decoration');
+  const parts = parseDecoration(raw || computed);
   // The bar reflects only the line facet — a single keyword, or None (X). Combos and
   // the divider style/color live in the "…" popover, so picking a segment recomposes
   // the shorthand while preserving any style/color already set.

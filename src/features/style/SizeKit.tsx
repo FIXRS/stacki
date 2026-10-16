@@ -15,6 +15,7 @@ import type { Contributor, ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
 import { useDebouncedLive } from './model/fieldHooks';
 import { displayOf, parseImportant, type Display } from './model/styleDisplay';
+import { useStyleHint } from './model/computedStyle';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -64,6 +65,7 @@ export function SizeLabel({
     <FieldLabel
       className={`embed-editor_size-label ${display.overridden ? 'is-overridden' : ''}`}
       active={display.isSelected}
+      {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear}
       resetLabel="Clear"
@@ -106,6 +108,7 @@ export function LivePropField({
 } & Props) {
   const display = displayOf(read(prop));
   const field = useLivePropEditing({ prop, display, busy, setProp, clearProp, liveSetProp });
+  const computed = useStyleHint(display.present ? '' : prop);
   return (
     <>
       <SizeLabel
@@ -137,7 +140,7 @@ export function LivePropField({
           onKeyDown={field.keyDown}
           disabled={busy}
           spellCheck={false}
-          placeholder={placeholder}
+          placeholder={computed || placeholder}
           aria-label={label}
         />
       </VariableConnect>

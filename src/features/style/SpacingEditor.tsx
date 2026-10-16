@@ -26,12 +26,14 @@ import {
 import { affectedSides, siblingProps } from './SpacingFill';
 import { withImportant } from './spacingValue';
 import { humanLabel } from './SpacingLabel';
+import { useStyleHint } from './model/computedStyle';
 
 // The editor shown inside the popover: a live text input (number + unit, with the
 // same arrow-step / !important handling as before). Commits + closes on blur.
 export function SpacingEditor(props: SpacingEditorProps) {
   const { prop, placeholder, read, onSelectSelector, onClose } = props;
   const editor = useSpacingEditor(props);
+  const computed = useStyleHint(read(prop) === undefined ? prop : '');
   return (
     <div
       className="embed-editor_spacing-popover"
@@ -74,7 +76,7 @@ export function SpacingEditor(props: SpacingEditorProps) {
             ref={editor.inputRef}
             className={`u-input embed-editor_spacing-editor`}
             value={editor.draft}
-            placeholder={placeholder}
+            placeholder={computed || placeholder}
             onChange={(event) => editor.change(event.target.value)}
             onBlur={editor.blur}
             onKeyDown={editor.keyDown}

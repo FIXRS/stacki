@@ -11,7 +11,7 @@ import Select, { type SelectOption } from './components/Select';
 import useScrub from './components/useScrub';
 import { type SegOption } from './SegmentedField';
 import { CURSOR_ICONS } from './cursorIcons';
-import { useHighlight } from './model/computedStyle';
+import { useStyleHint, useHighlight } from './model/computedStyle';
 import { handleArrowStep } from './model/numberStep';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
@@ -205,6 +205,7 @@ export function EffLabel({ label, prop, props }: { label: string; prop: string; 
     <FieldLabel
       className={`embed-editor_size-label ${display.overridden ? 'is-overridden' : ''}`}
       active={display.isSelected}
+      {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={() => clearProp(prop)}
       resetLabel="Clear"
@@ -243,6 +244,7 @@ export function LiveText({
   // `dragging` is what a swatch beside this field is showing mid-drag.
   const written = display.important ? `${display.value} !important` : display.value;
   const external = dragging ?? (display.present ? written : '');
+  const computed = useStyleHint(external ? '' : prop);
   const { draft, setDraft, focused } = useExternalDraft(external);
   // Undelayed live write for the scrub, which throttles its own — see useScrub.
   const liveNow = (text: string) => {
@@ -290,7 +292,7 @@ export function LiveText({
         {...draftInputHandlers({ focusedRef: focused, setDraft, live, cancel, commit })}
         disabled={busy}
         spellCheck={false}
-        placeholder={placeholder}
+        placeholder={computed || placeholder}
         aria-label={prop}
       />
     </VariableConnect>
@@ -419,6 +421,7 @@ export interface CustomInputProps {
 }
 export function CustomInput(props: CustomInputProps) {
   const { prop, value, placeholder, busy, setProp, liveSetProp, clearProp, onExit } = props;
+  const computed = useStyleHint(value ? '' : prop);
   const { draft, setDraft, focused } = useExternalDraft(value);
   const { live, cancel } = useLiveTimer((text) => {
     const trimmed = text.trim();
@@ -467,7 +470,7 @@ export function CustomInput(props: CustomInputProps) {
         }}
         disabled={busy}
         spellCheck={false}
-        placeholder={placeholder}
+        placeholder={computed || placeholder}
         aria-label={prop}
       />
     </VariableConnect>

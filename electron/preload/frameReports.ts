@@ -1,3 +1,4 @@
+import { authoredStyleMutation } from './frameAuthoredStyles';
 // What the frame tells the app as the page changes: the tracked rectangles,
 // following a page that moves by itself, which nodes rendered, their states
 // and classes, the opened instance, and the scheduling that keeps all of it to
@@ -510,6 +511,9 @@ const ownAttributeChange = (record: MutationRecord): boolean => {
   }
   if (record.attributeName === 'class') {
     return ownClassChange(record);
+  }
+  if (authoredStyleMutation(record)) {
+    return true;
   }
   if (record.attributeName === 'style' && target === document.documentElement) {
     const now = withoutViewportHeight(document.documentElement.getAttribute('style') ?? undefined);

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Select, { type SelectOption } from './components/Select';
 import { getProjectFontFamilies } from './model/webflow';
 import { displayOf } from './model/styleDisplay';
+import { useStyleHint } from './model/computedStyle';
 import { type Props, joinImportant, CUSTOM, PropLabel, LiveInput } from './TypographyKit';
 
 // The Typography section of the style panel. Like the Size section, every control
@@ -68,12 +69,12 @@ export function quoteFamily(name: string): string {
 export function FontFamilyField(props: Props) {
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read('font-family'));
-  const fonts = useProjectFonts();
   const [forceCustom, setForceCustom] = useState(false);
-  const { options, byPrimary } = fontOptions(fonts);
-  const current = display.present ? display.value : '';
+  const { options, byPrimary } = fontOptions(useProjectFonts());
+  const computed = useStyleHint(display.present ? '' : 'font-family');
+  const current = display.present ? display.value : computed;
   const matched = current ? byPrimary.get(primaryFamily(current)) : undefined;
-  const customMode = forceCustom || (display.present && !matched);
+  const customMode = forceCustom || (current.length > 0 && !matched);
 
   const pick = (value: string) => {
     if (value === CUSTOM) {
@@ -219,9 +220,10 @@ export function WeightField(props: Props) {
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read('font-weight'));
   const [forceCustom, setForceCustom] = useState(false);
-  const normalized = display.present ? normalizeWeight(display.value) : '';
+  const computed = useStyleHint(display.present ? '' : 'font-weight');
+  const normalized = normalizeWeight(display.present ? display.value : computed);
   const matched = WEIGHT_VALUES.has(normalized) ? normalized : undefined;
-  const customMode = forceCustom || (display.present && !matched);
+  const customMode = forceCustom || (normalized.length > 0 && !matched);
 
   const pick = (value: string) => {
     if (value === CUSTOM) {

@@ -17,6 +17,7 @@ export type HostNode = {
   readonly id: string;
   readonly kind: string;
   readonly name?: string;
+  readonly value?: string;
   readonly props?: Readonly<Record<string, HostAttr>>;
   readonly children?: readonly HostNode[] | undefined;
   readonly inner?: string;

@@ -49,7 +49,7 @@ const check = (what, condition, detail) => {
       globalThis.__answer = () => {
         const computedProps = {};
         for (const prop of props) computedProps[prop] = (globalThis.__computed || {})[prop] ?? '';
-        resolve({ computedProps, identity: { tag: 'div' } });
+        resolve({ computedProps, authoredProps: {}, identity: { tag: 'div' } });
       };
     });
   `;

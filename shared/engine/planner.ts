@@ -103,9 +103,17 @@ export type CandidatePolicy = 'must-parse' | 'may-be-invalid';
 
 export interface Plan {
   readonly splices: readonly Splice[];
+  /** An unchanged subtree explicitly moved by this plan, in before/after coordinates.
+   * Keeping its provenance lets queued edits follow it without matching lookalikes. */
+  readonly relocation?: ByteRelocation | undefined;
   /** Nodes that must keep their kind in the candidate, in its own paths. */
   readonly postKinds: readonly PostKind[];
   readonly candidate: CandidatePolicy;
+}
+
+export interface ByteRelocation {
+  readonly source: ByteSpan;
+  readonly target: ByteSpan;
 }
 
 export interface PlanningBase {

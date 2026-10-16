@@ -87,6 +87,7 @@ export function PropLabel({
     <FieldLabel
       className={`embed-editor_size-label ${className} ${overriddenClass}`}
       active={display.isSelected}
+      {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={() => clearProp(clearProps ?? prop)}
       resetLabel="Clear"

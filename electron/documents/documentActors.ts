@@ -747,6 +747,7 @@ export class DocumentActors {
       from: commit.base.checksum,
       to: commit.candidate.checksum,
       splices: minimalSplices(commit.plan.splices),
+      relocation: commit.plan.relocation,
     };
     entry.recordCommit(record);
     assert(entry.written === record.to, 'The commit is what the actor last wrote');

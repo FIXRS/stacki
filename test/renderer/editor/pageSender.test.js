@@ -169,6 +169,45 @@ test('with more queued, only the origin moves on; the model shows the newer edit
   assert.equal(box.state.save.tag, 'clean');
 });
 
+test('edits queued during a move keep the moved element and child selected', async () => {
+  const card = '<article><p>Same</p></article>';
+  const { disk, box, queue, send } = harness(`<main>${card}${card}</main><aside></aside>`);
+  const [main, aside] = box.state.model.nodes;
+  const target = main.children[0];
+  const child = target.children[0];
+  const move = editGestures.moveGesture(
+    box.state.model,
+    target.id,
+    { parentId: aside.id, index: 0 },
+    { keepsSlot: () => true },
+    { urgency: true },
+  );
+  assert.ok(move);
+  const options = { coalesceKey: undefined, urgency: true };
+  const gestures = [
+    move,
+    editGestures.propsGesture(target.id, titled('Moved'), options),
+    editGestures.propsGesture(child.id, titled('Child'), options),
+  ];
+  for (const gesture of gestures) {
+    queue.addGesture(PATH, gesture, step());
+    box.state = { ...box.state, model: gesture.apply(box.state.model) };
+  }
+  for (const _gesture of gestures) {
+    assert.deepEqual(await send(PATH, queue.shift(PATH)), { tag: 'sent' });
+  }
+  assert.equal(
+    disk.text,
+    `<main>${card}</main><aside><article title="Moved">` +
+      '<p title="Child">Same</p></article></aside>',
+  );
+  const moved = box.state.model.nodes[1].children[0];
+  assert.equal(moved.id, target.id, 'selection follows the moved element');
+  assert.equal(moved.children[0].id, child.id, 'selection also follows its child');
+  assert.deepEqual(box.notices, []);
+  assert.deepEqual(box.conflicts, []);
+});
+
 test('a gesture the engine cannot plan is taken back and said, never saved otherwise', async () => {
   const { disk, box, queue, send } = harness(PAGE);
   const record = step();

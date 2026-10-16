@@ -9,6 +9,7 @@ interface QueryMessage {
   readonly selectors: readonly string[];
   readonly compute: readonly string[];
   readonly props: readonly string[];
+  readonly textParentPath?: string;
 }
 interface PendingQuery {
   readonly resolve: (answer: CanvasAnswer | undefined) => void;
@@ -83,6 +84,7 @@ export function queryCanvas(
   selectors: readonly string[] = [],
   compute: readonly string[] = [],
   props: readonly string[] = [],
+  context: { readonly textParentPath?: string } = {},
 ): Promise<CanvasAnswer | undefined> {
   if (!frame || typeof path !== 'string') {
     return Promise.resolve(undefined);
@@ -92,6 +94,10 @@ export function queryCanvas(
   }
   assert(Number.isSafeInteger(nextId), 'Canvas query ID must remain a safe integer');
   assert(path.length <= LIMITS.attrCharsMax, 'Canvas query path exceeds limit');
+  assert(
+    (context.textParentPath?.length ?? 0) <= LIMITS.attrCharsMax,
+    'Canvas text parent path exceeds limit',
+  );
   for (const values of [selectors, compute, props]) {
     assert(values.length <= LIMITS.scanEntriesMax, 'Canvas query list exceeds limit');
     for (const value of values) {
@@ -107,7 +113,7 @@ export function queryCanvas(
     const entry: PendingQuery = {
       resolve,
       timer,
-      message: { type: 'avb:query', id, path, selectors, compute, props },
+      message: { type: 'avb:query', id, path, selectors, compute, props, ...context },
       held: false,
     };
     pending.set(id, entry);
@@ -176,6 +182,8 @@ export function receiveCanvasReply(input: unknown): void {
           matched: data.matched || {},
           computed: data.computed || {},
           computedProps: data.computedProps || {},
+          authoredProps: data.authoredProps || {},
+          inheritedSources: data.inheritedSources || {},
         }
       : undefined,
   );

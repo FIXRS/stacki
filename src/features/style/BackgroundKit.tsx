@@ -118,6 +118,7 @@ export function BgLabel({
     <FieldLabel
       className={`embed-editor_size-label ${display.overridden ? 'is-overridden' : ''}`}
       active={display.isSelected}
+      {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear}
       resetLabel="Clear"

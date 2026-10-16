@@ -8,6 +8,7 @@ import { handleArrowStep } from './model/numberStep';
 import VariableConnect from './VariableConnect';
 import { commitInPlace } from './model/commitInPlace';
 import { parseImportant } from './model/styleDisplay';
+import { useStyleHint } from './model/computedStyle';
 
 // ─────────────────────────── Live text input ───────────────────────────
 
@@ -28,6 +29,8 @@ export function LiveInput({
   onClear,
 }: LiveInputProps) {
   const field = useLiveInputEditing({ value, busy, onCommit, onLiveCommit, onClear });
+  // A computed value is a hint, never a draft that blur could write into CSS.
+  const computed = useStyleHint(value.trim() ? '' : (prop ?? ''));
   return (
     <VariableConnect
       code
@@ -48,7 +51,7 @@ export function LiveInput({
         onKeyDown={field.keyDown}
         disabled={busy}
         spellCheck={false}
-        placeholder={placeholder}
+        placeholder={computed || placeholder}
         aria-label={ariaLabel}
         autoFocus={autoFocus}
       />

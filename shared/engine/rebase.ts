@@ -4,8 +4,9 @@
 // against them while earlier edits are still reaching the disk. Those earlier
 // edits are this actor's own commits, and the host logged exactly what each
 // one spliced, so a span of the authored bytes has an exact image in the bytes
-// on disk now: no diff runs and nothing is guessed. A span that a commit cut
-// through has no image, and the intent is refused.
+// on disk now: no diff runs and nothing is guessed. A move also records the
+// before/after spans of an unchanged subtree, so it and its descendants follow
+// that relocation. Other spans a commit cut through have no image and are refused.
 //
 // The images, through one commit's splices (ascending, disjoint):
 //   a splice wholly after the span, or a zero-width one at its end: unchanged;
@@ -23,7 +24,7 @@
 import { assert } from '../core/assert';
 import { toIntent, type Intent, type Operation, type RejectionReason } from './intent';
 import { LIMITS } from '../core/limits';
-import type { Splice } from './planner';
+import type { ByteRelocation, Splice } from './planner';
 import { isNodeKind, toAnchorRef, type AnchorRef } from '../page/ref';
 import { err, ok, type Result } from '../core/result';
 import type { Snapshot } from '../page/snapshot';
@@ -36,6 +37,7 @@ export interface CommitRecord {
   readonly from: Snapshot['checksum'];
   readonly to: Snapshot['checksum'];
   readonly splices: readonly Splice[];
+  readonly relocation?: ByteRelocation | undefined;
 }
 
 /** The commits leading from `authored` to `current`, oldest first, when the
@@ -138,12 +140,14 @@ export function rebaseIntent(
   assert(chain[chain.length - 1]?.to === current.checksum, 'The chain ends at the current bytes');
   const through = (span: ByteSpan): ByteSpan | undefined =>
     chain.reduce<ByteSpan | undefined>(
-      (image, record) => (image === undefined ? undefined : rebaseSpan(image, record.splices)),
+      (image, record) =>
+        image === undefined ? undefined : rebaseCommittedSpan(image, record, rebaseSpan),
       span,
     );
   const untouched = (span: ByteSpan): ByteSpan | undefined =>
     chain.reduce<ByteSpan | undefined>(
-      (image, record) => (image === undefined ? undefined : shiftUntouched(image, record.splices)),
+      (image, record) =>
+        image === undefined ? undefined : rebaseCommittedSpan(image, record, shiftUntouched),
       span,
     );
   const anchor = rebaseAnchor(intent.anchor, through, current);
@@ -166,6 +170,40 @@ export function rebaseIntent(
 }
 
 type Through = (span: ByteSpan) => ByteSpan | undefined;
+
+// A move records the exact subtree it relocated. Descendants share its byte
+// shift; ancestors and unrelated nodes still follow the ordinary splices.
+function rebaseCommittedSpan(
+  span: ByteSpan,
+  record: CommitRecord,
+  map: (span: ByteSpan, splices: readonly Splice[]) => ByteSpan | undefined,
+): ByteSpan | undefined {
+  const relocation = record.relocation;
+  if (relocation !== undefined) {
+    const { source, target } = relocation;
+    assert(source.start < source.end, 'A relocation has a non-empty source');
+    assert(
+      source.end - source.start === target.end - target.start,
+      'A relocation preserves its bytes and length',
+    );
+    // An empty hunk at an edge could belong outside the relocated subtree.
+    if (span.start === span.end) {
+      if (span.start === source.start) {
+        return undefined;
+      }
+      if (span.end === source.end) {
+        return undefined;
+      }
+    }
+    if (source.start <= span.start) {
+      if (span.end <= source.end) {
+        const shift = target.start - source.start;
+        return toByteSpan(span.start + shift, span.end + shift);
+      }
+    }
+  }
+  return map(span, record.splices);
+}
 
 /** Images through the chain: `through` lets a span hold a change made inside
  * it (a value edited inside an element leaves the same element); `untouched`

@@ -265,7 +265,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
             relatedTarget: dom.window.document.body,
           }),
         );
-        await settle(120);
+        await settle(70);
       });
 
     await hover('play');
@@ -320,6 +320,32 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     });
     check('a quick press commits the option', applied.join() === 'play,pause,play');
     check('and the quick press closes the popup', !find('.dd-popup'));
+
+    await show('main');
+    await act(async () => {
+      find('.dd-trigger').click();
+      await settle(20);
+    });
+    await act(async () => {
+      for (const label of ['play', 'pause']) {
+        option(label)?.dispatchEvent(
+          new dom.window.MouseEvent('mouseover', {
+            bubbles: true,
+            relatedTarget: dom.window.document.body,
+          }),
+        );
+      }
+      await settle(70);
+    });
+    check(
+      'moving across options previews only the latest one within a frame',
+      applied.join() === 'play,pause,play,pause',
+      applied.join(),
+    );
+    await act(async () => {
+      body.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+      await settle(20);
+    });
 
     // The canvas is an iframe, so clicking it blurs the parent window without
     // delivering a mousedown to the dropdown's document listener.

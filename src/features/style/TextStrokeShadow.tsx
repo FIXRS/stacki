@@ -15,6 +15,7 @@ import { parseHideable, serializeHideable, type Hideable } from './model/hideabl
 import LayerList from './LayerList';
 import LayerPopover from './LayerPopover';
 import { displayOf, type Display } from './model/styleDisplay';
+import { useComputedValue } from './model/computedStyle';
 import { type Props, joinImportant, PropLabel, LiveInput } from './TypographyKit';
 
 // ─────────────── Stroke (-webkit-text-stroke) ───────────────
@@ -23,6 +24,7 @@ export function StrokeRow(props: Props) {
   const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
   const widthDisplay = displayOf(read('-webkit-text-stroke-width'));
   const colorDisplay = displayOf(read('-webkit-text-stroke-color'));
+  const computedColor = useComputedValue(colorDisplay.present ? '' : '-webkit-text-stroke-color');
   // The "Stroke" title reflects either longhand being set and clears both; each cell's
   // caption (Width/Color) owns its own provenance/clear.
   const combined = eitherDisplay(widthDisplay, colorDisplay);
@@ -57,7 +59,7 @@ export function StrokeRow(props: Props) {
         <div className="embed-editor_type-cell">
           <div className="embed-editor_type-field">
             <ColorSwatch
-              value={colorDisplay.present ? colorDisplay.value : ''}
+              value={colorDisplay.present ? colorDisplay.value : computedColor}
               busy={busy}
               ariaLabel="Stroke color"
               onChange={(color, live) => {
@@ -216,7 +218,8 @@ export const SHADOW_PREVIEW_CHECKERBOARD =
 export function TextShadowsRow(props: Props) {
   const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read('text-shadow'));
-  const rows = parseHideable(display.present ? display.value : '', ',', parseShadows);
+  const computed = useComputedValue(display.present ? '' : 'text-shadow');
+  const rows = parseHideable(display.present ? display.value : computed, ',', parseShadows);
   const shadows = rows.map((row) => row.item);
   const [openIndex, setOpenIndex] = useState<number | undefined>(undefined);
   const [anchorElement, setAnchorElement] = useState<HTMLElement | undefined>(undefined);

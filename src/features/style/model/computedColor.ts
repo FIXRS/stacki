@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { hasCanvas, onCanvasReady, queryCanvas } from '../../../editor/canvasQuery';
 import { getHost, onHostChange } from './host';
 import { createQueryCache } from './queryCache';
+import { textStyleContext } from './styleQuery';
 
 /**
  * Does this value need the page to resolve it?
@@ -42,7 +43,7 @@ export function needsPage(value: string): boolean {
 }
 
 const cache = createQueryCache(async (path, values) => {
-  const answer = await queryCanvas(path, [], values);
+  const answer = await queryCanvas(path, [], values, [], textStyleContext(path));
   return answer?.computed;
 });
 

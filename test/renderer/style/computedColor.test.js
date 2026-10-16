@@ -13,7 +13,6 @@
 const fs = require('fs');
 const path = require('path');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
-const { readFolderSource } = require('../../helpers/sourceText.js');
 
 const failures = [];
 let checked = 0;
@@ -61,17 +60,10 @@ const check = (what, condition, detail) => {
 
   // --- the resolving, against a page that themes its variables --------------
   //
-  // The replica below is a copy of what the preload runs; these two check that
-  // the real one still asks the same question, and that the app still asks it
-  // when there is no selection to ask about — which is the variables panel's
-  // whole situation.
+  // The real preload's root fallback is exercised by previewTokenFrame.test.js.
+  // Here, check that the app asks even without a selection, as the variables
+  // panel needs to resolve colors independently of any selected element.
   {
-    const preload = readFolderSource('electron/preload');
-    check(
-      'with no element named, the page answers about itself',
-      /const host = els\[0\] \|\| document\.documentElement;/.test(preload),
-      'a value with nothing selected gets no answer at all',
-    );
     const lib = fs.readFileSync(repoPath('src/features/style/model/computedColor.ts'), 'utf8');
     check(
       'and the app asks even with nothing selected',

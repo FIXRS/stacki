@@ -1,11 +1,15 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode, RefObject } from 'react';
+import { useInheritedSource } from '../model/computedStyle';
+import InheritedPropertyLabel from './InheritedPropertyLabel';
 import { panelBounds } from '../model/panelBox';
 import { useHoverTip } from './CssPropertyTip';
 import type { ScrubHandlers } from './useScrub';
 
 type Props = {
   children: ReactNode;
+  /** Unset CSS property whose rendered ancestor may supply the value. */
+  inheritedProp?: string;
   /** When true the label highlights (blue) and opens a reset menu on click. */
   active: boolean;
   /** Clears the field. Called from the menu or an Option/Alt-click. */
@@ -42,6 +46,24 @@ type Props = {
  * tools for any "clearable" input.
  */
 export default function FieldLabel(props: Props) {
+  const property = props.active ? '' : (props.inheritedProp ?? '');
+  const source = useInheritedSource(property);
+  if (source) {
+    return (
+      <InheritedPropertyLabel
+        property={property}
+        source={source}
+        disabled={props.disabled ?? false}
+        className={props.className ?? ''}
+      >
+        {props.children}
+      </InheritedPropertyLabel>
+    );
+  }
+  return <ClearableFieldLabel {...props} />;
+}
+
+function ClearableFieldLabel(props: Props) {
   const { children, active, disabled = false, title, onMouseDown, scrubProps, tooltip } = props;
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);

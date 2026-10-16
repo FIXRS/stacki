@@ -444,6 +444,96 @@ test("an edit authored before the app's own last edit is rebased exactly", async
   );
 });
 
+test('queued edits follow a moved subtree even beside an identical sibling', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const card = '<article><p>Same</p></article>';
+  fs.writeFileSync(file, `<main>${card}${card}</main><aside></aside>`);
+  const page = await read(harness, file);
+  const target = refAt(page, [0, 0]);
+  const child = refAt(page, [0, 0, 0]);
+  const moved = await edit(harness, file, page.checksum, {
+    tag: 'move-node',
+    target,
+    destination: refAt(page, [1]),
+    placement: 'last-child',
+  });
+  assert.ok(moved.ok, 'the subtree moves');
+  const parentEdit = await edit(harness, file, page.checksum, title(target, 'Moved'));
+  assert.ok(parentEdit.ok, 'an earlier reference still identifies the moved parent');
+  const childEdit = await edit(harness, file, page.checksum, title(child, 'Child'));
+  assert.ok(childEdit.ok, 'a descendant follows the move and the subsequent parent edit');
+  const textNode = nodeAt(page, [0, 0, 0, 0]);
+  assert.equal(textNode.kind, 'text');
+  const replacement = {
+    tag: 'replace-node',
+    target: refAt(page, [0, 0, 0, 0]),
+    node: { ...textNode, value: 'Edited' },
+  } as const;
+  const textEdit = await edit(harness, file, page.checksum, replacement);
+  assert.ok(textEdit.ok, 'content edits follow unchanged bytes inside the moved subtree');
+  const conflicting = await edit(harness, file, page.checksum, replacement);
+  assert.equal(conflicting.ok, false, 'a move does not bypass later overlapping changes');
+  assert.equal(
+    fs.readFileSync(file, 'utf8'),
+    `<main>${card}</main><aside><article title="Moved">` +
+      '<p title="Child">Edited</p></article></aside>',
+    'only the moved subtree is edited; its identical sibling stays untouched',
+  );
+});
+
+test('edits follow moves in either direction with UTF-8 text and line breaks', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const heading = '<h1>😀 café</h1>';
+  fs.writeFileSync(file, `<main>\n  <p>Before</p>\n  ${heading}\n  <p>After</p>\n</main>`);
+  const page = await read(harness, file);
+  const target = refAt(page, [0, 1]);
+  for (const [destination, placement] of [
+    [refAt(page, [0, 0]), 'before'],
+    [refAt(page, [0, 2]), 'after'],
+  ] as const) {
+    const moved = await edit(harness, file, page.checksum, {
+      tag: 'move-node',
+      target,
+      destination,
+      placement,
+    });
+    assert.ok(moved.ok, `move ${placement} follows the original reference`);
+  }
+  const edited = await edit(harness, file, page.checksum, title(target, 'Still selected'));
+  assert.ok(edited.ok, 'the edit follows both moves');
+  assert.equal(
+    fs.readFileSync(file, 'utf8'),
+    '<main>\n  <p>Before</p>\n  <p>After</p>\n  <h1 title="Still selected">😀 café</h1>\n</main>',
+  );
+});
+
+test('deleting a moved element never redirects edits onto its twin', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const card = '<article><p>Same</p></article>';
+  fs.writeFileSync(file, `<main>${card}${card}</main><aside></aside>`);
+  const page = await read(harness, file);
+  const target = refAt(page, [0, 0]);
+  const moved = await edit(harness, file, page.checksum, {
+    tag: 'move-node',
+    target,
+    destination: refAt(page, [1]),
+    placement: 'last-child',
+  });
+  assert.ok(moved.ok);
+  const removed = await edit(harness, file, page.checksum, { tag: 'remove-node', target });
+  assert.ok(removed.ok, 'the removal follows the moved element');
+  const late = await edit(harness, file, page.checksum, title(target, 'Wrong element'));
+  assert.equal(late.ok, false);
+  assert.equal(!late.ok && late.error.code === 'rejected' && late.error.reason, 'anchor-moved');
+  assert.equal(fs.readFileSync(file, 'utf8'), `<main>${card}</main><aside></aside>`);
+});
+
 test('an outside edit elsewhere maps; one on the same value is refused', async (context) => {
   const harness = fixture();
   context.after(harness.dispose);

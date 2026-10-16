@@ -4157,6 +4157,13 @@ textarea.embed-editor_value-input.is-expanded {
   white-space: nowrap;
   overflow: clip;
 }
+/* A parent name is the answer to the provenance question, so keep it readable
+   even when a component root carries several utility classes. */
+.embed-editor_provenance-source {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .embed-editor_provenance-val {
   /* Shrink + ellipsis a long value (e.g. a full box-shadow) so it stays inside the
      popover and never pushes the selector out of view — hover shows the full text. */
@@ -5345,6 +5352,36 @@ textarea.embed-editor_value-input.is-expanded {
      caret does; the flex centring still places the text and the chips. */
   line-height: var(--size-input);
   cursor: text;
+}
+/* Custom selects own their focus ring and use a shorter inner field. Its caret
+   needs that field's line height instead of the full dropdown's height. */
+.embed-editor_varconnect.is-token > .u-select-custom-input {
+  line-height: var(--size-control-md);
+}
+.u-select-button.is-custom .embed-editor_varconnect-editor:focus {
+  box-shadow: none;
+}
+/* Keep inherited chips outside the editable draft so focus cannot author them. */
+.embed-editor_varconnect.is-token > .embed-editor_varconnect-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: pre;
+  pointer-events: none;
+  background: transparent;
+  border-color: transparent;
+}
+.embed-editor_varconnect-hint > button {
+  flex-shrink: 0;
+  border: 0;
+  pointer-events: auto;
+}
+/* A live draft hides inheritance even before its value reaches React state. */
+.embed-editor_varconnect-editor:not(:empty):not(:has(> br:only-child))
+  ~ .embed-editor_varconnect-hint {
+  display: none;
 }
 /* The atomic chip (contenteditable=false): click to re-open the picker and switch. */
 .embed-editor_varconnect-token {

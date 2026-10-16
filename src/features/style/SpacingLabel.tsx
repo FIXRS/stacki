@@ -17,6 +17,7 @@ import {
 } from './spacingTypes';
 import { siblingProps, useSideDrag, useSideHover } from './SpacingFill';
 import { withImportant } from './spacingValue';
+import { useStyleHint } from './model/computedStyle';
 
 /** Label text: the value with its unit (the empty placeholder when unset), sans
  *  !important. The CSS truncates it to the band, so the unit shows when there's room. */
@@ -54,10 +55,11 @@ export function humanLabel(prop: string): string {
 // presses land, since the number sits on top of the band.
 export function SpacingLabel(props: SpacingLabelProps) {
   const { prop, side, read, busy, clearProp, onEdit } = props;
+  const computed = useStyleHint(read(prop) === undefined ? prop : '');
   const look = labelLook({
     resolved: read(prop),
     override: props.override,
-    emptyLabel: props.emptyLabel,
+    emptyLabel: computed || props.emptyLabel,
     variableLabels: props.variableLabels ?? false,
     variables: props.variables,
   });
