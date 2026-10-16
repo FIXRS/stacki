@@ -45,7 +45,6 @@ import {
   frontmatterOf,
 } from '../model/nodeFactory';
 import {
-  chooseImportPath,
   extractionGesture,
   createdComponentMessage,
   pasteNeeds,
@@ -54,6 +53,7 @@ import {
 } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { prunedAfterRemoval } from '../model/pageQueries';
+import { componentInstance, componentInstancePlacement } from '../model/componentInstances';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import {
@@ -133,43 +133,42 @@ export function useAddComponent(
       if (!comp || !page) {
         return;
       }
-      const paths = await resolveImportPath(comp.path);
-      const id = newId();
-      // A component whose default slot sits in a text context arrives with a
-      // word in it, the way an inserted <h1> or <p> does — something on the
-      // canvas to aim at. A wrapper whose slot holds blocks (ButtonWrapper,
-      // Section) comes in empty: a stray "Text" there is only ever deleted.
-      const takesText = (comp.slots || []).includes('default') && !!comp.slotText;
-      const node: EditorNode = {
-        id,
-        kind: 'component',
-        name: comp.name,
-        props: {},
-        children: takesText ? [{ id: newId(), kind: 'text', value: 'Text' }] : undefined,
-      };
+      const projectPath = projectRef.current?.path;
+      const instance = componentInstance(comp, insertables);
+      const resolved = await Promise.all(
+        instance.components.map(async (component) => ({
+          component,
+          paths: await resolveImportPath(component.path),
+        })),
+      );
+      // Import lookup is asynchronous; never apply a pending insertion to a
+      // different page or project that was opened while those reads ran.
+      if (pageStateRef.current.currentPage?.path !== page.path) {
+        return;
+      }
+      if (projectRef.current?.path !== projectPath) {
+        return;
+      }
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
       }
-      // Step 6, insert and frontmatter: the import when the page lacks it,
-      // then the node — two requests, one undo step.
+      const { node, imports } = componentInstancePlacement(state.model, instance, resolved);
+      // Nested defaults and all their imports are one insertion and undo step.
       const insert = insertGesture(state.model, node, target, { urgency: true });
-      if (state.model.imports.some((i) => i.name === comp.name)) {
+      if (imports.length === state.model.imports.length) {
         commitEdit(insert);
       } else {
         const imported = (model: EditorModel): EditorModel => ({
           ...model,
-          imports: [
-            ...model.imports,
-            { name: comp.name, path: chooseImportPath(model, paths), quote: "'" },
-          ],
+          imports,
         });
         const options = { coalesceKey: undefined, urgency: true };
         commitEdit(sequence(frontmatterGesture(state.model, options, imported), insert));
       }
-      setSelectedId(id);
+      setSelectedId(node.id);
     },
-    [insertables, commitEdit, resolveImportPath, pageStateRef, setSelectedId],
+    [insertables, commitEdit, resolveImportPath, pageStateRef, projectRef, setSelectedId],
   );
   return { addComponent, resolveImportPath };
 }

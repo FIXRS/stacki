@@ -165,6 +165,17 @@ test('sending a gesture: every outcome, and what the answers mean', async () => 
     applied.outcome.replies.map((reply) => reply.checksum),
     [sum(2), sum(3)],
   );
+  assert.deepEqual(
+    applied.step.outcome,
+    {
+      tag: 'applied',
+      applied: [
+        { checksum: sum(2), inverse: [] },
+        { checksum: sum(3), inverse: [] },
+      ],
+    },
+    'every write in a composed gesture contributes to its undo step',
+  );
 
   const unstated = await sent([], 1, false);
   assert.deepEqual(
@@ -179,6 +190,11 @@ test('sending a gesture: every outcome, and what the answers mean', async () => 
   assert.equal(refused.outcome.reason, 'region-externally-modified');
   assert.equal(refused.outcome.diskChecksum, sum(9));
   assert.equal(refused.outcome.replies.length, 1, 'the one that applied is reported');
+  assert.deepEqual(refused.step.outcome, {
+    tag: 'pending',
+    waiting: 1,
+    applied: [{ checksum: sum(2), inverse: [] }],
+  });
 
   const busy = await sent([{ ok: false, error: { code: 'backpressured', message: 'busy' } }], 2);
   assert.deepEqual(busy.outcome, { tag: 'retry', message: 'busy' }, 'never accepted: sent again');

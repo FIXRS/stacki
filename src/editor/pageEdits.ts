@@ -470,6 +470,15 @@ async function sendRequests(
 ): Promise<GestureSent> {
   const replies: PageEdited[] = [];
   for (const edit of requests) {
+    // The queue reserves one write per gesture. A composed gesture can send
+    // more than one request; reserve each extra reply before it arrives so
+    // its inverse is not discarded after the first write completes the step.
+    if (replies.length > 0) {
+      const outcome = input.record.outcome;
+      if (outcome.tag === 'pending' || outcome.tag === 'applied') {
+        owe(input.record);
+      }
+    }
     const request = { pagePath: input.path, authoredChecksum: input.origin.checksum, edit };
     const answer = await input.send(request);
     if (answer.ok) {
