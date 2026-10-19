@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import type { IconProps } from '../../ui/Icons';
 import { CanvasIcon, ChevronRightIcon, DesktopIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
 import { PreviewSizeControls } from './PreviewSizeControls';
+import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
 
 export type PreviewDevice = 'desktop' | 'tablet' | 'phone' | 'canvas' | 'custom';
@@ -58,12 +59,14 @@ export function PreviewToolbar({
   activeDevice,
   onDevice,
   sizing,
+  guide,
 }: {
   readonly crumbs: readonly PreviewCrumb[];
   readonly onCrumb?: (id: string | undefined) => void;
   readonly activeDevice: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
   readonly sizing?: PreviewSizeControlsProps;
+  readonly guide: GuideMenuProps;
 }) {
   const shownCrumbs = useFoldedCrumbs(crumbs);
   const buttonRefs = useRef(new Map<FixedDevice, HTMLButtonElement>());
@@ -85,6 +88,7 @@ export function PreviewToolbar({
         {...(onCrumb === undefined ? {} : { onCrumb })}
         onExpand={shownCrumbs.expand}
       />
+      <GuideMenu {...guide} />
       <div className="device-btns">
         {indicator && <span className="device-indicator" style={indicator} />}
         {DEVICES.map(({ key, Icon, title }) => (

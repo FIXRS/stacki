@@ -3,6 +3,7 @@ import type React from 'react';
 import type { OverlayInfo, RectMap, SpacingMap } from './PreviewOverlays';
 import type { PreviewDevice } from './PreviewToolbar';
 import type { PreviewMessage, PreviewReloadReason } from './previewMessages';
+import type { GuideMetrics } from './guideModel';
 import { parsePreviewMessage } from './previewMessages';
 import { outlineBoxPath, sameCopy } from './outlineBoxes';
 import { setModifiers } from '../../editor/heldModifiers';
@@ -57,8 +58,14 @@ export interface PreviewRuntime {
   readonly selOcc: number | undefined;
   readonly hoverPath: string | undefined;
   readonly hoverOcc: number | undefined;
+  /** What the column guide is drawn from; undefined until the frame reports. */
+  readonly guide: GuideMetrics | undefined;
   readonly registerFrame: () => void;
   readonly sendTrack: () => void;
+  /** Sends a message to the current frame. */
+  readonly post: (message: unknown) => void;
+  /** Calls the listener each time a frame registers; returns the unsubscribe. */
+  readonly subscribeLoad: (listener: () => void) => () => void;
 }
 
 export function usePreviewRuntime(
@@ -71,6 +78,7 @@ export function usePreviewRuntime(
   const [canvasHover, setCanvasHover] = useState<string | undefined>(undefined);
   const [selectedOccurrence, setSelectedOccurrence] = useState<number | undefined>(undefined);
   const [hoverOcc, setHoverOcc] = useState(0);
+  const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
   const hoverPath = props.navHoverPath ?? canvasHover;
   const selectedBoxPath = props.selPath
     ? outlineBoxPath(props.selPath, props.overlayInfo?.(props.selPath)?.nodeKind)
@@ -86,6 +94,7 @@ export function usePreviewRuntime(
       setCanvasHover,
       setSelectedOccurrence,
       setHoverOcc,
+      setGuide,
     }),
     [],
   );
@@ -97,25 +106,24 @@ export function usePreviewRuntime(
     () => trackedPaths(props.selPath, hoverPath, props.focusPath, selectedBoxPath, hoverBoxPath),
     [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath],
   );
+  const link = useFrameLink(iframeRef);
   const registerFrame = useCallback((): void => {
     const frame = iframeRef.current?.contentWindow;
     setCanvasFrame(frame ?? undefined);
     // The frame may have announced its rendering before this listener mounted.
     // The load handler repeats this handshake after the preload is ready.
     frame?.postMessage({ type: 'avb:request-render' }, '*');
-  }, []);
+    link.notify();
+  }, [link]);
   const sendTrack = useCallback((): void => {
-    iframeRef.current?.contentWindow?.postMessage(
-      {
-        type: 'avb:track',
-        paths: trackPaths,
-        scope: props.pathScope ?? '',
-        focus: props.focusPath ?? '',
-        focusOcc: props.focusOcc ?? 0,
-      },
-      '*',
-    );
-  }, [props.focusOcc, props.focusPath, props.pathScope, trackPaths]);
+    link.post({
+      type: 'avb:track',
+      paths: trackPaths,
+      scope: props.pathScope ?? '',
+      focus: props.focusPath ?? '',
+      focusOcc: props.focusOcc ?? 0,
+    });
+  }, [link, props.focusOcc, props.focusPath, props.pathScope, trackPaths]);
   useFrameRegistration(props, url, registerFrame, sendTrack);
   useSelectionScroll(props, iframeRef, refs);
   useResetOnReload(props, url, refs, setters);
@@ -126,8 +134,11 @@ export function usePreviewRuntime(
     selOcc: selectedOccurrence,
     hoverPath,
     hoverOcc: props.navHoverPath ? 0 : hoverOcc,
+    guide,
     registerFrame,
     sendTrack,
+    post: link.post,
+    subscribeLoad: link.subscribe,
   };
 }
 
@@ -220,6 +231,36 @@ interface RuntimeSetters {
   readonly setCanvasHover: React.Dispatch<React.SetStateAction<string | undefined>>;
   readonly setSelectedOccurrence: React.Dispatch<React.SetStateAction<number | undefined>>;
   readonly setHoverOcc: React.Dispatch<React.SetStateAction<number>>;
+  readonly setGuide: React.Dispatch<React.SetStateAction<GuideMetrics | undefined>>;
+}
+
+// A plain link to the current frame for the features built on the canvas:
+// sending to it, and hearing each time a frame registers (a reloaded page
+// starts from nothing, so what they told the last one has to be said again).
+// The listeners live in a ref, so subscribing never re-renders the canvas.
+function useFrameLink(iframeRef: React.RefObject<HTMLIFrameElement>): {
+  readonly post: (message: unknown) => void;
+  readonly notify: () => void;
+  readonly subscribe: (listener: () => void) => () => void;
+} {
+  const listeners = useRef(new Set<() => void>());
+  return useMemo(
+    () => ({
+      post: (message: unknown) => iframeRef.current?.contentWindow?.postMessage(message, '*'),
+      notify: () => {
+        for (const listener of listeners.current) {
+          listener();
+        }
+      },
+      subscribe: (listener: () => void) => {
+        listeners.current.add(listener);
+        return () => {
+          listeners.current.delete(listener);
+        };
+      },
+    }),
+    [iframeRef],
+  );
 }
 
 function useMessageListener(
@@ -289,6 +330,9 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       break;
     case 'canvas-ready':
       noteCanvasReady();
+      break;
+    case 'guide':
+      setters.setGuide(message.metrics);
       break;
     case 'query-result':
       receiveCanvasReply(message.input);

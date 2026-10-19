@@ -27,6 +27,10 @@ export type GapRow = { top: number; bottom: number; items: DOMRect[] };
 // come from the project's markup, and what lies below the bound is skipped.
 export const PRELOAD_LIMITS = { domDepthMax: 512, cssRuleDepthMax: 64 } as const;
 
+// Marks the elements the canvas adds to the page to measure it: its own
+// writes, which never start a page walk (mutationKind in frameReports.ts).
+export const PROBE_ATTR = 'data-avb-probe';
+
 export const isElement = (node: Node): node is Element => node.nodeType === 1;
 export const isComment = (node: Node): node is Comment => node.nodeType === 8;
 export const isText = (node: Node): node is Text => node.nodeType === 3;

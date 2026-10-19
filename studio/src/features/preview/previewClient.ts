@@ -3,6 +3,7 @@ import { receiveLiveText, applyLiveText } from './liveTextClient';
 import { installCursorPresence } from '../collaboration/cursorClient';
 import { receiveRenderPush } from './renderPushClient';
 import { rectsForPath } from '../../../vendor/stacki/electron/preload/frameMeasure';
+import { startGuide } from '../../../vendor/stacki/electron/preload/frameGuide';
 import {
   taggedPlaces,
   inFocus,
@@ -19,6 +20,7 @@ const studioOrigin =
   location.origin;
 const post = (message: unknown) => window.parent.postMessage(message, studioOrigin);
 const cursorPresence = installCursorPresence(post);
+const columnGuide = startGuide(post);
 // This async module is appended after page markup. Reveal that markup without
 // waiting for slow images or the separate morph module to finish loading.
 requestAnimationFrame(() => post({ type: 'studio:preview-ready' }));
@@ -164,6 +166,7 @@ window.addEventListener('message', (event) => {
   receiveLiveText(data);
   receiveLiveNumericStyles(data);
   cursorPresence.receive(data);
+  columnGuide.receive(data);
   if (data.type === 'studio:collaborators' && 'paths' in data && Array.isArray(data.paths)) {
     collaborators = data.paths
       .filter((path: unknown): path is string => typeof path === 'string' && path.length <= 1000)

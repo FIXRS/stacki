@@ -58,6 +58,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
       focusWhole={app.focusWhole}
       device={app.device}
       onDevice={app.setDevice}
+      projectPath={app.project.path}
       judgeEvent={app.judgeEvent}
       onStaleEvent={app.onStaleEvent}
       onPreviewReload={app.onPreviewReload}

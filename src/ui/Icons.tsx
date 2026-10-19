@@ -48,6 +48,15 @@ export const ComponentIcon = (props: IconProps) => (
   </I>
 );
 
+// Columns between two margins: the preview's column guide.
+export const GuideIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M2.5 2.5v11M13.5 2.5v11" />
+    <rect x="4.75" y="2.5" width="2.5" height="11" rx="0.5" />
+    <rect x="8.75" y="2.5" width="2.5" height="11" rx="0.5" />
+  </I>
+);
+
 export const LayoutIcon = (props: IconProps) => (
   <I {...props}>
     <rect x="2" y="2.5" width="12" height="11" rx="1.5" />

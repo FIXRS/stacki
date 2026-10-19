@@ -6,7 +6,7 @@ import { authoredStyleMutation } from './frameAuthoredStyles';
 // writes never trigger a pass.
 
 import type { Rect, Spacing } from './frameBasics';
-import { isComment, isElement, isText } from './frameBasics';
+import { PROBE_ATTR, isComment, isElement, isText } from './frameBasics';
 import {
   PATH_ATTR,
   elementsWithPath,
@@ -470,7 +470,6 @@ export const remeasureStyles = () => {
 // colour the style panel asked about. Its own writes are now told apart by
 // what they touched, never by timing.
 type MutationKind = 'none' | 'css' | 'page';
-export const PROBE_ATTR = 'data-avb-probe';
 const ownElement = (node: Node): boolean => {
   if (!isElement(node)) {
     return false;

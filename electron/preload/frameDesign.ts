@@ -175,7 +175,10 @@ function forwardShortcut(event: KeyboardEvent): void {
   // usually made, so it has to reach the app from in here too.
   const isClassJump = mod && !event.altKey && !event.shiftKey && event.key === 'Enter';
   const isProperties = !mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k';
-  if (isDelete || isDuplicate || isClassJump || isProperties) {
+  // ⇧G shows or hides the column guide drawn over this frame. It is replayed
+  // as the key "G", which says Shift on its own (src/features/preview/guideSettings.ts).
+  const isGuide = !mod && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'g';
+  if (isDelete || isDuplicate || isClassJump || isProperties || isGuide) {
     event.preventDefault();
     try {
       window.parent.postMessage(

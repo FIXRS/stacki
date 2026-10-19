@@ -12,6 +12,13 @@ import {
 } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
 import { parsePreviewRender, type PreviewRender } from '../../../shared/page/previewToken';
+import {
+  GUIDE_COLUMN_VARIABLES,
+  GUIDE_LIMITS,
+  parseGuideVariableName,
+  type GuideColumnVariable,
+  type GuideMetrics,
+} from './guideModel';
 
 export type PreviewMessage =
   | {
@@ -35,6 +42,8 @@ export type PreviewMessage =
   | ({ readonly kind: 'click-node'; readonly outside: boolean } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
   | { readonly kind: 'canvas-ready' }
+  /** What the column guide is drawn from (electron/preload/frameGuide.ts). */
+  | { readonly kind: 'guide'; readonly metrics: GuideMetrics }
   /** The rendering the canvas shows: its manifest and token (plan §9, step 7). */
   | { readonly kind: 'render'; readonly render: PreviewRender }
   /** The canvas reloaded instead of patching, and why (step 7). */
@@ -164,6 +173,8 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
       return { kind: 'open-node', ...parseLocatedMessage(value) };
     case 'avb:canvas-ready':
       return { kind: 'canvas-ready' };
+    case 'avb:guide':
+      return { kind: 'guide', metrics: parseGuideMetrics(value) };
     case 'avb:render':
       return { kind: 'render', render: parsePreviewRender(value) };
     case 'avb:preview-reload':
@@ -182,6 +193,81 @@ function parseRects(value: Readonly<Record<string, unknown>>): PreviewMessage {
     classes: dictionary(list(list(pathText)))(value['classes']),
     spacing: dictionary(list(optional(parseSpacing)))(value['spacing']),
   };
+}
+
+function parseGuideMetrics(value: Readonly<Record<string, unknown>>): GuideMetrics {
+  const rootFontPx = guideLength(value['rootFontSize']);
+  if (rootFontPx === 0) {
+    throw new Error('Preview guide: expected a positive root font size');
+  }
+  if (rootFontPx > GUIDE_LIMITS.rootFontPxMax) {
+    throw new Error('Preview guide: root font size exceeds limit');
+  }
+  return {
+    viewportWidthPx: guideLength(value['viewportWidth']),
+    rootFontPx,
+    marginPx: optional(guideLength)(value['margin']),
+    gutterPx: optional(guideLength)(value['gutter']),
+    widthMaxPx: optional(guideLength)(value['widthMax']),
+    columns: parseGuideColumns(value['columnCount'], value['columnVariable']),
+    variablesPx: Object.fromEntries(
+      guideVariableEntries(value['variables']).map(([name, px]) => [
+        name,
+        optional(guideLength)(px),
+      ]),
+    ),
+    variableCounts: Object.fromEntries(
+      guideVariableEntries(value['counts']).map(([name, input]) => [name, declaredCount(input)]),
+    ),
+  };
+}
+
+// The menu's own variables, as measured: at most one per value, each a custom
+// property name.
+function guideVariableEntries(input: unknown): ReadonlyArray<readonly [string, unknown]> {
+  const entries = Object.entries(record(input));
+  if (entries.length > GUIDE_LIMITS.variablesMax) {
+    throw new Error('Preview guide: too many variables');
+  }
+  for (const [name] of entries) {
+    if (parseGuideVariableName(name) === undefined) {
+      throw new Error('Preview guide: not a variable name');
+    }
+  }
+  return entries;
+}
+
+function guideLength(input: unknown): number {
+  const value = nonnegativeFinite(input);
+  if (value > GUIDE_LIMITS.lengthPxMax) {
+    throw new Error('Preview guide: length exceeds limit');
+  }
+  return value;
+}
+
+// The count the page found and the variable it came from; undefined when the
+// page declares none.
+function parseGuideColumns(countInput: unknown, variableInput: unknown): GuideMetrics['columns'] {
+  if (countInput === undefined) {
+    return undefined;
+  }
+  const variable = parseGuideColumnVariable(variableInput);
+  const columnCount = declaredCount(countInput);
+  return columnCount === undefined ? undefined : { count: columnCount, variable };
+}
+
+// A whole number as the page read it. Whether the guide can use it is the
+// model's to decide (guideProjectCount), so the menu can say why it does not.
+function declaredCount(input: unknown): number | undefined {
+  return optional(count)(input);
+}
+
+function parseGuideColumnVariable(input: unknown): GuideColumnVariable {
+  const variable = GUIDE_COLUMN_VARIABLES.find((name) => name === input);
+  if (variable === undefined) {
+    throw new Error('Preview guide: unknown column variable');
+  }
+  return variable;
 }
 
 function parseReloadReason(input: unknown): PreviewReloadReason {

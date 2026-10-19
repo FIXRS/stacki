@@ -7,6 +7,8 @@ const keys = new Set([
   'v',
   'f',
   'e',
+  // ⇧G shows or hides the column guide (guideSettings.ts).
+  'g',
   'backspace',
   'delete',
   '1',
