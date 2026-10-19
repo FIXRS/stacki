@@ -1,3 +1,4 @@
+import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
 import type { Data } from '../../shared/core/boundary';
 import type {
   IpcResults,
@@ -398,6 +399,10 @@ export function restoreProjectVersion(
 
 export function onAppProgress(callback: (message: string | undefined) => void): () => void {
   return window.avb.onProgress((input) => callback(optional(text)(record(input)['message'])));
+}
+
+export function onPreviewFailed(callback: (url: string) => void): () => void {
+  return window.avb.onPreviewFailed((input) => callback(parsePreviewFailure(input)));
 }
 
 export function onDevExit(callback: (log: string) => void): () => void {

@@ -14,7 +14,10 @@ interface ProbeResponse {
   arrayBuffer(): Promise<unknown>;
 }
 
-type FetchLike = (url: string, init: { redirect: 'follow' }) => Promise<ProbeResponse>;
+type FetchLike = (
+  url: string,
+  init: { redirect: 'follow'; signal: AbortSignal },
+) => Promise<ProbeResponse>;
 
 /**
  * Ask the dev server for a URL and report only the verdict.
@@ -32,7 +35,10 @@ async function probeUrl(
     return { ok: false, status: 0 };
   }
   try {
-    const response = await fetchImpl(url, { redirect: 'follow' });
+    const response = await fetchImpl(url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(5000),
+    });
     try {
       await response.arrayBuffer();
     } catch {

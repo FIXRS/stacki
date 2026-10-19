@@ -1,3 +1,4 @@
+import { listenForPreviewFailures } from './preview/previewFailure';
 import { registerStudioHandlers } from './handlers/studioHandlers';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
 import { RUNTIME_PATHS, resourcePath } from './lib/runtimePaths';
@@ -254,6 +255,8 @@ function createWindow() {
       nodeIntegrationInSubFrames: true,
     },
   });
+
+  listenForPreviewFailures(mainWindow.webContents, () => devServers.current()?.url);
 
   // A renderer that does not load leaves an empty window; the log says why.
   const loaded = process.env['VITE_DEV_SERVER_URL']

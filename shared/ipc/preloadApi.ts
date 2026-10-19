@@ -150,6 +150,7 @@ export type PreloadBridge = InvokeSurface & {
   readonly onTerminalExit: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalProcess: (callback: (data: unknown) => void) => () => void;
   readonly onDevLog: (callback: (data: unknown) => void) => () => void;
+  readonly onPreviewFailed: (callback: (data: unknown) => void) => () => void;
   readonly onDevExit: (callback: (data: unknown) => void) => () => void;
   readonly onProgress: (callback: (data: unknown) => void) => () => void;
   readonly onStudioProgress: (callback: (data: unknown) => void) => () => void;

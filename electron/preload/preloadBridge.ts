@@ -262,6 +262,11 @@ function eventBridge() {
       ipcRenderer.on('dev:log', listener);
       return () => ipcRenderer.removeListener('dev:log', listener);
     },
+    onPreviewFailed: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('dev:preview-failed', listener);
+      return () => ipcRenderer.removeListener('dev:preview-failed', listener);
+    },
     onDevExit: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('dev:exit', listener);

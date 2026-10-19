@@ -22,6 +22,7 @@ import {
   diagnoseProject,
   onAppProgress,
   onDevExit,
+  onPreviewFailed,
   onDevLog,
   onPageMaybeChanged,
   probeProjectPreview,
@@ -239,6 +240,7 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
       previewLoadPendingRef.current = false;
       watch.poke();
     }
+    const offFailure = subscribePreviewFailure(devUrl, livePathRef, watch);
     // Every write the app makes, plus every change made outside it.
     const offWrite = onPageMaybeChanged((event) => {
       watch.poke();
@@ -254,6 +256,7 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
     });
     return () => {
       offWrite();
+      offFailure();
       watch.stop();
       if (previewWatchRef.current === watch) {
         previewWatchRef.current = undefined;
@@ -261,6 +264,23 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
     };
   }, [devUrl, livePathRef, setRefreshKey]);
   return { previewLoaded };
+}
+
+// Only the currently displayed page may trigger recovery; a late failure from
+// a previous page or another iframe must not interrupt the user's navigation.
+function subscribePreviewFailure(
+  origin: string,
+  path: { readonly current: string | undefined },
+  watch: ReturnType<typeof createPreviewWatch>,
+): () => void {
+  if (typeof window.avb.onPreviewFailed !== 'function') {
+    return () => {};
+  }
+  return onPreviewFailed((failedURL) => {
+    if (failedURL === new URL(path.current || '/', origin).href) {
+      watch.failed();
+    }
+  });
 }
 
 // Project scans: one in flight, at most one waiting.

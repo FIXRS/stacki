@@ -52,6 +52,21 @@ export function portAnswers(port: number, host = '127.0.0.1') {
   });
 }
 
+// A listening TCP port can precede Astro's HTTP middleware. Wait for a real
+// response before navigating the canvas; error pages still count as responses.
+export async function serverResponds(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(1500),
+      redirect: 'manual',
+    });
+    await response.body?.cancel();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Astro >= 5 keeps a per-project single-instance lock and reports the
 // already-running server's URL when it refuses to start. The message format
 // varies: "already running.\n  URL: http://..." on a TTY, or a JSON log line

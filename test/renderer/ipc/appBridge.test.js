@@ -8,6 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
 
 const bridgeModule = loadRenderer('src/ipc/appBridge.ts');
 // A legacy bridge answered a cancelled dialog with null; the parser still reads it as a
@@ -108,4 +109,35 @@ test('App bridge rejects malformed replies and event values', async () => {
 
   bridgeModule.onSoundSettingChanged(() => {});
   assert.throws(() => soundCallback('yes'), /Expected boolean/);
+});
+
+test('preview failures validate URLs before reporting them to recovery', () => {
+  let deliver;
+  let removed = false;
+  const received = [];
+  global.window = {
+    avb: {
+      onPreviewFailed(callback) {
+        deliver = callback;
+        return () => {
+          removed = true;
+        };
+      },
+    },
+  };
+  const stop = bridgeModule.onPreviewFailed((url) => received.push(url));
+  deliver('http://127.0.0.1:4321/#avb-design');
+  assert.deepEqual(received, ['http://127.0.0.1:4321/']);
+  for (const invalid of [
+    42,
+    '',
+    'file:///tmp/page',
+    'https://example.com',
+    'http://user:pass@localhost/',
+    'http://localhost/' + 'x'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1),
+  ]) {
+    assert.throws(() => deliver(invalid));
+  }
+  stop();
+  assert.equal(removed, true);
 });

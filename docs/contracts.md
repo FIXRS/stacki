@@ -66,6 +66,13 @@ with `null` accepted as absent, at the reader that parses it, because JSON
 cannot say `undefined`. JSON's own `null` inside project data (`Data` in
 `shared/core/boundary.ts`) is a value and round-trips as `null`.
 
+The `dev:preview-failed` event carries a local HTTP URL through
+`onPreviewFailed`. `shared/ipc/previewFailure.ts` validates its length, loopback
+host, and absence of credentials, and removes the editor-mode hash. Main only
+reports failed subframe navigations on the active preview origin; aborted page
+switches are ignored. The renderer only recovers its current page, so a late
+failure from a previous navigation cannot reload the new page.
+
 Expected operating failures use `Result` or an explicit result union. A shape
 that violates the declared wire contract is a programmer error and throws at
 the boundary. Do not catch that assertion and turn it into an operating result.

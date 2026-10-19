@@ -19,6 +19,7 @@ interface PreviewOptions {
 }
 interface PreviewWatch {
   readonly poke: () => void;
+  readonly failed: () => void;
   readonly stop: () => void;
   readonly isServing: () => boolean;
 }
@@ -31,7 +32,12 @@ type WatchState =
 export function createPreviewWatch(options: PreviewOptions): PreviewWatch {
   const watch = new PreviewWatcher(options);
   // Bound methods preserve the original callable API when consumers detach one.
-  return { poke: () => watch.poke(), stop: () => watch.stop(), isServing: () => watch.isServing() };
+  return {
+    poke: () => watch.poke(),
+    failed: () => watch.failed(),
+    stop: () => watch.stop(),
+    isServing: () => watch.isServing(),
+  };
 }
 
 class PreviewWatcher {
@@ -71,6 +77,16 @@ class PreviewWatcher {
     if (this.state.serving && this.timers.now() - this.askedAt < this.quietMs) {
       return;
     }
+    this.schedule(this.settleMs);
+  }
+
+  failed(): void {
+    if (this.state.kind === 'stopped') {
+      return;
+    }
+    // A successful probe must now reload the failed frame, even if no probe
+    // observed the brief outage. Explicit failures also bypass the quiet period.
+    this.state = { kind: 'active', serving: false };
     this.schedule(this.settleMs);
   }
 

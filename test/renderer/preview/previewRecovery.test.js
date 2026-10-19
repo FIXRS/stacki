@@ -147,6 +147,25 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     return { watch, asked, reloads: () => reloads };
   };
 
+  // The initial frame failed, but Astro recovered before the first probe.
+  // A later healthy probe must reload that empty document exactly once.
+  {
+    const harness = makeWatch([{ ok: true }]);
+    harness.watch.failed();
+    await sleep(40);
+    check('a known frame failure recovers on an already healthy server', harness.reloads() === 1);
+    harness.watch.poke();
+    await sleep(30);
+    check('the successful retry does not create a reload loop', harness.reloads() === 1);
+    harness.watch.failed();
+    await sleep(40);
+    check('a second failure bypasses the healthy quiet period', harness.reloads() === 2);
+    harness.watch.stop();
+    harness.watch.failed();
+    await sleep(30);
+    check('a closed project cannot restart recovery', harness.reloads() === 2);
+  }
+
   // --- An ordinary edit: nothing was broken, so nothing reloads -------------
   {
     const harness = makeWatch([{ ok: true }]);

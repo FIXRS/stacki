@@ -38,7 +38,7 @@ import {
   nodeVersionOf,
   parseExistingServer,
   parsesAsModule,
-  portAnswers,
+  serverResponds,
   readAstroLock,
   satisfiesRange,
   serverAlive,
@@ -366,7 +366,7 @@ export class DevServers {
 
     // The daemon's own failure reasons only land in `astro dev logs`.
 
-    // Wait until the port answers so the iframe doesn't load into a dead server.
+    // Wait for HTTP readiness; a listening socket alone can leave the iframe blank.
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
       assertActive();
@@ -376,7 +376,7 @@ export class DevServers {
             (await this.failureDetail(projectPath, localBin)),
         );
       }
-      if (await portAnswers(port)) {
+      if (await serverResponds(url)) {
         assertActive();
         return url;
       }
