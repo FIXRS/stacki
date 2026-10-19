@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { once } from 'node:events';
 import path from 'path';
 import { createRequire } from 'module';
 import { spawn, type ChildProcess } from 'child_process';
@@ -278,6 +279,19 @@ class ConfigService {
     }
   }
 
+  async stopAndWait(error: Error): Promise<void> {
+    const child = this.child;
+    if (!child || child.exitCode !== null || child.signalCode !== null) {
+      this.stop(error);
+      return;
+    }
+    // Windows holds the runner's working directory until the process exits.
+    // Subscribe before stopping so even an immediate exit cannot be missed.
+    const closed = once(child, 'close', { signal: AbortSignal.timeout(5000) });
+    this.stop(error);
+    await closed;
+  }
+
   touch(): void {
     if (this.stopped) {
       return;
@@ -434,6 +448,10 @@ class ConfigService {
 // Project path to its service, including one still starting.
 const services = new Map<string, ConfigService>();
 const IDLE_TIMEOUT = 5 * 60 * 1000;
+
+export async function stopServiceAndWait(projectPath: string): Promise<void> {
+  await services.get(projectPath)?.stopAndWait(new Error(RELOADED));
+}
 
 function stopService(projectPath: string): void {
   services.get(projectPath)?.stop(new Error(RELOADED));

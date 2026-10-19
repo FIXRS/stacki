@@ -4,7 +4,7 @@ import path from 'node:path';
 import { walk, safePath } from '../project/projectServer';
 import type { createRooms } from '../collaboration/rooms';
 import { sourcePath, string } from '../../shared/validation';
-import { stopService } from '../../../vendor/stacki/electron/content/contentConfig';
+import { stopServiceAndWait } from '../../../vendor/stacki/electron/content/contentConfig';
 
 export const CMS_SOURCE =
   /\.(astro|json|md|mdx|mdoc|markdown|css|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/i;
@@ -38,7 +38,7 @@ export async function withCmsSnapshot<T>(
     await stageSources(root, stage, snapshot);
     return await run(stage);
   } finally {
-    stopService(stage);
+    await stopServiceAndWait(stage);
     await rm(stage, { recursive: true, force: true });
   }
 }
