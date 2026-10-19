@@ -464,7 +464,14 @@ function AssetPanelBody({
   );
   return (
     <div className="panel-section grow">
-      {!state.batch.selecting && <AssetHeader cwd={state.cwd} actions={actions} state={state} />}
+      {(props.pick || !state.batch.selecting) && (
+        <AssetHeader
+          cwd={state.cwd}
+          actions={actions}
+          state={state}
+          picking={Boolean(props.pick)}
+        />
+      )}
       <PickBanner
         {...(props.pick === undefined ? {} : { pick: props.pick })}
         {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })}
@@ -486,15 +493,28 @@ function AssetHeader({
   cwd,
   actions,
   state,
+  picking,
 }: {
   readonly cwd: string;
   readonly actions: AssetActions;
   readonly state: AssetPanelState;
+  readonly picking: boolean;
 }) {
   return (
     <div className="panel-header">
       <h2>Assets</h2>
       <div style={{ display: 'flex', gap: 2 }}>
+        {!picking && (
+          <button
+            className="asset-select-link"
+            onClick={() => {
+              state.batch.setSelected(new Set());
+              state.batch.setSelecting(true);
+            }}
+          >
+            Select assets
+          </button>
+        )}
         <button
           className="ghost"
           title={cwd ? 'New folder' : 'Open public/ or src/ first'}

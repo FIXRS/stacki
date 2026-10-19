@@ -17,18 +17,7 @@ export function AssetSelectionToolbar({
   const selected = eligible.filter((file) => batch.selected.has(file.rel));
   const busy = batch.progress !== undefined;
   if (!batch.selecting) {
-    return (
-      <div className="asset-batch-tools">
-        <button
-          onClick={() => {
-            batch.setSelecting(true);
-            batch.setSelected(new Set());
-          }}
-        >
-          Select assets
-        </button>
-      </div>
-    );
+    return undefined;
   }
   return (
     <div className="asset-batch-tools selecting">

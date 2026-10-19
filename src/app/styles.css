@@ -8097,3 +8097,17 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   height: 16px;
   accent-color: var(--accent);
 }
+
+.panel-header .asset-select-link {
+  padding: 4px 6px;
+  margin-right: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.panel-header .asset-select-link:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  text-decoration: underline;
+}

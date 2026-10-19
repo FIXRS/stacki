@@ -35,6 +35,8 @@ export interface DropdownOption<T = string> {
   readonly dim?: boolean;
 }
 export interface DropdownProps<T = string> {
+  readonly disabled?: boolean;
+  readonly ariaLabel?: string;
   readonly value: T;
   readonly options: readonly DropdownOption<T>[];
   readonly onChange: (value: T) => void;
@@ -89,11 +91,19 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
   useDropdownDismiss(state, actions.close);
   useDropdownSound(state);
   useDropdownFocus(state, { searchable: props.searchable ?? false });
+  useEffect(() => {
+    if (props.disabled && state.open) {
+      actions.close();
+    }
+  }, [props.disabled, state.open, actions]);
   const onKey = (event: KeyboardEvent<HTMLElement>) => dropdownKey(event, control, props);
   return (
     <>
       <button
         type="button"
+        disabled={props.disabled}
+        aria-label={props.ariaLabel}
+        aria-expanded={state.open}
         ref={state.triggerRef}
         className={`dd-trigger ${props.className || ''}`}
         onMouseEnter={props.onPrepare}
