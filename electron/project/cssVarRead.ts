@@ -1,7 +1,7 @@
 // Reading a project's custom properties: the stylesheets that hold them, and
 // each rule's declarations and comments in source order (cssVars.ts).
 
-import fs from 'fs';
+import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
 import postcss from 'postcss';
 import type { Declaration, Rule as PostcssRule } from 'postcss';
@@ -28,7 +28,7 @@ export function findStylesheets(projectPath: string): string[] {
     if (depth > CSS_VARIABLE_LIMITS.stylesheetDepthMax) {
       return;
     }
-    let entries: fs.Dirent[];
+    let entries: ReturnType<typeof fs.readdirSync>;
     try {
       entries = fs.readdirSync(directory, { withFileTypes: true });
     } catch {

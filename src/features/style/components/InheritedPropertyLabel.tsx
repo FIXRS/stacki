@@ -30,7 +30,6 @@ export default function InheritedPropertyLabel({
         props={[property]}
         className={className}
         busy={disabled}
-        note={`Inherited from ${source.label} — click to see the parent`}
         onProvenance={(_, rect) => {
           if (suppress.current) {
             suppress.current = false;

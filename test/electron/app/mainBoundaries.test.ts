@@ -58,7 +58,7 @@ test('the complete channel inventory matches real main and terminal registration
   );
   // Step 8 retired page:writeRaw; step 9 added page:previewEdit; step 10
   // retired page:write and page:serialize, the Markdown whole-model save.
-  assert.equal(harness.handlers.size, 116);
+  assert.equal(harness.handlers.size, 119);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),
@@ -344,4 +344,50 @@ test('an empty tsconfig alias map takes precedence over jsconfig', async (contex
   assert.equal(toRecord(await harness.invoke('src:resolvePath', payload))?.['ok'], false);
   fs.writeFileSync(config, '{"compilerOptions":{}}');
   assert.equal(toRecord(await harness.invoke('src:resolvePath', payload))?.['ok'], true);
+});
+
+test('Studio setup accepts the open project root and refuses outside projects', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  await harness.invoke('project:scan', harness.root);
+  assert.deepEqual(await harness.invoke('studio:status', harness.root), {
+    kind: 'missing',
+    desktopVersion: '0.1.48',
+  });
+  await assert.rejects(harness.invoke('studio:status', path.dirname(harness.root)), /outside/);
+  await assert.rejects(
+    harness.invoke('studio:install', {
+      projectPath: path.dirname(harness.root),
+      source: 'published',
+      requestId: 'test-install',
+    }),
+    /outside/,
+  );
+  fs.mkdirSync(path.join(harness.root, 'studio'));
+  const status = toRecord(await harness.invoke('studio:status', harness.root));
+  assert.equal(status?.['kind'], 'blocked');
+  assert.deepEqual(
+    await harness.invoke('studio:install', {
+      projectPath: harness.root,
+      source: 'published',
+      requestId: 'test-install',
+    }),
+    { kind: 'error', message: 'Studio already exists. Setup does not replace existing files.' },
+  );
+});
+
+test('popup preferences persist independently and reject invalid changes', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  await harness.invoke('settings:set', { setting: 'sound', enabled: true });
+  await harness.invoke('settings:set', { setting: 'usageCountsEnabled', enabled: false });
+  const result = toRecord(await harness.invoke('settings:get'));
+  assert.equal(result?.['sound'], true);
+  assert.equal(result?.['usageCountsEnabled'], false);
+  const stored = toRecord(harness.call('readSettings'));
+  assert.equal(stored?.['sound'], true);
+  assert.equal(stored?.['usageCountsEnabled'], false);
+  await assert.rejects(harness.invoke('settings:set', { setting: 'sound', enabled: 'yes' }));
+  await assert.rejects(harness.invoke('settings:set', { setting: 'unknown', enabled: true }));
+  assert.equal(toRecord(harness.call('readSettings'))?.['sound'], true);
 });

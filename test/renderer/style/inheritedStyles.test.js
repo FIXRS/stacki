@@ -154,11 +154,12 @@ test('computed inheritance fills style controls without authoring CSS', async ()
       ['Size', '48px'],
       ['Height', '60px'],
       ['Color', 'rgb(12, 34, 56)'],
-      ['Width', '640px'],
     ]) {
       assert.equal(input(label).placeholder, value, `${label} shows the computed value`);
       assert.equal(input(label).value, '', `${label} does not become an authored draft`);
     }
+    assert.equal(input('Width').placeholder, 'auto', 'width hides computed dimensions');
+    assert.equal(input('Width').value, '');
     assert.match(control('Font family').textContent, /Georgia/);
     assert.match(control('Font weight').textContent, /600/);
     assert.equal(control('Text color').querySelector('span').style.background, 'rgb(12, 34, 56)');
@@ -194,7 +195,7 @@ test('computed inheritance fills style controls without authoring CSS', async ()
     assert.equal(input('Height').placeholder, '1.1');
     assert.equal(input('Font family').placeholder, 'var(--font-heading)');
     assert.equal(input('Color').placeholder, 'var(--heading-accent)');
-    assert.equal(input('Width').placeholder, '40rem');
+    assert.equal(input('Width').placeholder, 'auto');
     assert.equal(input('Size').value, '', 'inherited declarations remain hints');
     const orange = Array.from(document.querySelectorAll('.embed-editor_prop-orange'));
     for (const label of ['Font', 'Size', 'Height', 'Color']) {
@@ -228,7 +229,6 @@ test('computed inheritance fills style controls without authoring CSS', async ()
       ['Size', ['h1']],
       ['Height', ['h1-line-height']],
       ['Color', ['heading-accent']],
-      ['Width', ['space', 'gutter']],
     ]) {
       const chips = hint(label).querySelectorAll('.embed-editor_varconnect-token-name');
       assert.deepEqual(
@@ -239,7 +239,8 @@ test('computed inheritance fills style controls without authoring CSS', async ()
       const editor = wrapper(label).querySelector('.embed-editor_varconnect-editor');
       assert.equal(editor.textContent, '', 'inheritance is outside the serialized editor');
     }
-    assert.equal(hint('Width').textContent, 'calc(space + gutter)');
+    assert.equal(input('Width').placeholder, 'auto');
+    assert.ok(hint('Width') === null, 'width does not replace auto with inherited variable chips');
     assert.equal(document.querySelectorAll('.u-field-label.is-active').length, 0);
     assert.deepEqual(writes, [], 'showing inherited chips never writes an override');
 

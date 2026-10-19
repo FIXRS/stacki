@@ -32,6 +32,9 @@ function projectBridge() {
   return {
     platform: process.platform,
 
+    studioStatus: invoke('studio:status'),
+    installStudio: invoke('studio:install'),
+
     // Project:
     openProjectDialog: invoke('project:openDialog'),
     newProjectDialog: invoke('project:newDialog'),
@@ -243,6 +246,11 @@ function terminalBridge() {
 // What main pushes to the app, and its preferences and menu.
 function eventBridge() {
   return {
+    onStudioProgress: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('studio:progress', listener);
+      return () => ipcRenderer.removeListener('studio:progress', listener);
+    },
     // Events:
     onPageMaybeChanged: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
@@ -278,6 +286,7 @@ function eventBridge() {
 
     // App preferences — read once on load; the menu pushes changes as they happen.
     settings: invoke('settings:get'),
+    setPreference: invoke('settings:set'),
 
     // Application menu events (macOS menu accelerators never reach the DOM)
     onMenu: (channel: string, callback: (data?: unknown) => void) => {

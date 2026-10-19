@@ -706,8 +706,10 @@ function fakeAudio() {
   );
 
   const main = fs.readFileSync(repoPath('dist/electron/main.js'), 'utf8');
-  check('the setting is a menu item', /label: 'Interface Sounds'/.test(main));
-  check('a checkbox, so it reads as a toggle', /type: 'checkbox'/.test(main));
+  check('settings opens from the menu', /label: 'Settings…'/.test(main));
+  const preferences = fs.readFileSync(repoPath('src/app/settings/Settings.tsx'), 'utf8');
+  check('sound is in settings', /Interface sounds/.test(preferences));
+  check('an accessible switch controls sound', /role="switch"/.test(preferences));
   check('off unless it has been turned on', /SETTINGS_DEFAULTS = \{\s*sound: false,/.test(main));
   check(
     'and remembered across launches',

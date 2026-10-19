@@ -1,3 +1,4 @@
+import { assetSources } from '../ipc/editorEnvironment';
 import React, { useRef, useState } from 'react';
 import { assert } from '../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
@@ -64,10 +65,8 @@ const fileURL = (encodedPath: string): string =>
 // packaged build, but in dev the renderer is on http and Chromium blocks
 // file:// subresources from it. Try our scheme first, then fall back to
 // file:// so a packaged build still works if the scheme is unavailable.
-export const sourceCandidates = (abs: string): readonly [string, string] => [
-  `stacki-asset://local/${encodePath(abs)}`,
-  fileURL(encodePath(abs)),
-];
+export const sourceCandidates = (abs: string): readonly [string, string] =>
+  assetSources(abs, [`stacki-asset://local/${encodePath(abs)}`, fileURL(encodePath(abs))]);
 
 // Formats Chromium can load through FontFace. .eot can't, so it keeps the
 // badge.

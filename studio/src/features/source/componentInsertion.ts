@@ -1,0 +1,68 @@
+import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
+import { defaultInstance } from './instanceDefaults';
+import { relativeImport, resolveImport } from './imports';
+import { insertFragment, parsePage, type Edit, type TreeAction } from './source';
+
+type Insert = Extract<TreeAction, { kind: 'insert' }>;
+export function componentInsertionEdits(source: string, action: Insert, file: string): Edit[] {
+  if (!/^[A-Z][\w]*$/.test(action.name) || !/^[\w./@-]+\.astro$/.test(action.importPath)) {
+    throw new Error('Invalid component');
+  }
+  const parsed = parsePage(source);
+  if (!parsed.editable) {
+    throw new Error(parsed.reason);
+  }
+  const imports = insertionImports(parsed.model.imports, file);
+  const resolved = resolveImport(file, action.importPath);
+  const rootName = imports.resolve(resolved, action.name, action.importPath);
+  const node = defaultInstance(resolved, (child, name) =>
+    imports.resolve(child, name, relativeImport(file, child)),
+  );
+  const fragment = node
+    ? serializeNodes([node])
+    : action.paired
+      ? `<${rootName}>Text</${rootName}>`
+      : `<${rootName} />`;
+  const edits: Edit[] = [insertFragment(source, action, fragment, parsed.model.nodes.length === 0)];
+  if (imports.statements.length) {
+    const eol = parsed.model.eol;
+    const statements = imports.statements.join(eol) + eol;
+    const start = source.startsWith('---') ? 3 + eol.length : 0;
+    edits.push({ start, end: start, text: start ? statements : `---${eol}${statements}---${eol}` });
+  }
+  return edits;
+}
+function insertionImports(
+  imports: readonly {
+    readonly name: string;
+    readonly path: string;
+    readonly typeOnly?: boolean;
+    readonly imported?: string;
+  }[],
+  file: string,
+) {
+  const available = [...imports];
+  const statements: string[] = [];
+  const resolve = (resolved: string | undefined, preferred: string, specifier: string) => {
+    const existing = available.find(
+      (item) =>
+        !item.typeOnly &&
+        !item.imported &&
+        (item.path === specifier || (resolved && resolveImport(file, item.path) === resolved)),
+    );
+    if (existing) {
+      return existing.name;
+    }
+    let name = preferred;
+    if (available.some((item) => item.name === name)) {
+      name += 'Inserted';
+    }
+    if (available.some((item) => item.name === name)) {
+      throw new Error('Import name conflict');
+    }
+    statements.push(`import ${name} from ${JSON.stringify(specifier)};`);
+    available.push({ name, path: specifier });
+    return name;
+  };
+  return { resolve, statements };
+}

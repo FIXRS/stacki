@@ -2,7 +2,7 @@
 
 Visual Builder for Astro.
 
-A Mac, Windows, and Linux desktop app for editing [Astro](https://astro.build) projects visually.
+A shared visual editor for [Astro](https://astro.build): desktop apps for Mac, Windows, and Linux, and a project-owned Studio hosted on Cloudflare.
 
 MIT licensed — fork it, build on it, ship your own version.
 
@@ -21,7 +21,8 @@ MIT licensed — fork it, build on it, ship your own version.
 ## Running in development
 
 ```bash
-npm install
+npm ci
+npm --prefix studio ci
 npm run dev
 ```
 
@@ -32,6 +33,32 @@ To run against a production build of the UI:
 ```bash
 npm start
 ```
+
+## Shared Studio source
+
+The root `src`, `shared`, and `electron` directories are the canonical editor.
+`studio/` contains collaboration, Cloudflare hosting, and browser transport adapters.
+`npm run studio:build` assembles the shared editor into `studio/vendor/stacki` before
+building; never maintain that generated copy by hand. Native filesystem writes stay
+in Electron. Hosted writes go through the authenticated Cloudflare Container draft.
+
+The desktop installation uses its own editor version for every project it opens.
+Each website can separately pin and customize its hosted Studio source. Releases
+are opt-in per website and replace all Studio customizations while retaining the
+website, deployment configuration, secrets, and drafts. See
+[Studio releases and updates](studio/docs/releases.md).
+
+```sh
+npm run studio:install
+npm --prefix studio/test/fixtures/site ci --ignore-scripts
+npm run studio:dev
+npm test                   # both packages' strict checks and test suites
+npm run check:changed      # routes changed files to their package checks
+npm run studio:release     # versioned source bundle
+```
+
+Studio uses its own dependency lockfile so native modules never enter its cloud
+installation. Both artifacts use the root Stacki version and the same release feed.
 
 ## Packaging installers
 
@@ -58,7 +85,7 @@ npm run dist:mac   # requires a Developer ID cert + notarization credentials
 Official builds are published by CI, not from anyone's laptop. Pushing a
 `v*` tag runs `.github/workflows/release.yml`, which builds a signed and
 notarized macOS universal build, a Windows installer, and Linux x64 AppImage
-and Debian packages. It uploads them to the `stacki-releases` repo and only
+and Debian packages, plus a versioned Studio source bundle. It uploads them to the `stacki-releases` repo and only
 makes the release visible once every platform has landed and the Linux
 packages pass installed-app smoke tests. Shipped apps auto-update from that feed via
 `electron-updater`.

@@ -1,3 +1,9 @@
+import type { StudioStatus, StudioInstallResult } from './studioSetup';
+import type { StudioInstallProgress } from './studioProgress';
+
+export interface StudioEventResults {
+  readonly 'studio:progress': StudioInstallProgress;
+}
 import type { ComponentProperties } from '../properties/propertyEditing';
 import type { PreviewVerdict } from '../page/previewToken';
 import type { Result } from '../core/result';
@@ -87,6 +93,8 @@ export type WirePageEdit =
   | { readonly ok: false; readonly error: WirePageEditError };
 
 export interface IpcResults {
+  readonly 'studio:status': StudioStatus;
+  readonly 'studio:install': StudioInstallResult;
   readonly 'component:properties': Result<ComponentProperties>;
   readonly 'component:editProperties': Result<ComponentProperties & { readonly undo: string }>;
   readonly 'component:revertProperties': Result<{ readonly undo: string }>;
@@ -679,6 +687,12 @@ export interface IpcResults {
       };
   readonly 'settings:get': {
     readonly sound: boolean;
+    readonly usageCountsEnabled: boolean;
+  };
+  readonly 'settings:set': {
+    readonly sound: boolean;
+    readonly usageCountsEnabled: boolean;
+    readonly saved: boolean;
   };
   readonly 'shell:openExternal': {
     readonly ok: true;

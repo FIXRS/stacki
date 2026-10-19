@@ -1,0 +1,93 @@
+import { useEffect, useRef, useState } from 'react';
+import { publishProject } from './publishClient';
+import type { PublishState } from './publish';
+import { PublishProgress } from './PublishProgress';
+import { useSharedPublish } from './sharedPublish';
+import './publish.css';
+
+export function PublishButton({ report }: { report: (error: unknown) => void }) {
+  const [ownBusy, setBusy] = useState(false);
+  const shared = useSharedPublish();
+  const busy = ownBusy || shared.kind === 'building';
+  const [state, setState] = useState<PublishState>();
+  const [failed, setFailed] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const active = useRef<AbortController>();
+  usePublishBroadcast(shared, setState, setVisible, setFailed);
+  useEffect(() => () => active.current?.abort(), []);
+  async function publish() {
+    if (active.current && !active.current.signal.aborted) {
+      return;
+    }
+    const controller = new AbortController();
+    active.current = controller;
+    setBusy(true);
+    setState(undefined);
+    setFailed(false);
+    setVisible(true);
+    try {
+      const state = await publishProject(controller.signal, setState);
+      report(
+        state.kind === 'committed'
+          ? (state.deployment === 'live'
+              ? 'Published. Your changes are live.'
+              : state.deployment === 'pending'
+                ? 'Saved to GitHub. Live deployment is still unconfirmed; check Cloudflare.'
+                : 'Saved to GitHub. Automatic live deployment is not connected.') +
+              (state.cleanupWarning ? ' ' + state.cleanupWarning : '')
+          : state.kind === 'failed'
+            ? state.message
+            : 'Publish started',
+      );
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setFailed(true);
+        report(error);
+      }
+    } finally {
+      active.current = undefined;
+      if (!controller.signal.aborted) {
+        setBusy(false);
+      }
+    }
+  }
+  return (
+    <div className="publish-control">
+      <button className="primary" disabled={busy} onClick={() => void publish()}>
+        {busy ? 'Publishing…' : 'Publish'}
+      </button>
+      {visible && (
+        <PublishProgress
+          state={state}
+          busy={busy}
+          failed={failed}
+          dismiss={() => setVisible(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function usePublishBroadcast(
+  shared: PublishState,
+  setState: (state: PublishState | undefined) => void,
+  setVisible: (visible: boolean) => void,
+  setFailed: (failed: boolean) => void,
+) {
+  const observed = useRef('');
+  useEffect(() => {
+    if (shared.kind === 'building') {
+      observed.current = shared.id;
+      setState(shared);
+      setVisible(true);
+      setFailed(false);
+    } else if (observed.current && shared.kind === 'idle') {
+      setState(undefined);
+      setFailed(true);
+      observed.current = '';
+    } else if ('id' in shared && shared.id === observed.current) {
+      setState(shared);
+      setFailed(shared.kind === 'failed');
+    }
+  }, [shared, setState, setVisible, setFailed]);
+}

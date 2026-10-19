@@ -311,15 +311,7 @@ export function SizeRowLabel({
     );
   }
   if (resolved.source !== 'selected') {
-    return (
-      <ProvenanceLabel
-        label={label}
-        props={[prop]}
-        busy={busy}
-        onProvenance={onProvenance}
-        note={`Set by ${resolved.winner.selectorText} — click to see all selectors`}
-      />
-    );
+    return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />;
   }
   const overridden = showOverride && resolved.overridden;
   return (

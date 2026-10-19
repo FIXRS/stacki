@@ -72,6 +72,8 @@ export function useBackgroundRefresh(
         return;
       }
       refreshingRef.current = true;
+      // Failed network refreshes need the same backoff as successful scans.
+      lastScanAtRef.current = Date.now();
       setRefreshing(true);
       try {
         const content = await rebuildAndStore();

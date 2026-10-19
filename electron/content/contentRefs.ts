@@ -1,3 +1,4 @@
+import { cmsSourcePath } from '../lib/contentPaths';
 import fs from 'fs';
 import path from 'path';
 
@@ -425,8 +426,8 @@ function applyRename(
         plan.imageEdits.map(({ path: at, value }) => ({ path: at, value })),
       );
     }
-    const from = path.resolve(projectPath, move.from);
-    const to = path.resolve(projectPath, move.to);
+    const from = cmsSourcePath(projectPath, move.from);
+    const to = cmsSourcePath(projectPath, move.to);
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.renameSync(from, to);
     touched.add(move.to);

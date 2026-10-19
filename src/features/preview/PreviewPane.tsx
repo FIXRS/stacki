@@ -1,16 +1,15 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { usePointerDrag } from '../../ui/usePointerDrag';
+import React from 'react';
+import { usePreviewDimensions, usePreviewSizing } from './usePreviewSizing';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
 import type { OverlayInfo, SpacingHover } from './PreviewOverlays';
 import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
-import { PreviewToolbar, deviceForWidth, deviceWidth } from './PreviewToolbar';
+import { PreviewToolbar } from './PreviewToolbar';
 import { usePreviewRuntime, type JudgeCanvasEvent } from './previewRuntime';
 import type { PreviewVerdict } from '../../../shared/page/previewToken';
 import type { PreviewReloadReason } from './previewMessages';
-import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
 import './previewViewport.css';
 import type { LiveValue } from '../../ui/liveValue';
 
@@ -56,7 +55,8 @@ interface PreviewPaneProps {
 export default function PreviewPane(props: PreviewPaneProps) {
   const url = props.devUrl && props.route ? props.devUrl + props.route : undefined;
   const runtime = usePreviewRuntime({ ...props, selPath: props.selPath }, url);
-  const sizing = usePreviewSizing(props.device, props.onDevice);
+  const dimensions = usePreviewDimensions();
+  const sizing = usePreviewSizing(props.device, dimensions, props.onDevice);
   return (
     <>
       <PreviewToolbar
@@ -212,187 +212,4 @@ function PreviewPlaceholder({ props }: { readonly props: PreviewPaneProps }) {
       )}
     </div>
   );
-}
-
-function usePreviewSizing(device: PreviewDevice, onDevice: (device: PreviewDevice) => void) {
-  const startDrag = usePointerDrag();
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const frameRef = useRef<HTMLDivElement>(null);
-  const [available, setAvailable] = useState({ width: 0, height: 0 });
-  const [customWidth, setCustomWidth] = useState<number | undefined>(undefined);
-  const [customHeight, setCustomHeight] = useState<number | undefined>(undefined);
-  const [resizing, setResizing] = useState(false);
-  useMeasuredSize(wrapRef, setAvailable);
-  useDeviceShortcuts(onDevice);
-  useEffect(() => {
-    if (device !== 'custom') {
-      setCustomWidth(undefined);
-    }
-    if (device === 'desktop' || device === 'canvas') {
-      setCustomHeight(undefined);
-    }
-  }, [device]);
-  const width = customWidth ?? deviceWidth(device);
-  const viewport = previewViewport(width, available, customHeight);
-  const activeDevice = device === 'canvas' ? 'canvas' : (deviceForWidth(viewport.width) ?? device);
-  const setWidth = (next: number): void => {
-    setCustomWidth(next);
-    onDevice('custom');
-  };
-  const startResize = useResizeHandler({
-    wrapRef,
-    frameRef,
-    startDrag,
-    onDevice,
-    setCustomWidth,
-    setCustomHeight,
-    setResizing,
-    scale: viewport.scale,
-  });
-  return {
-    wrapRef,
-    frameRef,
-    wrapWidth: available.width,
-    viewport,
-    setWidth,
-    customHeight,
-    resizing,
-    width,
-    activeDevice,
-    startResize,
-  };
-}
-
-function useMeasuredSize(
-  ref: React.RefObject<HTMLDivElement>,
-  setSize: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>,
-): void {
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) {
-      return;
-    }
-    const measure = (): void =>
-      setSize({ width: element.clientWidth, height: element.clientHeight });
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref, setSize]);
-}
-
-function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {
-  const onDeviceRef = useRef(onDevice);
-  onDeviceRef.current = onDevice;
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        isTypingTarget(event.target ?? undefined)
-      ) {
-        return;
-      }
-      const device = deviceFromKey(event.key);
-      if (device) {
-        onDeviceRef.current(device);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-}
-
-function isTypingTarget(target: EventTarget | undefined): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.matches('input, textarea, select') || target.isContentEditable)
-  );
-}
-
-function deviceFromKey(key: string): PreviewDevice | undefined {
-  switch (key) {
-    case '1':
-      return 'desktop';
-    case '2':
-      return 'tablet';
-    case '3':
-      return 'phone';
-    case '4':
-      return 'canvas';
-    default:
-      return undefined;
-  }
-}
-
-interface ResizeContext {
-  readonly scale: number;
-  readonly wrapRef: React.RefObject<HTMLDivElement>;
-  readonly frameRef: React.RefObject<HTMLDivElement>;
-  readonly startDrag: ReturnType<typeof usePointerDrag>;
-  readonly onDevice: (device: PreviewDevice) => void;
-  readonly setCustomWidth: React.Dispatch<React.SetStateAction<number | undefined>>;
-  readonly setCustomHeight: React.Dispatch<React.SetStateAction<number | undefined>>;
-  readonly setResizing: React.Dispatch<React.SetStateAction<boolean>>;
-}
-
-type ResizeEdge = 'w' | 'e' | 's';
-
-function useResizeHandler(context: ResizeContext) {
-  return useCallback(
-    (edge: ResizeEdge) =>
-      (event: React.PointerEvent<HTMLDivElement>): void => {
-        if (event.button !== 0) {
-          return;
-        }
-        event.preventDefault();
-        const frame = context.frameRef.current;
-        const wrap = context.wrapRef.current;
-        if (!frame || !wrap) {
-          return;
-        }
-        const start = {
-          x: event.clientX,
-          y: event.clientY,
-          width: frame.offsetWidth,
-          height: frame.offsetHeight,
-        };
-        context.setResizing(true);
-        context.startDrag(event, {
-          cursor: edge === 's' ? 'row-resize' : 'col-resize',
-          onMove: (next) => resizeFrame(edge, start, next, wrap, context),
-          onEnd: () => context.setResizing(false),
-        });
-      },
-    [context],
-  );
-}
-
-function resizeFrame(
-  edge: ResizeEdge,
-  start: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  },
-  event: PointerEvent,
-  wrap: HTMLDivElement,
-  context: ResizeContext,
-): void {
-  if (edge === 's') {
-    const height = Math.round(start.height + (event.clientY - start.y) / context.scale);
-    const maximum = Math.max(160, (wrap.clientHeight - 32) / context.scale);
-    context.setCustomHeight(clamp(height, 160, maximum));
-    return;
-  }
-  const direction = edge === 'e' ? 2 : -2;
-  const width = Math.round(start.width + (direction * (event.clientX - start.x)) / context.scale);
-  context.setCustomWidth(clamp(width, PREVIEW_WIDTH_LIMITS.minimum, PREVIEW_WIDTH_LIMITS.maximum));
-  context.onDevice('custom');
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(Math.max(value, minimum), maximum);
 }

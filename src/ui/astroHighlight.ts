@@ -4,6 +4,7 @@
 // Astro VS Code extension whenever Astro adds syntax.
 
 import { StateEffect, StateField, type Extension } from '@codemirror/state';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import {
   Decoration,
   EditorView,
@@ -61,6 +62,8 @@ type AstroHighlighter = Awaited<ReturnType<typeof createAstroHighlighter>>;
 let highlighterPromise: Promise<AstroHighlighter> | undefined;
 
 export const astroHighlight: Extension = [
+  // Keep text neutral while Shiki loads instead of flashing basicSetup's fallback colors.
+  syntaxHighlighting(HighlightStyle.define([])),
   astroHighlightField,
   EditorView.baseTheme({
     '.cm-astro-token, .cm-astro-token *': {

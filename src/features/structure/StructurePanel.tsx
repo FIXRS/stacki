@@ -24,6 +24,7 @@ import { parseNavigatorDrop } from './navigatorDrop';
 import { NO_LIVE_TEXT, useLiveValue, type LiveValue } from '../../ui/liveValue';
 
 interface StructurePanelProps {
+  readonly clientMode?: boolean;
   readonly pageState: StructurePageState | undefined;
   readonly currentPage?:
     | {
@@ -66,6 +67,13 @@ export default function StructurePanel(props: StructurePanelProps) {
     return <MissingPage currentPage={props.currentPage} />;
   }
   const projection = structureProjection(props.pageState);
+  if (props.clientMode && projection.tag === 'parse-error') {
+    return (
+      <div className="panel-note">
+        This page needs a Designer to fix its source before it can be edited.
+      </div>
+    );
+  }
   switch (projection.tag) {
     case 'valid':
       return <EditableStructurePanel {...props} pageState={projection.state} />;
@@ -169,6 +177,7 @@ function EditableStructurePanel(props: EditableProps) {
         <ContextMenu
           position={state.contextMenu}
           canPaste={typeof props.hasClipboard === 'function' && props.hasClipboard()}
+          protectedNode={props.clientMode === true && state.contextMenu.nodeId === 'layout'}
           onClose={() => state.setContextMenu(undefined)}
           onAction={(action) => runContextAction(action, props, state)}
         />
@@ -377,6 +386,7 @@ function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string):
 function treeContextOf(props: EditableProps, state: TreeState): StructureTreeContext {
   const isCollapsed = (node: NavigatorNode): boolean => collapsedState(node, state.toggled);
   return {
+    clientMode: props.clientMode === true,
     selectedId: props.selectedId,
     ...(props.emptyNodeIds === undefined ? {} : { emptyNodeIds: props.emptyNodeIds }),
     ...(props.hiddenNodeIds === undefined ? {} : { hiddenNodeIds: props.hiddenNodeIds }),
@@ -456,6 +466,7 @@ function NavigatorHeader({
         <h2>Navigator</h2>
         <button
           className="ghost"
+          aria-label={state.allExpanded ? 'Collapse all' : 'Expand all'}
           onMouseEnter={state.showTooltip}
           onMouseLeave={state.hideTooltip}
           onClick={() => {
@@ -495,9 +506,9 @@ function NavigatorBody({
       ref={state.bodyRef}
       onDragLeave={() => state.setDropTarget(undefined)}
     >
-      <FrontmatterRow props={props} />
+      {!props.clientMode && <FrontmatterRow props={props} />}
       <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
-      {nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
+      {!props.clientMode && nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
     </div>
   );
 }

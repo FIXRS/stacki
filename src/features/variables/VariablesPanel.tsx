@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { onVariablesChanged } from '../../ipc/editorEnvironment';
 import type { Result } from '../../../shared/core/result';
 import type {
   VariableFile,
@@ -114,7 +115,18 @@ function useVariableFiles(projectPath: string) {
         if (!live) {
           return;
         }
-        setResult(next);
+        // Keep read errors visible, but omit stylesheets with no editable variables.
+        setResult(
+          next.ok
+            ? {
+                ok: true,
+                value: {
+                  ...next.value,
+                  files: next.value.files.filter((file) => file.error || (file.count ?? 0) > 0),
+                },
+              }
+            : next,
+        );
         if (pending) {
           pending = false;
           refresh();
@@ -122,7 +134,7 @@ function useVariableFiles(projectPath: string) {
       });
     };
     refresh();
-    const unsubscribe = window.avb.onCssChanged(refresh);
+    const unsubscribe = onVariablesChanged(refresh);
     return () => {
       live = false;
       unsubscribe();

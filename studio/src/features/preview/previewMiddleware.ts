@@ -1,0 +1,54 @@
+import type { MiddlewareHandler } from 'astro';
+
+const MAX_RENDER_BYTES = 4_000_000;
+
+// Prerendered Astro routes intentionally hide request headers, so embed the
+// baseline for every HTML render and remove it from subsequent diff inputs.
+// Keep the exact initial server rendering. A second request can already contain
+// a collaborator's newer edit, making the first DOM patch incorrectly a no-op.
+export const onRequest: MiddlewareHandler = async ({ request }, next) => {
+  const response = await next();
+  if (
+    request.method !== 'GET' ||
+    !response.headers.get('content-type')?.includes('text/html') ||
+    (!response.ok && response.status !== 404)
+  ) {
+    return response;
+  }
+  // An authored 404 page is an editable HTML rendering, despite its status.
+  return withRenderBaseline(response);
+};
+
+export async function withRenderBaseline(response: Response): Promise<Response> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return response;
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    size += value.byteLength;
+    if (size > MAX_RENDER_BYTES) {
+      await reader.cancel();
+      return new Response('Studio preview exceeds the 4 MB rendering limit', { status: 413 });
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const html = new TextDecoder().decode(bytes);
+  // Escaping '<' prevents page content from ending this inert JSON script.
+  const encoded = JSON.stringify(html).replaceAll('<', '\\u003c');
+  const baseline = `<script id="studio-render-baseline" type="application/json">${encoded}</script>`;
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  return new Response(html + baseline, { status: response.status, headers });
+}

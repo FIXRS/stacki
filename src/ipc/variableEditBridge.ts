@@ -1,3 +1,5 @@
+import { styleTransport } from './editorEnvironment';
+import { editVariables, hasVariableCommand } from './editorEnvironment';
 import type { PreloadBridge } from '../../shared/ipc/preloadApi';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { boolean, record, text } from '../../shared/core/boundary';
@@ -11,43 +13,43 @@ export type VariableEditResult =
 const edits = {
   readStyleFile(input: unknown) {
     const payload = parseIpcPayload('style:readFile', input);
-    return () => window.avb.readStyleFile(payload);
+    return () => styleTransport.readStyleFile(payload);
   },
   writeStyleFile(input: unknown) {
     const payload = parseIpcPayload('style:writeFile', input);
-    return () => window.avb.writeStyleFile(payload);
+    return () => styleTransport.writeStyleFile(payload);
   },
   setCssVariable(input: unknown) {
     const payload = parseIpcPayload('css:setVariable', input);
-    return () => window.avb.setCssVariable(payload);
+    return () => editVariables('setCssVariable', payload);
   },
   moveCssVariables(input: unknown) {
     const payload = parseIpcPayload('css:moveVariables', input);
-    return () => window.avb.moveCssVariables(payload);
+    return () => editVariables('moveCssVariables', payload);
   },
   addCssVariables(input: unknown) {
     const payload = parseIpcPayload('css:addVariables', input);
-    return () => window.avb.addCssVariables(payload);
+    return () => editVariables('addCssVariables', payload);
   },
   renameCssVariables(input: unknown) {
     const payload = parseIpcPayload('css:renameVariables', input);
-    return () => window.avb.renameCssVariables(payload);
+    return () => editVariables('renameCssVariables', payload);
   },
   setCssSectionTitle(input: unknown) {
     const payload = parseIpcPayload('css:setSectionTitle', input);
-    return () => window.avb.setCssSectionTitle(payload);
+    return () => editVariables('setCssSectionTitle', payload);
   },
   addCssSection(input: unknown) {
     const payload = parseIpcPayload('css:addSection', input);
-    return () => window.avb.addCssSection(payload);
+    return () => editVariables('addCssSection', payload);
   },
   removeCssSection(input: unknown) {
     const payload = parseIpcPayload('css:removeSection', input);
-    return () => window.avb.removeCssSection(payload);
+    return () => editVariables('removeCssSection', payload);
   },
   moveCssHeading(input: unknown) {
     const payload = parseIpcPayload('css:moveHeading', input);
-    return () => window.avb.moveCssHeading(payload);
+    return () => editVariables('moveCssHeading', payload);
   },
 };
 type EditName = keyof typeof edits;
@@ -61,10 +63,10 @@ export async function variableEdit<Name extends EditName>(
   name: Name,
   payload: ReadonlyPayload<Parameters<PreloadBridge[Name]>[0]>,
 ): Promise<VariableEditResult> {
-  if (typeof window.avb?.[name] !== 'function') {
+  const invoke = edits[name](payload);
+  if (!hasVariableCommand(name)) {
     return { ok: false, error: RESTART };
   }
-  const invoke = edits[name](payload);
   let response: unknown;
   try {
     response = await invoke();

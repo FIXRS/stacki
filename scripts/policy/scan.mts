@@ -46,7 +46,14 @@ const CODE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.mts', '.ts', '
 const SHELL_EXTENSIONS = new Set(['.bash', '.bat', '.cmd', '.fish', '.ps1', '.sh', '.zsh']);
 const SHELL_SHEBANG = /^#!.*\b(?:ba|z|fi|k|da)?sh\b/;
 // Byte-exact inputs: round-trip fixtures and corpora are tested as written.
-const EXEMPT_PREFIXES = ['test/fixtures/', 'test/corpus/', 'node_modules/', 'dist/', 'release/'];
+const EXEMPT_PREFIXES = [
+  'test/fixtures/',
+  'test/corpus/',
+  'node_modules/',
+  'dist/',
+  'release/',
+  'studio/',
+];
 const EXEMPT_FILES = new Set(['package-lock.json']);
 const LOCKFILES = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 // A suppression with no rule list switches every rule off, including the one

@@ -1,0 +1,34 @@
+{
+  "name": "example-site",
+  "type": "module",
+  "version": "0.0.1",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "check": "astro check",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "format": "prettier --write .",
+    "studio": "npm --prefix studio run dev"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@astrojs/sitemap": "^3.7.4",
+    "astro": "^7.3.8",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "prettier-plugin-astro": "^0.14.1",
+    "wrangler": "^4.123.0"
+  },
+  "lumos": {
+    "version": "1.0.0",
+    "commit": "04795f80076775ab7a9d0a6a0f59228ab7845bd0",
+    "scaffolded": "2026-10-16"
+  }
+}

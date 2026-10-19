@@ -26,6 +26,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-electron-
       - run: npm ci
+      - run: npm --prefix studio ci
       # The full gate, as on every platform: a release is never built from code that
       # fails it. npm test builds the app as its first step.
       - run: npm test
@@ -71,6 +72,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-electron-
       - run: npm ci
+      - run: npm --prefix studio ci
       - run: npm test
       # Windows signing is optional, matching the existing release channel.
       # Electron-builder signs when credentials exist and otherwise builds unsigned.
@@ -101,6 +103,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-electron-
       - run: npm ci
+      - run: npm --prefix studio ci
       - name: Prepare Electron sandbox for tests
         run: |
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
@@ -159,10 +162,46 @@ jobs:
           test "$(stat -c '%u:%g:%a' /opt/Stacki/chrome-sandbox)" = '0:0:4755'
           xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki
 
+  build-studio:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+      - run: npm --prefix studio ci
+      - run: npm --prefix studio/test/fixtures/site ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+        working-directory: studio
+      - run: npm run verify
+        working-directory: studio
+      - name: Test Studio in the browser
+        working-directory: studio
+        run: |
+          node dist/cli.mjs dev test/fixtures/site --background
+          npm run test:browser
+      - run: npm run release:bundle
+        working-directory: studio
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stacki-studio
+          path: studio/release/*.json
+      - name: Upload Studio to the draft release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release upload "$TAG" "studio/release/stacki-studio-${TAG#v}.json" \
+            --repo flowtricks/stacki-releases --clobber
+
   # Publish only when every platform has uploaded and both Linux installs work.
   publish:
     if: github.event_name == 'push'
-    needs: [build-mac, build-windows, build-linux, test-linux-install]
+    needs: [build-mac, build-windows, build-linux, test-linux-install, build-studio]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all platforms uploaded, then publish
@@ -173,7 +212,8 @@ jobs:
           assets=$(gh release view "$TAG" --repo flowtricks/stacki-releases \
             --json assets --jq '[.assets[].name] | join(" ")')
           echo "assets: $assets"
-          for required in latest-mac.yml latest.yml latest-linux.yml; do
+          for required in latest-mac.yml latest.yml latest-linux.yml \
+            "stacki-studio-${TAG#v}.json"; do
             case " $assets " in
               *" $required "*) ;;
               *) echo "missing $required — refusing to publish"; exit 1 ;;

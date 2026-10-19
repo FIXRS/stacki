@@ -2,10 +2,10 @@
 // and the checks a batch of renames must pass before any file is written
 // (cssVars.ts).
 
-import fs from 'fs';
+import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
-import { writeProjectText } from '../documents/documentWrites';
-import { MAIN_LIMITS } from '../lib/mainLimits';
+import { writeProjectText } from './variableWorkspace';
+import { MAIN_LIMITS } from './variableWorkspace';
 import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, findStylesheets } from './cssVarRead';
 
 // --- renaming ----------------------------------------------------------------
@@ -48,7 +48,7 @@ export function findRenameTargets(projectPath: string): string[] {
     if (depth > CSS_VARIABLE_LIMITS.renameTargetDepthMax) {
       return;
     }
-    let entries: fs.Dirent[];
+    let entries: ReturnType<typeof fs.readdirSync>;
     try {
       entries = fs.readdirSync(directory, { withFileTypes: true });
     } catch {

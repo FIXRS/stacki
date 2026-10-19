@@ -1,3 +1,4 @@
+import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { PickedAsset } from '../../ui/AssetField';
 import type { CmsUndo } from './cmsWriter';
@@ -183,7 +184,7 @@ function useCmsReload({
     });
     reloadRef.current = () => reader.refresh();
     void reader.refresh();
-    const unsubscribe = window.avb.onCmsChanged(() => {
+    const unsubscribe = cmsTransport.onCmsChanged(() => {
       void reader.refresh();
     });
     return () => {

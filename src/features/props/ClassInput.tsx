@@ -1,4 +1,6 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useClassPopup } from './useClassPopup';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
@@ -22,11 +24,6 @@ interface ClassInputProps {
   readonly value?: string | undefined;
   readonly suggestions?: readonly string[];
   readonly onChange: (value: string, immediate: boolean) => void;
-}
-interface PopupPosition {
-  readonly left: number;
-  readonly top: number;
-  readonly width: number;
 }
 interface Family {
   readonly index: number;
@@ -69,7 +66,6 @@ function useClassInput({ value, suggestions = [], onChange }: ClassInputProps) {
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
   const [highlight, setHighlight] = useState(0);
-  const [popupPosition, setPopupPosition] = useState<PopupPosition | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -78,14 +74,6 @@ function useClassInput({ value, suggestions = [], onChange }: ClassInputProps) {
   const tokenActions = classTokenActions({ tokens, at, setCaret, setDraft, onChange });
   const familyState = useClassFamily(tokens, onChange);
   const matches = classMatches(draft, suggestions, tokens);
-  useLayoutEffect(() => {
-    if (!focused || !matches.length || !wrapRef.current) {
-      setPopupPosition(undefined);
-      return;
-    }
-    const rect = wrapRef.current.getBoundingClientRect();
-    setPopupPosition({ left: rect.left, top: rect.bottom + 4, width: rect.width });
-  }, [focused, matches.length, draft]);
 
   return {
     ...tokenActions,
@@ -99,7 +87,6 @@ function useClassInput({ value, suggestions = [], onChange }: ClassInputProps) {
     setFocused,
     highlight,
     setHighlight,
-    popupPos: popupPosition,
     wrapRef,
     inputRef,
     matches,
@@ -491,15 +478,17 @@ function ClassTokens({ state }: { readonly state: ClassState }) {
   return items;
 }
 function ClassSuggestions({ state }: { readonly state: ClassState }) {
-  const { popupPos: popupPosition, matches, highlight, setHighlight, addToken } = state;
+  const { matches, highlight, setHighlight, addToken, focused, wrapRef, draft } = state;
+  const popupPosition = useClassPopup(wrapRef, matches.length, { open: focused });
+  const popupRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    popupRef.current?.children[highlight]?.scrollIntoView({ block: 'nearest' });
+  }, [highlight, matches.length, draft]);
   if (!popupPosition) {
     return undefined;
   }
-  return (
-    <div
-      className="dd-popup class-suggest"
-      style={{ left: popupPosition.left, top: popupPosition.top, width: popupPosition.width }}
-    >
+  return createPortal(
+    <div ref={popupRef} className="dd-popup class-suggest" style={popupPosition}>
       {matches.map((suggestion, i) => (
         <div
           key={suggestion}
@@ -511,20 +500,21 @@ function ClassSuggestions({ state }: { readonly state: ClassState }) {
           <span className="dd-option-label">{suggestion}</span>
         </div>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
 function ClassFamilyMenu({ state }: { readonly state: ClassState }) {
   const { family, famRef, famHighlight, famOriginal, previewFamily, applyFamily } = state;
-  if (!family) {
+  const position = useClassPopup(state.wrapRef, family?.options.length ?? 0, {
+    open: !!family,
+    matchWidth: false,
+  });
+  if (!family || !position) {
     return undefined;
   }
-  return (
-    <div
-      ref={famRef}
-      className="dd-popup class-family"
-      style={{ left: family.left, top: family.top }}
-    >
+  return createPortal(
+    <div ref={famRef} className="dd-popup class-family" style={position}>
       {family.options.map((option, i) => (
         <div
           key={option}
@@ -541,6 +531,7 @@ function ClassFamilyMenu({ state }: { readonly state: ClassState }) {
           <span className="dd-option-label">{option}</span>
         </div>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }

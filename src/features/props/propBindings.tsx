@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import type { BindInputHandle } from './BindInput';
 import type { ExprInputAPI } from '../../ui/ExprInput';
 import type { PickerNode } from './DataPicker';
@@ -57,6 +58,21 @@ function chipPath(chip: Chip | undefined) {
 }
 
 export function BindField(props: BindFieldProps) {
+  return useCodeAccess() ? <EditableBindField {...props} /> : <ClientBindField {...props} />;
+}
+function ClientBindField({ value, onChange, placeholder }: BindFieldProps) {
+  if (value && value.type !== 'string') {
+    return <ManagedValue />;
+  }
+  return (
+    <input
+      value={value?.value ?? ''}
+      placeholder={placeholder ?? ''}
+      onChange={(event) => onChange({ type: 'string', value: event.target.value })}
+    />
+  );
+}
+function EditableBindField(props: BindFieldProps) {
   const state = useBindFieldModel(props);
   const actions = useBindFieldActions(state);
   useBindFieldDismiss(state);

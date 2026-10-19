@@ -16,3 +16,6 @@ package-lock.json
 
 # Markdown is prose and tables; its line breaks are authored, not formatted.
 *.md
+
+# Studio runs its own strict checks through the combined gate.
+studio/

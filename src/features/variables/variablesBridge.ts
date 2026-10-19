@@ -12,7 +12,7 @@ import {
   text,
 } from '../../../shared/core/boundary';
 import { toArray } from '../../../shared/core/record';
-import { toProjectPath } from '../../../shared/core/brand';
+import { readVariables } from '../../ipc/editorEnvironment';
 
 export interface VariableSelection {
   readonly file: string;
@@ -77,10 +77,9 @@ export function parseCSSVariables(input: unknown): Result<VariablesSnapshot, str
 export async function readCSSVariables(
   projectPath: string,
 ): Promise<Result<VariablesSnapshot, string>> {
-  const path = toProjectPath(projectPath);
   let response: unknown;
   try {
-    response = await window.avb.cssVariables(path);
+    response = await readVariables(projectPath);
   } catch (error: unknown) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -227,7 +226,10 @@ function variableFileParser(budget: VariablesBudget): Parser<VariableFile> {
   const row = object({
     label: variableText,
     name: optional(variableText),
-    cells: budget.list(optional(parseVariableCell)),
+    // JSON transports sparse cells as null rather than Electron's undefined.
+    cells: budget.list((input) =>
+      input === null ? undefined : optional(parseVariableCell)(input),
+    ),
   });
   const blockShape = object({
     kind: blockKind,

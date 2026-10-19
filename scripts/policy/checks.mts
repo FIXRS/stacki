@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from './assert.mts';
 import { runChild, type ChildResult } from './child.mts';
+import { checkStudio, studioAffected } from './studioChecks.mts';
 import { POLICY_LIMITS } from './limits.mts';
 import { formatViolations, isExempt, normalizePath, scanPaths } from './scan.mts';
 
@@ -40,6 +41,12 @@ export function checkFiles(
   const batchSize = POLICY_LIMITS.filesPerCheckMax;
   for (let start = 0; start < files.length; start += batchSize) {
     sections.push(...checkBatch(root, files.slice(start, start + batchSize), options.format));
+  }
+  if (studioAffected(candidates.map((file) => normalizePath(root, file)))) {
+    const studio = checkStudio(root, options.format);
+    if (studio.status !== 0) {
+      sections.push(section('Studio', studio.stdout + studio.stderr));
+    }
   }
   return outcome(sections);
 }

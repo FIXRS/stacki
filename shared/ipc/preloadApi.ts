@@ -3,6 +3,8 @@
 import type { IpcPayloads } from './ipcPayloads';
 
 interface InvokeChannels {
+  readonly studioStatus: 'studio:status';
+  readonly installStudio: 'studio:install';
   readonly openProjectDialog: 'project:openDialog';
   readonly newProjectDialog: 'project:newDialog';
   readonly scaffoldProject: 'project:scaffold';
@@ -118,6 +120,7 @@ interface InvokeChannels {
   readonly resizeTerminal: 'terminal:resize';
   readonly closeTerminal: 'terminal:close';
   readonly settings: 'settings:get';
+  readonly setPreference: 'settings:set';
   readonly nativeCopy: 'native:copy';
   readonly nativePaste: 'native:paste';
   readonly nativeUndo: 'native:undo';
@@ -149,6 +152,7 @@ export type PreloadBridge = InvokeSurface & {
   readonly onDevLog: (callback: (data: unknown) => void) => () => void;
   readonly onDevExit: (callback: (data: unknown) => void) => () => void;
   readonly onProgress: (callback: (data: unknown) => void) => () => void;
+  readonly onStudioProgress: (callback: (data: unknown) => void) => () => void;
   readonly onCreateLog: (callback: (data: unknown) => void) => () => void;
   readonly onFsChanged: (callback: (data: unknown) => void) => () => void;
   readonly onMenu: (channel: string, callback: (data?: unknown) => void) => () => void;

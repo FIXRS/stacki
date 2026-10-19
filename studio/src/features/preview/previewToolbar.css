@@ -1,0 +1,72 @@
+.studio-preview-toolbar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.5rem;
+  padding-right: 0.75rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.studio-preview-toolbar > .preview-toolbar {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+.studio-cursor-chat {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+}
+.preview-frame-wrap[data-preview-loading='true'] > .frame-sized,
+.preview-frame-wrap[data-preview-loading='true'] > .canvas-view {
+  visibility: hidden;
+}
+.studio-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+.studio-preview-loading p {
+  margin: 0;
+}
+.studio-preview-spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: studio-preview-spin 0.8s linear infinite;
+}
+@keyframes studio-preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-preview-spinner {
+    animation: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .studio-preview-toolbar {
+    min-height: 44px;
+    gap: 4px;
+    padding: 0 6px;
+  }
+  .studio-preview-toolbar > .preview-toolbar {
+    gap: 0;
+    padding: 0 4px;
+  }
+  .studio-preview-toolbar .crumbs,
+  .studio-preview-toolbar .preview-size-controls {
+    display: none;
+  }
+}

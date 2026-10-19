@@ -1,3 +1,4 @@
+import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   EditorView,
@@ -173,12 +174,10 @@ interface StyleEditorProps {
 
 // Compact declaration editor: no gutters, no line numbers, no folding — it
 // sits inside a popover a couple of hundred pixels wide.
-export default function StyleEditor({
-  value,
-  onChange,
-  autoFocus,
-  placeholder = '',
-}: StyleEditorProps) {
+export default function StyleEditor(props: StyleEditorProps) {
+  return useCodeAccess() ? <EditableStyleEditor {...props} /> : <ManagedValue />;
+}
+function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: StyleEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | undefined>(undefined);
   const onChangeRef = useRef(onChange);

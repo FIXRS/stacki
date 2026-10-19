@@ -1,3 +1,4 @@
+import { styleTransport } from '../../ipc/editorEnvironment';
 import type { Result } from '../../../shared/core/result';
 import { count, list, object, pathText, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
@@ -23,10 +24,10 @@ async function request(
 
 export function readStyleFiles(projectPath: string) {
   const payload = parseIpcPayload('style:listFiles', projectPath);
-  return request(() => window.avb.listStyleFiles(payload));
+  return request(() => styleTransport.listStyleFiles(payload));
 }
 
 export function readAstroStyleFiles(projectPath: string) {
   const payload = parseIpcPayload('style:listAstroStyles', projectPath);
-  return request(() => window.avb.listAstroStyleFiles(payload));
+  return request(() => styleTransport.listAstroStyleFiles(payload));
 }

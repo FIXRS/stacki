@@ -4,7 +4,7 @@ import type {
   ComponentProperties,
   PropertyChange,
 } from '../../../shared/properties/propertyEditing';
-import { onFilesChanged } from '../../ipc/appBridge';
+import { onPropertyFilesChanged as onFilesChanged } from '../../ipc/editorEnvironment';
 import { onWindowReturn } from '../../lib/windowReturn';
 import { editComponentProperties, readComponentProperties } from './propertiesBridge';
 

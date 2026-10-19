@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import Settings from './settings/Settings';
 import { type DynamicEntry, type ProjectIdentity } from './appTypes';
 import { routeToPath } from './model/nodeFactory';
 import { schemaFor } from './model/pageGestures';
@@ -9,13 +10,26 @@ export default function App() {
   const scope = useAppScope();
   const actions = useUiActions(scope);
   const app: AppView = { ...scope, ...actions };
+  return (
+    <>
+      <AppContent app={app} />
+      <Settings
+        projectPath={app.project?.path}
+        previewURL={app.devStatus === 'on' ? app.devUrl : undefined}
+      />
+    </>
+  );
+}
+
+function AppContent({ app }: { readonly app: AppView }) {
   const { project } = app;
   if (!project) {
     return <WelcomeView app={app} />;
   }
   const route = canvasRouteOf(app);
   // The preview's callbacks read the canvas path when they run.
-  app.livePathRef.current = route.pageUrlPath;
+  const { livePathRef } = app;
+  livePathRef.current = route.pageUrlPath;
   const shell: ShellView = { ...app, ...route, bindContext: bindContextOf(app, route), project };
   return <AppShell app={shell} />;
 }

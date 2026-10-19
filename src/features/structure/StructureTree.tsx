@@ -31,6 +31,7 @@ import { isFragmentNode } from '../../editor/liveClasses';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 
 export interface StructureTreeContext {
+  readonly clientMode?: boolean;
   readonly selectedId: string | undefined;
   readonly emptyNodeIds?: ReadonlySet<string>;
   readonly hiddenNodeIds?: ReadonlySet<string>;
@@ -112,9 +113,14 @@ function Gap(props: GapProps) {
     dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
   const accepted = acceptsDrag(parentId === undefined ? undefined : props.nodeById(parentId));
   const location = { parentId, index };
+  if (props.clientMode && parentId === undefined) {
+    return undefined;
+  }
   return (
     <div
       className="nav-gap"
+      data-drop-parent={parentId ?? ''}
+      data-drop-index={index}
       style={{ marginLeft: depth * 16 }}
       onDragOver={(event) => {
         if (accepted && isDndPayload(event)) {
@@ -177,6 +183,7 @@ function TreeNode(props: TreeNodeProps) {
 
 function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
   return {
+    clientMode: props.clientMode === true,
     selectedId: props.selectedId,
     ...(props.emptyNodeIds === undefined ? {} : { emptyNodeIds: props.emptyNodeIds }),
     ...(props.hiddenNodeIds === undefined ? {} : { hiddenNodeIds: props.hiddenNodeIds }),
@@ -262,7 +269,11 @@ function TreeRow(props: TreeRowProps) {
       title={props.fragment ? fragmentTitle : undefined}
       className={rowClassName(props)}
       style={rowStyle(props.depth, props.dropInto ? 'drop-into' : 'plain')}
-      draggable={node.kind !== 'chunk-group' && node.kind !== 'branch'}
+      draggable={
+        !(props.clientMode && node.id === 'layout') &&
+        node.kind !== 'chunk-group' &&
+        node.kind !== 'branch'
+      }
       {...handlers}
     >
       <RowHandle
@@ -291,6 +302,10 @@ function treeRowHandlers(props: TreeRowProps) {
   const { node } = props;
   return {
     onDragStart: (event: React.DragEvent<HTMLDivElement>): void => {
+      if (props.clientMode && node.id === 'layout') {
+        event.preventDefault();
+        return;
+      }
       event.stopPropagation();
       event.dataTransfer.setData('avb/node', node.id);
       allowDragEffect(event.dataTransfer, 'move');
@@ -571,6 +586,15 @@ function ContextMenuItem({
   return (
     <div
       className={`ctx-menu-item ${disabled ? 'disabled' : ''}`}
+      role="menuitem"
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
+      onKeyDown={(event) => {
+        if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onAction(action);
+        }
+      }}
       onClick={() => {
         if (!disabled) {
           onAction(action);
@@ -595,7 +619,9 @@ export function ContextMenu({
   canPaste,
   onClose,
   onAction,
+  protectedNode = false,
 }: {
+  readonly protectedNode?: boolean;
   readonly position: ContextPosition;
   readonly canPaste: boolean;
   readonly onClose: () => void;
@@ -607,8 +633,14 @@ export function ContextMenu({
   const top = Math.min(position.top, window.innerHeight - 130);
   const shortcut = (key: string): string => shortcutLabel(key, 'primary', currentDesktopPlatform());
   return (
-    <div ref={ref} className="ctx-menu" style={{ left, top, width: 200 }}>
-      <ContextMenuItem action="copy" label="Copy" shortcut={shortcut('C')} onAction={onAction} />
+    <div ref={ref} role="menu" className="ctx-menu" style={{ left, top, width: 200 }}>
+      <ContextMenuItem
+        action="copy"
+        label="Copy"
+        shortcut={shortcut('C')}
+        disabled={protectedNode}
+        onAction={onAction}
+      />
       <ContextMenuItem
         action="paste"
         label="Paste"
@@ -619,11 +651,18 @@ export function ContextMenu({
       <ContextMenuItem
         action="duplicate"
         label="Duplicate"
+        disabled={protectedNode}
         shortcut={shortcut('D')}
         onAction={onAction}
       />
       <div className="ctx-divider" />
-      <ContextMenuItem action="delete" label="Delete" shortcut="⌫" onAction={onAction} />
+      <ContextMenuItem
+        action="delete"
+        label="Delete"
+        shortcut="⌫"
+        disabled={protectedNode}
+        onAction={onAction}
+      />
     </div>
   );
 }

@@ -202,6 +202,7 @@ export class DevServers {
         userConfig ? `import userConfig from '../../${userConfig}';` : 'const userConfig = {};',
         JSON.stringify(markersPath),
         JSON.stringify(previewHelperPath),
+        JSON.stringify(RUNTIME_PATHS.studioEntry),
         JSON.stringify(projectDirectories),
         JSON.stringify(MORPH_CLIENT),
         JSON.stringify(MORPH_TAG_HTML),

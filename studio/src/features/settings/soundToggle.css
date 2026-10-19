@@ -1,0 +1,47 @@
+.account-popover .sound-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.75rem;
+  padding: 0.625rem;
+  border: 0;
+  border-radius: 0.4375rem;
+  background: transparent;
+  text-align: left;
+}
+
+.account-popover .sound-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.account-popover .sound-toggle:focus-visible {
+  outline: 0.125rem solid var(--accent);
+  outline-offset: -0.125rem;
+}
+
+.sound-toggle-track {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 0.1875rem;
+  border-radius: 1rem;
+  background: var(--border);
+}
+
+.sound-toggle[aria-checked='true'] .sound-toggle-track {
+  background: var(--accent);
+}
+
+.sound-toggle-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.sound-toggle[aria-checked='true'] .sound-toggle-thumb {
+  transform: translateX(1rem);
+}

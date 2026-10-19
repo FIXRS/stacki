@@ -1,0 +1,87 @@
+import path from 'node:path';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { aliasMap } from '../../../vendor/stacki/electron/content/cmsRefs';
+import { instancesIn } from '../../../vendor/stacki/electron/properties/componentUsage';
+import type { ComponentUsageFile } from '../../../vendor/stacki/src/features/palette/paletteModel';
+import { walk, readSource } from '../project/projectServer';
+import { sourcePath } from '../../shared/validation';
+
+export async function scanComponentUsage(root: string, selected?: string) {
+  const paths = (await walk(root, 'src')).filter(
+    (file) => file.endsWith('.astro') || /^src\/pages\/.+\.mdx?$/.test(file),
+  );
+  const targets = paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/'));
+  if (selected && !targets.includes(selected)) {
+    throw new Error('Select a component inside this project');
+  }
+  if (targets.length > 1000) {
+    throw new Error('Component usage scan exceeds 1000 components');
+  }
+  const sources: { readonly file: string; readonly text: string }[] = [];
+  let size = 0;
+  for (const file of paths) {
+    const text = await readSource(root, file);
+    size += text.length;
+    if (size > 20_000_000) {
+      throw new Error('Component usage scan exceeds 20 MB of source');
+    }
+    sources.push({ file, text });
+  }
+  if (size * (selected ? 1 : targets.length) > 100_000_000) {
+    throw new Error('Component usage scan exceeds the source processing limit');
+  }
+  const aliases = aliasMap(root);
+  return (selected ? [selected] : targets).map((target) => {
+    const files: ComponentUsageFile[] = [];
+    for (const { file, text } of sources) {
+      if (file === target) {
+        continue;
+      }
+      const count = instancesIn(text, {
+        file: path.resolve(root, file),
+        targetPath: path.resolve(root, target),
+        name: path.basename(target, '.astro'),
+        aliases,
+      });
+      if (count) {
+        files.push({ rel: file, path: file, kind: usageKind(file), count });
+      }
+    }
+    files.sort((left, right) => right.count - left.count || left.rel.localeCompare(right.rel));
+    return { file: target, files, total: files.reduce((sum, file) => sum + file.count, 0) };
+  });
+}
+
+function usageKind(file: string): ComponentUsageFile['kind'] {
+  if (file.startsWith('src/pages/')) {
+    return 'page';
+  }
+  if (file.startsWith('src/layouts/')) {
+    return 'layout';
+  }
+  if (file.startsWith('src/components/')) {
+    return 'component';
+  }
+  return 'file';
+}
+
+export async function componentUsageRoute(
+  root: string,
+  request: IncomingMessage,
+  response: ServerResponse,
+  pathname: string,
+): Promise<boolean> {
+  if (pathname !== '/studio/api/component-usage') {
+    return false;
+  }
+  if (request.method !== 'GET') {
+    throw new Error('Use GET for component usage');
+  }
+  const input = new URL(request.url ?? '/', 'http://studio').searchParams.get('file');
+  const usage = await scanComponentUsage(root, input === null ? undefined : sourcePath(input));
+  response.setHeader('Content-Type', 'application/json');
+  response.end(
+    JSON.stringify(input === null ? usage.map(({ file, total }) => ({ file, total })) : usage[0]),
+  );
+  return true;
+}

@@ -1,10 +1,12 @@
+import { useCodeAccess, ManagedValue } from './CodeAccess';
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { basicSetup, EditorView } from 'codemirror';
 import type { MutableRefObject } from 'react';
 import type { LanguageSupport } from '@codemirror/language';
 import { assert } from '../../shared/core/assert';
 import { Annotation, EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
-import { Decoration } from '@codemirror/view';
+import { Decoration, keymap } from '@codemirror/view';
+import { indentWithTab } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -35,6 +37,7 @@ export const appTheme = EditorView.theme(
       lineHeight: '1.55',
     },
     '.cm-content': { caretColor: 'var(--accent)', padding: '8px 0' },
+    '.cm-line': { paddingRight: '16px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
     '&.cm-focused': { outline: 'none' },
     // The same selection as the rest of the app. CodeMirror paints its own
@@ -64,7 +67,8 @@ export const appTheme = EditorView.theme(
       outlineOffset: '-1px',
     },
     '.cm-gutters': {
-      backgroundColor: 'transparent',
+      // Sticky gutters must hide code that scrolls horizontally beneath them.
+      backgroundColor: 'var(--bg-panel)',
       color: 'var(--text-faint)',
       border: 'none',
     },
@@ -167,6 +171,9 @@ const codeDecorationField = StateField.define({
 });
 
 export default function CodeEditor(props: CodeEditorProps) {
+  return useCodeAccess() ? <EditableCodeEditor {...props} /> : <ManagedValue />;
+}
+function EditableCodeEditor(props: CodeEditorProps) {
   const { value, language, revealLine, activeRange, componentRanges } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | undefined>(undefined);
@@ -331,6 +338,7 @@ function codeEditorCreate(
       doc: latest.current.value ?? '',
       extensions: [
         basicSetup,
+        keymap.of([indentWithTab]),
         // Search stays above the document so it cannot cover the final match.
         search({ top: true }),
         codeEditorLanguage(language),

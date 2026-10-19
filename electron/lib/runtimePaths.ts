@@ -33,6 +33,7 @@ export const RUNTIME_PATHS = {
   morphClient: distPath('dist/electron/previewClient/morphClient.js'),
   previewMarkers: unpackedPath('dist/electron/previewServer/previewMarkers.js'),
   componentPreview: unpackedPath('dist/electron/previewServer/componentPreview.js'),
+  studioEntry: unpackedPath('dist/electron/previewServer/studioEntry.js'),
 } as const;
 
 /** An icon or other file the build copies to dist/resources/. */

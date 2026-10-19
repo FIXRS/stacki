@@ -4,6 +4,7 @@
 // Method: the component is bundled with esbuild, mounted into jsdom through
 // React, and driven through its CodeMirror view; assertions read the editor
 // state and the callbacks it fired.
+// Inspect the structural highlighter before waiting for Shiki to catch fallback-color flashes.
 
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -15,7 +16,9 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     stdin: {
       contents:
         `export { default as CodeEditor, selectedCodeScrollTop } ` +
-        `from './src/ui/CodeEditor.tsx'; export { EditorView } from '@codemirror/view';`,
+        `from './src/ui/CodeEditor.tsx'; export { EditorView } from '@codemirror/view';` +
+        `export { highlightingFor } from '@codemirror/language';` +
+        `export { tags } from '@lezer/highlight';`,
       resolveDir: ROOT,
       loader: 'jsx',
     },
@@ -63,7 +66,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
   });
   const React = require('react');
   const { createRoot } = require('react-dom/client');
-  const { CodeEditor, EditorView, selectedCodeScrollTop } = require(outfile);
+  const { CodeEditor, EditorView, selectedCodeScrollTop, highlightingFor, tags } = require(outfile);
   assert.equal(selectedCodeScrollTop(600, 820, 500), 350, 'short blocks center their start');
   assert.equal(selectedCodeScrollTop(600, 850, 500), 350, 'a block fitting exactly stays centered');
   assert.equal(selectedCodeScrollTop(600, 851, 500), 600, 'overflowing blocks start at the top');
@@ -100,6 +103,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
   try {
     await render('one\ntwo\nthree');
     const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+    assert.ok(highlightingFor(view.state, [tags.keyword]), 'JavaScript keeps its syntax colors');
     assert.equal(view.state.selection.main.head, 4, 'initial reveal goes to the requested line');
     assert.ok(
       document.querySelector('.cm-code-muted'),
@@ -165,6 +169,11 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
       }
     };
     await render(astroSource, astroOptions);
+    const astroView = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+    assert.ok(
+      highlightingFor(astroView.state, [tags.keyword, tags.string, tags.tagName]) === null,
+      'Astro never shows fallback syntax colors while its grammar loads',
+    );
     await waitFor(() => tokenTexts().length > 0);
     // A pass that still runs out of time (a starved machine) is followed by
     // another, at most three.

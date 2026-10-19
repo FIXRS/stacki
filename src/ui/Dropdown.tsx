@@ -42,6 +42,10 @@ export interface DropdownProps<T = string> {
   readonly menuClassName?: string;
   readonly placeholder?: string;
   readonly livePreview?: boolean;
+  readonly onPrepare?: () => void;
+  readonly onPreview?: (value: T) => void;
+  readonly onCancelPreview?: () => void;
+  readonly onCommitPreview?: () => void;
   readonly searchable?: boolean;
   readonly searchPlaceholder?: string;
 }
@@ -92,6 +96,8 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
         type="button"
         ref={state.triggerRef}
         className={`dd-trigger ${props.className || ''}`}
+        onMouseEnter={props.onPrepare}
+        onFocus={props.onPrepare}
         onClick={() => (state.open ? actions.close() : actions.openPopup())}
         onKeyDown={onKey}
       >
@@ -149,8 +155,16 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
 // One frame lets an immediate press commit before hover preview rerenders its row.
 // Waiting longer makes the canvas feel stale as the pointer crosses options.
 function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Actions<T> {
-  const { setOpen, setHighlight, setQuery, committed, previewed, triggerRef, visible } = state;
-  const { value, options, onChange, livePreview = true } = props;
+  const { setOpen, setHighlight, committed, previewed, visible } = state;
+  const {
+    value,
+    options,
+    onChange,
+    onPreview,
+    onPrepare,
+    onCancelPreview,
+    livePreview = true,
+  } = props;
   const hoverFrame = useRef<number | undefined>(undefined);
   const cancelHover = useCallback((): void => {
     if (hoverFrame.current !== undefined) {
@@ -166,24 +180,25 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
     const applied = previewed.current?.value ?? committed.current;
     if (option.value !== applied) {
       previewed.current = { value: option.value };
-      onChange(option.value);
+      (onPreview ?? onChange)(option.value);
     }
   };
   const close = useCallback(() => {
     cancelHover();
     setOpen(false);
-    if (previewed.current !== undefined && previewed.current.value !== committed.current) {
+    if (onCancelPreview) {
+      onCancelPreview();
+    } else if (previewed.current !== undefined && previewed.current.value !== committed.current) {
       onChange(committed.current);
     }
     previewed.current = undefined;
-  }, [setOpen, previewed, committed, onChange, cancelHover]);
+  }, [setOpen, previewed, committed, onChange, cancelHover, onCancelPreview]);
   return {
     close,
     openPopup: () => {
       cancelHover();
-      committed.current = value;
-      previewed.current = undefined;
-      setQuery('');
+      onPrepare?.();
+      initializeDropdown(state, value);
       setHighlight(options.findIndex((option) => option.value === value));
       setOpen(true);
     },
@@ -205,16 +220,41 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
     },
     pick: (option) => {
       cancelHover();
-      const applied = previewed.current?.value ?? committed.current;
-      committed.current = option.value;
-      previewed.current = undefined;
-      setOpen(false);
-      if (option.value !== applied) {
-        onChange(option.value);
-      }
-      triggerRef.current?.focus();
+      commitDropdownOption(props, state, option);
     },
   };
+}
+
+function initializeDropdown<T>(state: Selection<T>, value: T): void {
+  const { committed, previewed, setQuery } = state;
+  committed.current = value;
+  previewed.current = undefined;
+  setQuery('');
+}
+
+function commitDropdownOption<T>(
+  props: DropdownProps<T>,
+  state: Selection<T>,
+  option: DropdownOption<T>,
+): void {
+  const { onPreview, onCancelPreview, onCommitPreview, onChange } = props;
+  const { committed, previewed, setOpen, triggerRef } = state;
+  const applied = onPreview ? committed.current : (previewed.current?.value ?? committed.current);
+  if (onPreview) {
+    onPreview(option.value);
+    if (option.value === committed.current) {
+      onCancelPreview?.();
+    } else {
+      onCommitPreview?.();
+    }
+  }
+  committed.current = option.value;
+  previewed.current = undefined;
+  setOpen(false);
+  if (option.value !== applied) {
+    onChange(option.value);
+  }
+  triggerRef.current?.focus();
 }
 
 function useDropdownPosition<T>(state: Selection<T>, options: { readonly searchable: boolean }) {

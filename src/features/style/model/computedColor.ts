@@ -1,3 +1,4 @@
+import { useStableStyleValue } from './useStableStyleValue';
 // What a colour value actually looks like, on the element it applies to.
 //
 // A swatch used to paint the value straight into the panel's own DOM, which
@@ -106,5 +107,11 @@ export function useResolvedColor(value: string): string {
   });
 
   const resolved = cached?.kind === 'settled' ? cached.answer : undefined;
-  return resolved || raw;
+  return useStableStyleValue(resolved || raw, { pending: cached?.kind === 'pending' }, [
+    host.projectPath,
+    host.openFilePath,
+    host.selectedId,
+    path,
+    raw,
+  ]);
 }

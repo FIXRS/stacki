@@ -508,23 +508,17 @@ async function rereadPastWrites(
   return content;
 }
 
-// Rebuild and store content, flushing deferred page-embed edits first.
-export function useContentRebuild(
+function useFlushPending(
   editorRefs: ReturnType<typeof useEditorRefs>,
-  scanState: ReturnType<typeof useScanState>,
   nativeState: ReturnType<typeof useNativeState>,
-  contentBuild: ReturnType<typeof useContentBuild>,
-  contentStore: ReturnType<typeof useContentStore>,
+  scanState: ReturnType<typeof useScanState>,
 ) {
-  const { contentRef, inComponentRef, pageDocsRef, pendingKeysRef } = editorRefs;
-  const { setStatus } = scanState;
+  const { pageDocsRef, pendingKeysRef } = editorRefs;
   const { setPendingKeys } = nativeState;
-  const { buildContent } = contentBuild;
-  const { storeContent } = contentStore;
-
+  const { setStatus } = scanState;
   // Write out every page embed that was edited while a component was open, now
   // that the page is writable again. Best-effort: reported, then cleared.
-  const flushPending = useCallback(async () => {
+  return useCallback(async () => {
     const keys = [...pendingKeysRef.current];
     if (!keys.length) {
       return;
@@ -551,6 +545,21 @@ export function useContentRebuild(
         : 'Saved the page-embed edits you made inside the component.',
     );
   }, [pageDocsRef, pendingKeysRef, setPendingKeys, setStatus]);
+}
+
+// Rebuild and store content, flushing deferred page-embed edits first.
+export function useContentRebuild(
+  editorRefs: ReturnType<typeof useEditorRefs>,
+  scanState: ReturnType<typeof useScanState>,
+  nativeState: ReturnType<typeof useNativeState>,
+  contentBuild: ReturnType<typeof useContentBuild>,
+  contentStore: ReturnType<typeof useContentStore>,
+) {
+  const { contentRef, inComponentRef, pendingKeysRef } = editorRefs;
+  const { buildContent } = contentBuild;
+  const { storeContent } = contentStore;
+
+  const flushPending = useFlushPending(editorRefs, nativeState, scanState);
 
   // Rebuild content, flushing any deferred page-embed edits the moment we detect
   // the component was closed (so the fresh page read reflects them). onPartial
@@ -584,7 +593,13 @@ export function useContentRebuild(
       if (fresh === undefined && contentRef.current !== undefined) {
         return contentRef.current;
       }
-      return storeContent(fresh ?? content);
+      // A browser refresh crosses the network. A failed file read is not a
+      // deleted stylesheet: replacing the last complete scan with that partial
+      // inventory makes its chips and values disappear until the next poll.
+      // Foreground scans still show available sources and their read errors.
+      return storeContent(
+        completeRefresh(fresh ?? content, { allowPartial: !!onPartial || !contentRef.current }),
+      );
     },
     [buildContent, flushPending, storeContent, contentRef, inComponentRef, pendingKeysRef],
   );
@@ -658,4 +673,11 @@ export function useApplyResolve(
     ],
   );
   return { applyResolve };
+}
+
+function completeRefresh(content: Content, options: { readonly allowPartial: boolean }): Content {
+  if (!options.allowPartial && content.errors.length) {
+    throw new Error('Stylesheet refresh interrupted; keeping the last complete scan.');
+  }
+  return content;
 }

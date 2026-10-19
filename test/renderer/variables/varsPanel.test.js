@@ -41,6 +41,8 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     path.join(directory, 'src', 'styles', 'motion.css'),
     ':root { --ease: linear; --duration: 200ms; --_private: 1; }\n',
   );
+  fs.writeFileSync(path.join(directory, 'src', 'styles', 'empty.css'), '.card { color: red; }');
+  fs.writeFileSync(path.join(directory, 'src', 'styles', 'private.css'), ':root { --_only: 1; }');
   const esbuild = require('esbuild');
   const buildDirectory = repoPath('node_modules/.stacki-test');
   fs.mkdirSync(buildDirectory, { recursive: true });

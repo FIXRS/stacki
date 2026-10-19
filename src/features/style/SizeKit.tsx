@@ -140,7 +140,7 @@ export function LivePropField({
           onKeyDown={field.keyDown}
           disabled={busy}
           spellCheck={false}
-          placeholder={computed || placeholder}
+          placeholder={prop === 'width' || prop === 'height' ? 'auto' : computed || placeholder}
           aria-label={label}
         />
       </VariableConnect>

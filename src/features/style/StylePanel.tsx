@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { useStyleFiles } from './useStyleFiles';
 import type { HostState } from './model/host';
 import { setHost } from './model/host';
 import EmbedEditor from './EmbedEditor';
@@ -33,7 +34,7 @@ type StyleFiles = HostState['files'];
 export default function StylePanel(props: StylePanelProps) {
   const files = useStyleFiles(props.project?.path, undefined, readStyleFiles);
   const astroFiles = useStyleFiles(props.project?.path, props.openFilePath, readAstroStyleFiles);
-  const host = hostState(props, files, astroFiles);
+  const host = hostState(props, files.files, astroFiles.files);
   // Children read the bridge during their own effects, which run before the
   // parent's effects. Publishing here ensures their first read is current.
   setHost(host);
@@ -51,6 +52,20 @@ export default function StylePanel(props: StylePanelProps) {
         ref={hostRef}
         onClick={playButtonNote}
       >
+        {files.error || astroFiles.error ? (
+          <div className="props-empty" role="alert">
+            Could not load stylesheet sources. {files.error || astroFiles.error}
+            <button
+              type="button"
+              onClick={() => {
+                files.retry();
+                astroFiles.retry();
+              }}
+            >
+              Retry stylesheet loading
+            </button>
+          </div>
+        ) : undefined}
         {props.node ? (
           <EmbedEditor />
         ) : (
@@ -59,36 +74,6 @@ export default function StylePanel(props: StylePanelProps) {
       </div>
     </SoundHere>
   );
-}
-
-// `refreshKey` names what, when it changes, makes the files worth reading again.
-function useStyleFiles(
-  projectPath: string | undefined,
-  refreshKey: string | undefined,
-  read: (
-    projectPath: string,
-  ) => Promise<
-    | { readonly ok: true; readonly value: StyleFiles }
-    | { readonly ok: false; readonly error: string }
-  >,
-): StyleFiles {
-  const [files, setFiles] = useState<StyleFiles>([]);
-  useEffect(() => {
-    if (!projectPath) {
-      setFiles([]);
-      return;
-    }
-    let active = true;
-    void read(projectPath).then((result) => {
-      if (active) {
-        setFiles(result.ok ? result.value : []);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [projectPath, read, refreshKey]);
-  return files;
 }
 
 function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleFiles): HostState {

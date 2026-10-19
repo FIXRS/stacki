@@ -173,6 +173,10 @@ const TEXT_TAGS = new Set([
 // the common shape; `const Tag = isLink ? "a" : "button"` names its options
 // outright. Returns every tag it could be, or [] when that can't be told.
 function dynamicTagLiterals(frontmatter: string, name: string): string[] {
+  const alias = destructuredTag(frontmatter, name);
+  if (alias) {
+    return [alias.tag];
+  }
   const decl = frontmatter.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`));
   if (!decl) {
     return [];
@@ -194,6 +198,27 @@ function dynamicTagLiterals(frontmatter: string, name: string): string[] {
     new RegExp(`\\b${ident[1]}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`),
   );
   return viaDefault ? [required(viaDefault[1], 'Dynamic tag default capture')] : [];
+}
+
+// Lumos also declares dynamic tags directly in Astro.props: `tag: Tag = "h2"`.
+function destructuredTag(
+  frontmatter: string,
+  name: string,
+): { prop: string; tag: string } | undefined {
+  const declarations = frontmatter.matchAll(
+    /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*Astro\.props\b/g,
+  );
+  for (const declaration of declarations) {
+    const match = declaration[1]?.match(
+      new RegExp(
+        `(?:^|,)\\s*([A-Za-z_$][\\w$]*)\\s*:\\s*${name}\\s*=\\s*["']([A-Za-z][\\w-]*)["']`,
+      ),
+    );
+    if (match?.[1] && match[2]) {
+      return { prop: match[1], tag: match[2].toLowerCase() };
+    }
+  }
+  return undefined;
 }
 
 // The HTML tag a component renders as, so nesting rules can reach through it:
@@ -223,6 +248,10 @@ export function rootTag(source: string): RenderTag | undefined {
     }
     // A capitalised name is either another component — whose own tag this
     // file can't know — or a variable holding one.
+    const alias = destructuredTag(frontmatter, name);
+    if (alias) {
+      return alias;
+    }
     const decl = frontmatter.match(
       new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`),
     );

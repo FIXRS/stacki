@@ -1,7 +1,7 @@
-import fs from 'fs';
+import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
 import postcss from 'postcss';
-import { writeProjectText } from '../documents/documentWrites';
+import { writeProjectText } from './variableWorkspace';
 import { assert } from '../../shared/core/assert';
 import type { Declaration, Rule as PostcssRule } from 'postcss';
 

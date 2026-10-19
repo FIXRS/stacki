@@ -1,0 +1,71 @@
+.role-menu {
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.role-menu-heading {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 0.375rem 0.625rem 0.625rem;
+}
+.account-popover .role-menu-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+}
+.account-popover .role-menu-option:hover {
+  background: var(--bg-hover);
+}
+.account-popover .role-menu-option[aria-checked='true'] {
+  background: rgba(0, 153, 255, 0.09);
+}
+.role-menu-option strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+}
+.role-menu-symbol {
+  width: 1.375rem;
+  height: 1.375rem;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.role-menu-check {
+  margin-left: auto;
+  color: var(--accent);
+}
+.client-role-badge {
+  color: var(--text-dim);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.studio-right.client-inspector .right-tabs {
+  display: block;
+  padding: 14px 16px;
+  height: auto;
+  font-weight: 550;
+}
+
+.account-popover:has(.role-menu) {
+  width: min(21.25rem, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 64px);
+  overflow-y: auto;
+}
+.account-popover .role-menu-option {
+  margin-top: 0;
+}
+.account-popover .role-menu-option + .role-menu-option {
+  margin-top: 4px;
+}
+.account-popover .role-menu-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

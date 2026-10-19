@@ -185,7 +185,7 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
   const morph = readSource('electron/previewClient/morphClient.ts');
   check(
     'and the client still listens to the socket as well',
-    /import\.meta\.hot\.on\('avb:page-changed', \(\) => \{[\s\S]{0,200}?void update\(\);/.test(
+    /import\.meta\.hot\.on\('avb:page-changed', \(\) => \{[\s\S]{0,200}?requestUpdate\(\);/.test(
       morph,
     ),
     'the fast path is gone',

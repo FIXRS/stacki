@@ -1,3 +1,4 @@
+import { registerStudioHandlers } from './handlers/studioHandlers';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
 import { RUNTIME_PATHS, resourcePath } from './lib/runtimePaths';
 import { readSource } from './lib/mainLimits';
@@ -311,26 +312,9 @@ function buildMenu() {
       label: 'File',
       submenu: [
         {
-          label: 'Interface Sounds',
-          type: 'checkbox',
-          checked: !!settings.sound,
-          // The menu owns the setting: it is the only place it can be changed,
-          // so the tick is the state rather than a copy of it.
-          click: (item) => {
-            settings = { ...settings, sound: item.checked };
-            writeSettings();
-            send('menu:sound', item.checked);
-          },
-        },
-        {
-          label: 'Anonymous Usage Counts',
-          type: 'checkbox',
-          checked: settings.usageCountsEnabled,
-          click: (item) => setUsageCountsEnabled(item.checked),
-        },
-        {
-          label: 'About Usage Counts…',
-          click: () => void showUsageExplanation(),
+          label: 'Settings…',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => send('menu:settings'),
         },
         { type: 'separator' },
         // Until now the only way out of a project was to close the app, and on
@@ -596,15 +580,31 @@ function writeSettings(): boolean {
   }
 }
 
-// The renderer asks once on load; the menu pushes every change after that.
-ipcMain.handle('settings:get', () => ({ sound: settings.sound }));
+// Preferences apply immediately; replies distinguish session changes from saved ones.
+const publicSettings = () => ({
+  sound: settings.sound,
+  usageCountsEnabled: settings.usageCountsEnabled,
+});
+ipcMain.handle('settings:get', publicSettings);
+ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
+  let saved: boolean;
+  if (setting === 'sound') {
+    settings = { ...settings, sound: enabled };
+    saved = writeSettings();
+    send('menu:sound', enabled);
+  } else {
+    saved = setUsageCountsEnabled(enabled);
+  }
+  return { ...publicSettings(), saved };
+});
 
-function setUsageCountsEnabled(enabled: boolean): void {
+function setUsageCountsEnabled(enabled: boolean): boolean {
   if (!enabled) {
     usageCountInFlight?.abort();
   }
   settings = { ...settings, usageCountsEnabled: enabled };
-  if (!writeSettings()) {
+  const saved = writeSettings();
+  if (!saved) {
     void showMessageBox(mainWindow, {
       type: 'warning',
       title: 'Privacy Setting Not Saved',
@@ -615,6 +615,7 @@ function setUsageCountsEnabled(enabled: boolean): void {
   if (enabled && watcher) {
     noteUsageActivity();
   }
+  return saved;
 }
 
 function noteUsageActivity(): void {
@@ -660,8 +661,7 @@ function usageNoticeOptions(): MessageBoxOptions {
       'Stacki sends one count on days you open a project. It sends no project names, ' +
       'file contents, device identifier, or activity history. Daily totals are kept ' +
       'on Cloudflare for up to 366 days; its network sees the connection IP, but the ' +
-      'usage database does not store it. Turn this off any time in File → Anonymous ' +
-      'Usage Counts.',
+      'usage database does not store it. Turn this off any time in File → Settings.',
     buttons: ['Continue'],
     checkboxLabel: 'Turn off anonymous usage counts',
     checkboxChecked: !settings.usageCountsEnabled,
@@ -688,17 +688,6 @@ async function showUsageNotice(): Promise<void> {
     // If the notice could not be shown, the version stays old and no count is sent.
     console.warn('Could not show usage notice:', error);
   }
-}
-
-async function showUsageExplanation(): Promise<void> {
-  const notice = usageNoticeOptions();
-  await showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Anonymous Usage Counts',
-    message: notice.message,
-    ...(notice.detail === undefined ? {} : { detail: notice.detail }),
-    buttons: ['Close'],
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -913,6 +902,11 @@ registerGitHandlers(host);
 registerPageHandlers(host);
 registerPreviewHandlers(host);
 registerProjectHandlers(host);
+registerStudioHandlers(
+  host,
+  app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() },
+  () => app.getVersion(),
+);
 registerProjectScanHandlers(host);
 registerStyleSourceHandlers(host);
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });

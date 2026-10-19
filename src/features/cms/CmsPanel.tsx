@@ -1,3 +1,4 @@
+import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection } from './cmsSchema';
 import type { CmsPanelContent, CmsPanelContentCollection, CmsPanelFile } from './cmsPanelBridge';
@@ -52,7 +53,9 @@ const EMPTY_CONTENT: CmsPanelContent = {
 export default function CmsPanel(props: CmsPanelProps) {
   const { files, content, refresh } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
-  const [openKey, setOpenKey] = useState<string | undefined>(undefined);
+  const [openKey, setOpenKey] = useState<string | undefined>(
+    props.selectedContent ? CONTENT_KEY : undefined,
+  );
   const collections = useMemo(() => visibleCollections(files, content), [files, content]);
   const groups = useMemo(
     () => collectionGroups(collections, props.currentFile),
@@ -115,7 +118,7 @@ function useCmsPanelData(projectPath: string, refreshKey: string | number): CmsP
   }, [projectPath]);
   useEffect(() => {
     void refresh();
-    const dispose = window.avb.onCmsChanged(() => void refresh());
+    const dispose = cmsTransport.onCmsChanged(() => void refresh());
     return () => {
       requestId.current += 1;
       dispose();

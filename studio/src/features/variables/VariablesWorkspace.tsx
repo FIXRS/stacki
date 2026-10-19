@@ -1,0 +1,61 @@
+import { useCallback } from 'react';
+import VariablesView from '../../../vendor/stacki/src/features/variables/VariablesView';
+import VariablesPanel from '../../../vendor/stacki/src/features/variables/VariablesPanel';
+import type { VariableUndo } from '../../../vendor/stacki/src/features/variables/variableHistory';
+import type { SharedDocument } from '../collaboration/useDocument';
+import type { EditorProps } from '../../app/Editor';
+
+export function VariablesWorkspace({
+  props,
+  document,
+}: {
+  readonly props: EditorProps;
+  readonly document: SharedDocument | undefined;
+}) {
+  const { report } = props;
+  const toast = useCallback((message: string) => report(message), [report]);
+  const record = useCallback(
+    (command: VariableUndo) => {
+      document?.recordCommand({
+        undo: command.undo,
+        redo: command.redo,
+        ...(command.coalesceKey ? { coalesceKey: command.coalesceKey } : {}),
+      });
+    },
+    [document],
+  );
+  if (props.view.panel !== 'variables') {
+    return null;
+  }
+  if (!props.view.variable) {
+    return (
+      <div className="cms-view studio-variables-empty">
+        <p>Select a stylesheet to edit its variables.</p>
+      </div>
+    );
+  }
+  return (
+    <VariablesView
+      project={{ path: 'studio' }}
+      selected={props.view.variable}
+      onClose={() => {
+        if (window.matchMedia('(max-width: 700px)').matches) {
+          props.view.setVariable(undefined);
+        } else {
+          props.view.setPanel(undefined);
+        }
+      }}
+      showToast={toast}
+      onRecordUndo={record}
+    />
+  );
+}
+export function VariableNavigation({ view }: { readonly view: EditorProps['view'] }) {
+  return (
+    <VariablesPanel
+      project={{ path: 'studio' }}
+      selected={view.variable}
+      onSelect={view.setVariable}
+    />
+  );
+}

@@ -4,6 +4,7 @@
 // closing on a press outside (propBindings.tsx).
 
 import { useEffect, useRef, useState } from 'react';
+import { useCodeAccess } from '../../ui/CodeAccess';
 import type { RefObject } from 'react';
 import type { TemplateHole } from '../../editor/bindings';
 import type { ExprInputAPI } from '../../ui/ExprInput';
@@ -65,7 +66,8 @@ export function SourceEditButton({
 }: SourceEditButtonProps) {
   const [position, setPosition] = useState<FieldPosition | undefined>(undefined);
   const target = symbolTarget(name, dataContext);
-  if (!target) {
+  const allowCode = useCodeAccess();
+  if (!target || !allowCode) {
     return undefined;
   }
 
@@ -264,6 +266,9 @@ export function ExpressionBindingField({
 }
 
 export function BindHandle({ active, onOpen }: BindHandleProps) {
+  if (!useCodeAccess()) {
+    return undefined;
+  }
   return (
     <button
       type="button"
@@ -393,7 +398,10 @@ export function useValueCodeEditorDismiss(ref: RefObject<HTMLElement>, onClose: 
     };
   }, [onClose, ref]);
 }
-export function ValueCodeEditor({
+export function ValueCodeEditor(props: ValueCodeEditorProps) {
+  return useCodeAccess() ? <EditableValueCodeEditor {...props} /> : undefined;
+}
+function EditableValueCodeEditor({
   pos: position,
   name,
   value,
@@ -456,6 +464,9 @@ export function ValueCodeEditor({
 }
 
 export function VarSourceEditor(props: VarSourceEditorProps) {
+  return useCodeAccess() ? <EditableVarSourceEditor {...props} /> : undefined;
+}
+function EditableVarSourceEditor(props: VarSourceEditorProps) {
   const state = useVarSourceEditor(props);
   useVarSourceEditorDismiss(state);
   return <VarSourceEditorView state={state} />;

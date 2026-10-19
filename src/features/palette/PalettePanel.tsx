@@ -24,6 +24,7 @@ const PREVIEW_DELAY_MS = 450;
 interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
   readonly devUrl: string | undefined;
+  readonly resolvePreviewURL?: (url: string) => Promise<string>;
   readonly trailingSlash: TrailingSlash;
   readonly onInsert: (name: string) => void;
   readonly onDragBegin?: () => void;
@@ -283,24 +284,23 @@ function PaletteItem({
       </span>
       <span className="label">
         {prettyComponentName(component.name)}
-        {component.instances !== undefined && (
-          <div className="sub">
-            <button
-              type="button"
-              className="palette-instances"
-              disabled={component.instances === 0}
-              onClick={(event) => {
-                event.stopPropagation();
-                void props.openUsage(component, event.currentTarget);
-              }}
-              onMouseDown={(event) => event.stopPropagation()}
-              onDoubleClick={(event) => event.stopPropagation()}
-              onDragStart={(event) => event.preventDefault()}
-            >
-              {component.instances} instance{component.instances === 1 ? '' : 's'}
-            </button>
-          </div>
-        )}
+        <div className="sub">
+          <button
+            type="button"
+            className="palette-instances"
+            disabled={component.instances === undefined || component.instances === 0}
+            style={{ visibility: component.instances === undefined ? 'hidden' : 'visible' }}
+            onClick={(event) => {
+              event.stopPropagation();
+              void props.openUsage(component, event.currentTarget);
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onDragStart={(event) => event.preventDefault()}
+          >
+            {component.instances ?? 0} instance{component.instances === 1 ? '' : 's'}
+          </button>
+        </div>
       </span>
     </div>
   );
@@ -385,6 +385,7 @@ function PalettePopups({
           preview={preview}
           devURL={props.devUrl}
           trailingSlash={props.trailingSlash}
+          {...(props.resolvePreviewURL ? { resolvePreviewURL: props.resolvePreviewURL } : {})}
         />
       )}
     </>
@@ -395,13 +396,18 @@ function ComponentPreviewPopup({
   preview,
   devURL,
   trailingSlash,
+  resolvePreviewURL,
 }: {
   readonly preview: NonNullable<ReturnType<typeof useComponentPreview>['value']>;
   readonly devURL: string;
   readonly trailingSlash: TrailingSlash;
+  readonly resolvePreviewURL?: (url: string) => Promise<string>;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const [ready, setReady] = useState(false);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'empty'>('loading');
+  const directURL = componentPreviewURL(devURL, preview.component, trailingSlash);
+  const resolvedURL = useResolvedPreviewURL(directURL, setStatus, resolvePreviewURL);
+  const visible = status === 'ready' || (!!resolvePreviewURL && status === 'loading');
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>): void => {
       if (event.source !== frameRef.current?.contentWindow) {
@@ -409,7 +415,7 @@ function ComponentPreviewPopup({
       }
       const message = parseComponentPreviewMessage(event.data);
       if (message) {
-        setReady(message.status === 'ready');
+        setStatus(message.status);
       }
     };
     window.addEventListener('message', receive);
@@ -418,15 +424,55 @@ function ComponentPreviewPopup({
   return (
     <div
       className="comp-preview"
-      style={{ left: preview.left, top: preview.top, visibility: ready ? 'visible' : 'hidden' }}
-      aria-hidden={!ready}
+      style={{
+        left: preview.left,
+        top: preview.top,
+        visibility: visible ? 'visible' : 'hidden',
+      }}
+      aria-hidden={status === 'empty'}
+      data-loading={status === 'loading'}
     >
       <div className="comp-preview-title">{prettyComponentName(preview.component.name)}</div>
+      {status === 'loading' && (
+        <div className="comp-preview-loading" role="status">
+          Loading preview…
+        </div>
+      )}
       <iframe
         ref={frameRef}
-        src={componentPreviewURL(devURL, preview.component, trailingSlash)}
+        src={resolvePreviewURL ? resolvedURL : directURL}
         title={`${preview.component.name} preview`}
       />
     </div>
   );
+}
+
+function useResolvedPreviewURL(
+  directURL: string,
+  setStatus: (status: 'loading' | 'ready' | 'empty') => void,
+  resolvePreviewURL?: (url: string) => Promise<string>,
+) {
+  const [resolvedURL, setResolvedURL] = useState<string>();
+  useEffect(() => {
+    if (!resolvePreviewURL) {
+      return;
+    }
+    let active = true;
+    void resolvePreviewURL(directURL)
+      .then((url) => {
+        if (active) {
+          setResolvedURL(url);
+        }
+      })
+      .catch(() => {
+        // An expired draft session cannot display a component preview.
+        if (active) {
+          setStatus('empty');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [directURL, resolvePreviewURL, setStatus]);
+  return resolvedURL;
 }

@@ -30,6 +30,8 @@ export default function CodeWindow(props: CodeWindowProps) {
   return (
     <div
       className="code-window"
+      role="dialog"
+      aria-label={title}
       style={{ left: rectangle.x, top: rectangle.y, width: rectangle.w, height: rectangle.h }}
     >
       <div className="code-window-header" onPointerDown={startDrag}>

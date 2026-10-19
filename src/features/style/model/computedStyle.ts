@@ -1,3 +1,4 @@
+import { useStableStyleValue } from './useStableStyleValue';
 // What a control shows when nothing in the panel sets its property.
 //
 // The resolved model only knows what the project's CSS declares. A control whose
@@ -154,7 +155,15 @@ function useComputedAnswer(prop: string): Answer {
     }
   });
 
-  return answer;
+  const host = getHost();
+  const value = useStableStyleValue(answer.value, { pending: answer.pending }, [
+    host.projectPath,
+    host.openFilePath,
+    host.selectedId,
+    answer.path,
+    prop,
+  ]);
+  return { ...answer, value };
 }
 
 /**

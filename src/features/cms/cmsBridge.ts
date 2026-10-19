@@ -1,3 +1,4 @@
+import { cmsTransport } from '../../ipc/editorEnvironment';
 import type { Result } from '../../../shared/core/result';
 import type { Parser } from '../../../shared/core/boundary';
 import type { DeclaredTypes } from './cmsTypes';
@@ -52,23 +53,23 @@ async function cmsRequest<Value>(
 }
 export function readCms(projectPath: string, rel: string) {
   const payload = parseIpcPayload('cms:read', { projectPath, rel });
-  return cmsRequest(parseCmsRead, () => window.avb.readCms(payload));
+  return cmsRequest(parseCmsRead, () => cmsTransport.readCms(payload));
 }
 export function readCmsMeta(projectPath: string) {
   const payload = parseIpcPayload('cms:meta', projectPath);
-  return cmsRequest(parseCmsMeta, () => window.avb.cmsMeta(payload));
+  return cmsRequest(parseCmsMeta, () => cmsTransport.cmsMeta(payload));
 }
-export function writeCms(projectPath: string, rel: string, value: unknown) {
+export function writeCms(projectPath: string, rel: string, value: unknown, expectedData?: unknown) {
   const payload = parseIpcPayload('cms:write', { projectPath, rel, data: value });
-  return cmsRequest(parseCmsSuccess, () => window.avb.writeCms(payload));
+  return cmsRequest(parseCmsSuccess, () => cmsTransport.writeCms(payload, expectedData));
 }
 export function writeCmsMeta(projectPath: string, rel: string, fields: DeclaredTypes) {
   const payload = parseIpcPayload('cms:setMeta', { projectPath, rel, fields });
-  return cmsRequest(parseCmsSuccess, () => window.avb.setCmsMeta(payload));
+  return cmsRequest(parseCmsSuccess, () => cmsTransport.setCmsMeta(payload));
 }
 export function readCmsUsage(projectPath: string, rel: string) {
   const payload = parseIpcPayload('cms:usage', { projectPath, rel });
-  return cmsRequest(parseCmsUsage, () => window.avb.cmsUsage(payload));
+  return cmsRequest(parseCmsUsage, () => cmsTransport.cmsUsage(payload));
 }
 export function deleteCms(projectPath: string, rel: string) {
   const payload = parseIpcPayload('cms:delete', { projectPath, rel });
@@ -77,10 +78,10 @@ export function deleteCms(projectPath: string, rel: string) {
       parseCmsSuccess(response);
       return list(pathText)(record(response)['rewritten']);
     },
-    () => window.avb.deleteCms(payload),
+    () => cmsTransport.deleteCms(payload),
   );
 }
 export function importCmsAsset(projectPath: string, rel: string, assetRel: string) {
   const payload = parseIpcPayload('cms:assetRef', { projectPath, rel, assetRel });
-  return cmsRequest(parseCmsAsset, () => window.avb.cmsAssetRef(payload));
+  return cmsRequest(parseCmsAsset, () => cmsTransport.cmsAssetRef(payload));
 }

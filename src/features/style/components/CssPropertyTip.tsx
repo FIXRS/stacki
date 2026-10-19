@@ -10,14 +10,8 @@ import { HoverTooltip } from './SegmentedControl';
 const TIP_DELAY_MS = 500;
 
 /**
- * The tooltip body: the CSS property names, and a note only where one says
- * something about the control itself (an orange label opens a popover, and has
- * to say so).
- *
- * It used to carry what the page computed for each property underneath — "on
- * the page: 16px (<div>)". That is the value the control already shows, said
- * again in smaller type, and it turned a two-word answer into a paragraph. The
- * question a label's tooltip answers is which property this is.
+ * Property labels show only CSS names so the mapping stays easy to scan.
+ * Dedicated help icons can add an explanatory note.
  */
 export function PropTip({ props, note }: { props: readonly string[]; note?: ReactNode }) {
   return (
@@ -123,7 +117,6 @@ export function ProvenanceLabel({
   busy,
   anchorProp,
   onProvenance,
-  note = 'Set through another selector — click to see all',
 }: {
   label: ReactNode;
   /** Properties this label covers — shown in the tooltip. */
@@ -133,11 +126,8 @@ export function ProvenanceLabel({
   /** The property whose provenance the click opens (defaults to the first). */
   anchorProp?: string;
   onProvenance: (prop: string, anchor: DOMRect) => void;
-  note?: ReactNode;
 }) {
-  const { ref, hoverProps, hide, tip } = useHoverTip<HTMLButtonElement>(
-    <PropTip props={props} note={note} />,
-  );
+  const { ref, hoverProps, hide, tip } = useHoverTip<HTMLButtonElement>(<PropTip props={props} />);
   return (
     <>
       <button

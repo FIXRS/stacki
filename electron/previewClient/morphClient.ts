@@ -60,37 +60,55 @@ if (host === 'browser') {
   stripPreviewInstrumentation(document);
 }
 
-function fetchDocument(): Promise<FetchedDocument> {
-  return fetch(location.href, { cache: 'no-store' })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error('dev server answered ' + response.status);
-      }
-      return response.text();
-    })
-    .then((html) => {
-      const withAnchors = new DOMParser().parseFromString(html, 'text/html');
-      stripTemplateMarkers(withAnchors);
-      const clone = withAnchors.cloneNode(true);
-      // A cloned document is a Document; the guard is the types' only honest
-      // way to say nodeType 9 without an assertion.
-      if (!asDocument(clone)) {
-        throw new Error('cloned rendering is not a document');
-      }
-      const clean = clone;
-      stripAnchors(clean);
-      return { withAnchors, clean };
-    });
+function fetchDocument(initialHTML?: string): Promise<FetchedDocument> {
+  const rendering =
+    initialHTML === undefined
+      ? fetch(location.href, { cache: 'no-store' }).then((response) => {
+          // Studio edits authored 404 pages too. Reject transport/server failures,
+          // but retain Astro's intentional 404 status for an HTML page rendering.
+          const html404 =
+            response.status === 404 && response.headers.get('content-type')?.includes('text/html');
+          if (!response.ok && !html404) {
+            throw new Error('dev server answered ' + response.status);
+          }
+          return response.text();
+        })
+      : Promise.resolve(initialHTML);
+  return rendering.then((html) => {
+    const withAnchors = new DOMParser().parseFromString(html, 'text/html');
+    withAnchors.getElementById('studio-render-baseline')?.remove();
+    stripTemplateMarkers(withAnchors);
+    const clone = withAnchors.cloneNode(true);
+    // A cloned document is a Document; the guard is the types' only honest
+    // way to say nodeType 9 without an assertion.
+    if (!asDocument(clone)) {
+      throw new Error('cloned rendering is not a document');
+    }
+    const clean = clone;
+    stripAnchors(clean);
+    return { withAnchors, clean };
+  });
 }
 
 // The server's own rendering of this page, captured before any client code can
 // alter it. The live DOM is not a substitute: a script that appends during
 // parse has already run by the time this module does, and mistaking its work
 // for server output would delete it on the first patch.
+// Studio adaptation: use the initial response, even if edits arrive before this
+// module loads. Never use an already-mutated live DOM as the server baseline.
+function initialRendering(): string | undefined {
+  const element = document.getElementById('studio-render-baseline');
+  if (!element) {
+    return undefined;
+  }
+  const value: unknown = JSON.parse(element.textContent || 'null');
+  element.remove();
+  return typeof value === 'string' ? value : undefined;
+}
 let previousDocument: Document | undefined = undefined;
 const ready =
   host === 'stacki'
-    ? fetchDocument().then(
+    ? fetchDocument(initialRendering()).then(
         (fetched) => {
           previousDocument = fetched.clean;
           noteStyles(fetched.clean);
@@ -116,6 +134,44 @@ function reloadFor(reason: ReloadReason): void {
 
 let busy = false;
 let again = false;
+let pushedHTML: string | undefined;
+let pushReady = false;
+let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+// The hosted preview receives Astro renders on its existing socket. Keep the
+// pull path for old servers, disconnected sockets and failed pushed renders.
+function requestUpdate(): void {
+  if (!pushReady) {
+    void update();
+  } else if (!fallbackTimer) {
+    fallbackTimer = setTimeout(() => {
+      fallbackTimer = undefined;
+      void update();
+    }, 1500);
+  }
+}
+document.addEventListener('studio:render-push', (event) => {
+  pushReady = event instanceof CustomEvent && event.detail === true;
+});
+document.addEventListener('studio:render-html', (event) => {
+  if (
+    !(event instanceof CustomEvent) ||
+    typeof event.detail !== 'string' ||
+    event.detail.length > 4_000_000
+  ) {
+    return;
+  }
+  clearTimeout(fallbackTimer);
+  fallbackTimer = undefined;
+  pushedHTML = event.detail;
+  void update();
+});
+document.addEventListener('studio:render-fallback', () => {
+  clearTimeout(fallbackTimer);
+  fallbackTimer = undefined;
+  void update();
+});
+document.dispatchEvent(new window.Event('studio:render-listening'));
 
 // It calls itself only once the last patch has settled (see the end), so the
 // stack never grows: that is event re-entry, bounded by `busy`, not recursion.
@@ -131,38 +187,18 @@ async function update(): Promise<void> {
     if (!previousDocument) {
       throw new Error('no baseline rendering to compare against');
     }
-    const next = await fetchDocument();
-    checkMarkerCap(next.withAnchors);
-    const added = addedScripts(previousDocument, next.clean);
-    if (added === undefined) {
-      reloadFor('scripts-changed');
-      return;
+    const html = pushedHTML;
+    pushedHTML = undefined;
+    if (html !== undefined) {
+      again = false;
     }
-    refillMorphWork();
-    const liveRoot = document.documentElement;
-    const previousRoot = previousDocument.documentElement;
-    const nextRoot = next.clean.documentElement;
-    if (!liveRoot || !previousRoot || !nextRoot) {
-      throw new Error('missing <html> in one of the renderings');
+    const next = await fetchDocument(html);
+    // A newer push arrived while a fallback fetch was in flight.
+    if (pushedHTML === undefined) {
+      applyRendering(next);
+    } else {
+      again = true;
     }
-    patchAttrs(liveRoot, previousRoot, nextRoot);
-    patchChildren(document.head, previousDocument.head, next.clean.head);
-    patchChildren(document.body, previousDocument.body, next.clean.body);
-    const renderedBefore = previousDocument;
-    previousDocument = next.clean;
-    // After the patch, so a component that has just appeared is styled by the
-    // time anything measures it — and running by the time anything clicks it.
-    loadStyles(next.clean);
-    refreshDevStyles(renderedBefore, next.clean);
-    runScripts(added);
-    const liveBody = document.body;
-    const serverBody = next.withAnchors.body;
-    if (!liveBody || !serverBody) {
-      throw new Error('missing <body> in one of the renderings');
-    }
-    syncAnchors(liveBody, serverBody);
-    syncStamps(document, next.withAnchors);
-    document.dispatchEvent(new CustomEvent('avb:morphed'));
   } catch (error: unknown) {
     // Whatever went wrong, the page must still end up showing what the file
     // says. Falling back to the reload this replaced is always safe.
@@ -183,6 +219,43 @@ async function update(): Promise<void> {
   }
 }
 
+function applyRendering(next: FetchedDocument): void {
+  if (!previousDocument) {
+    throw new Error('no baseline rendering to compare against');
+  }
+  checkMarkerCap(next.withAnchors);
+  const added = addedScripts(previousDocument, next.clean);
+  if (added === undefined) {
+    reloadFor('scripts-changed');
+    return;
+  }
+  refillMorphWork();
+  const liveRoot = document.documentElement;
+  const previousRoot = previousDocument.documentElement;
+  const nextRoot = next.clean.documentElement;
+  if (!liveRoot || !previousRoot || !nextRoot) {
+    throw new Error('missing <html> in one of the renderings');
+  }
+  patchAttrs(liveRoot, previousRoot, nextRoot);
+  patchChildren(document.head, previousDocument.head, next.clean.head);
+  patchChildren(document.body, previousDocument.body, next.clean.body);
+  const renderedBefore = previousDocument;
+  previousDocument = next.clean;
+  // After the patch, so a component that has just appeared is styled by the
+  // time anything measures it — and running by the time anything clicks it.
+  loadStyles(next.clean);
+  refreshDevStyles(renderedBefore, next.clean);
+  runScripts(added);
+  const liveBody = document.body;
+  const serverBody = next.withAnchors.body;
+  if (!liveBody || !serverBody) {
+    throw new Error('missing <body> in one of the renderings');
+  }
+  syncAnchors(liveBody, serverBody);
+  syncStamps(document, next.withAnchors);
+  document.dispatchEvent(new CustomEvent('avb:morphed', { detail: next.withAnchors }));
+}
+
 // Two ways the news arrives, because one of them is not reliable enough on its
 // own. HMR is the fast path: the dev server saw the file change and said so.
 // But that message rides a WebSocket the page opened when it loaded, and a
@@ -199,7 +272,7 @@ if (import.meta.hot) {
   import.meta.hot.on('avb:page-changed', () => {
     if (host === 'stacki') {
       // update() reports its own failures and reloads; nothing is left to catch.
-      void update();
+      requestUpdate();
     } else {
       // The dev plugin turns Astro's broadcast full reload into this event for every
       // client. A normal browser wants Astro's normal behavior, not Stacki's DOM patch.
@@ -219,6 +292,6 @@ window.addEventListener('message', (event: MessageEvent) => {
     data['type'] === 'avb:patch-now'
   ) {
     // update() reports its own failures and reloads; nothing is left to catch.
-    void update();
+    requestUpdate();
   }
 });

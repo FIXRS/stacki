@@ -468,3 +468,44 @@ names the two whose failures are tolerated and why.
 A new test must write only to its own scratch path under
 `node_modules/.stacki-test/` (or a `mkdtemp` directory) and bind no fixed
 port, so it can share the pool.
+
+## Desktop Studio setup
+
+`studio:status` inspects the open project's Studio installation; `studio:install`
+accepts only that project's path and a source choice (`published` or `file`). Main
+chooses the current desktop version from the official release feed in packaged apps.
+Development apps use the matching generated bundle in the application checkout's
+`studio/release/` directory, never a bundle from the open website. The legacy file
+source uses the native file dialog and is not exposed by the setup UI. `shared/ipc/studioSetup.ts`
+validates results; `shared/ipc/studioRelease.ts` validates the release itself.
+The installer stages dependencies, type checks and a build before activation,
+uses the same lock as CLI updates, and refuses an existing Studio directory.
+Cloud authorization and deployment remain an explicit agent-assisted handoff.
+
+Each installation carries a bounded `requestId`. The `studio:progress` event echoes
+that ID and the requested project path alongside the current stage and a bounded
+tail of command output. Preload exposes `onStudioProgress`; the renderer parses
+each snapshot before use and ignores other projects or previous attempts. Main
+batches output at 150 ms intervals, flushes on stage changes and completion, and
+caps command time and output. Progress counts completed stages, not elapsed time.
+
+The managed website preview starts installed Studio and serves an entry page at its
+own `/studio` URL. A private loopback server isolates Studio's module graph from the
+desktop canvas instrumentation; the entry embeds that editor while preserving the
+website's address. Both servers use the original project source, so local Studio saves
+edit website files directly. Local editing needs no Cloudflare configuration. Session
+state lives in a self-ignored `.studio-state` directory, not a copied draft workspace.
+The website preview owns the child process and closes it on shutdown. Missing Studio
+is checked again when `/studio` opens so a new installation works without a restart.
+Startup and health probes are bounded; failures leave the website preview available.
+The terminal stays closed. Setup displays the generated preview configuration command
+for later use. Hosted Studio retains its separate draft and publish workflow.
+
+## Desktop preferences
+
+File → Settings opens a modal from both the welcome screen and an open project.
+`settings:get` returns sound and anonymous usage-count preferences; `settings:set`
+accepts one named boolean preference and returns both current values plus `saved`.
+A failed disk write applies only to the current session and is shown in the popup.
+Disabling usage counts still aborts in-flight counting. Studio setup is available
+in the same popup when a project is open.

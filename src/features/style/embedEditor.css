@@ -4258,6 +4258,11 @@ textarea.embed-editor_value-input.is-expanded {
   gap: var(--space-2);
   min-width: 0;
 }
+/* Keep the swatch and value inside their column; centered intrinsic sizing lets
+   long color values overlap the neighboring field and overflow the panel. */
+.embed-editor_type-cell > .embed-editor_type-field {
+  align-self: stretch;
+}
 /* The italicize / capitalize / direction row: bars size to their content and are
    spread across the row, with UNIFORM square segments — so a 4-button bar isn't
    cramped into a third of the width while a 2-button bar has room to spare. */

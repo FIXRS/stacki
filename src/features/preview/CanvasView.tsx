@@ -55,6 +55,7 @@ export default function CanvasView({ url, refreshKey, onPreviewLoaded }: CanvasV
   worldRef.current = world;
   const userMovedRef = React.useRef(false);
   useFrameHeights(iframesRef, setHeights);
+  useStudioPatches(iframesRef, url);
   const fit = useFitCanvas(wrapRef, worldRef, setView);
   useCanvasFit(wrapRef, userMovedRef, world.width, world.height, fit);
   React.useEffect(() => setHeights({}), [refreshKey, url]);
@@ -346,7 +347,7 @@ function CanvasFrames({
             onLoad={(event) => {
               event.currentTarget.contentWindow?.postMessage(
                 { type: 'avb:set-vh', px: frame.viewportHeight },
-                '*',
+                new URL(url, window.location.href).origin,
               );
               onPreviewLoaded?.();
             }}
@@ -383,4 +384,38 @@ function CanvasControls({
       </button>
     </div>
   );
+}
+
+// Browser Studio uses authenticated preview frames rather than Electron's preload.
+function useStudioPatches(frames: React.MutableRefObject<FrameElements>, url: string): void {
+  React.useEffect(() => {
+    const origin = new URL(url, window.location.href).origin;
+    const patch = () => {
+      for (const frame of Object.values(frames.current)) {
+        frame?.contentWindow?.postMessage({ type: 'avb:patch-now' }, origin);
+      }
+    };
+    const receive = (event: MessageEvent<unknown>) => {
+      if (
+        event.origin !== origin ||
+        !Object.values(frames.current).some((frame) => frame?.contentWindow === event.source)
+      ) {
+        return;
+      }
+      if (
+        event.data &&
+        typeof event.data === 'object' &&
+        'type' in event.data &&
+        event.data.type === 'studio:invalidate'
+      ) {
+        patch();
+      }
+    };
+    window.addEventListener('studio:source-updated', patch);
+    window.addEventListener('message', receive);
+    return () => {
+      window.removeEventListener('studio:source-updated', patch);
+      window.removeEventListener('message', receive);
+    };
+  }, [frames, url]);
 }

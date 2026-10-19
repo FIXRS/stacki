@@ -35,7 +35,7 @@ type Props = {
   className?: string;
   /** Shown in a hover tooltip after a short delay, in every state (blue or dim) —
    *  the panel uses it to name the CSS property this label writes. When given, it
-   *  replaces the native `title`, which becomes a note line inside the tooltip. */
+   *  replaces the native `title` to keep the tooltip focused on the property name. */
   tooltip?: ReactNode;
 };
 
@@ -70,7 +70,7 @@ function ClearableFieldLabel(props: Props) {
   const menuId = useId();
   // The hover tooltip anchors to whichever element this state renders (the dim
   // caption's span or the active pill's wrapper) and swallows the native `title`.
-  const hoverTip = useHoverTip<HTMLSpanElement>(tipContent(tooltip, title));
+  const hoverTip = useHoverTip<HTMLSpanElement>(tooltip);
   const nativeTitle = tooltip ? undefined : title;
   // While active (the only time the menu can be open), the tooltip's anchor IS the
   // label's root: the wrapper span below.
@@ -137,16 +137,6 @@ function ClearableFieldLabel(props: Props) {
       {hoverTip.tip}
     </span>
   );
-}
-
-// The tooltip's content: the property it names, with the native title as a note.
-function tipContent(tooltip: ReactNode, title: string | undefined): ReactNode {
-  return tooltip ? (
-    <>
-      {tooltip}
-      {title ? <div className="u-prop-tip-note">{title}</div> : undefined}
-    </>
-  ) : undefined;
 }
 
 // A click on the active label toggles its menu; Option/Alt-click resets at once.

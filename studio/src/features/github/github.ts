@@ -1,0 +1,293 @@
+import { prepareStudioBranch } from '../updates/githubUpdate';
+import type { StudioRelease } from '../updates/release';
+import { GitHubChangedError, GitHubRequestError } from './githubErrors';
+import { changedPublishFiles } from './changedPublishFiles';
+import { publicAssetTree } from '../storage/publicAssetTree';
+import { treeChanges } from './treeChanges';
+import { independentlyDeployed } from './syncPaths';
+import { createSign } from 'node:crypto';
+import { record, string } from '../../shared/validation';
+
+export interface GitHubConfig {
+  readonly appId: string;
+  readonly installationId: string;
+  readonly privateKey: string;
+  readonly repository: string;
+  readonly branch: string;
+}
+export interface RepositoryFile {
+  readonly path: string;
+  readonly content: string;
+  readonly encoding?: 'utf-8' | 'base64';
+  readonly deleted?: boolean;
+}
+export interface RepositoryAccess {
+  commit(
+    files: readonly RepositoryFile[],
+    expectedHead: string,
+    message: string,
+  ): Promise<{ sha: string; url: string }>;
+  incoming(base: string): Promise<IncomingChanges>;
+  acceptBase(sha: string): Promise<void>;
+}
+export interface IncomingFile {
+  readonly file: string;
+  readonly before: string | null;
+  readonly after: string | null;
+}
+export interface IncomingChanges {
+  readonly sha: string;
+  readonly files: readonly IncomingFile[];
+}
+export class GitHubRepository {
+  constructor(
+    readonly config: GitHubConfig,
+    private readonly transport: typeof fetch = (...args) => fetch(...args),
+  ) {
+    if (!/^[\w.-]+\/[\w.-]+$/.test(config.repository)) {
+      throw new Error('Expected owner/repository');
+    }
+    if (!/^[\w./-]+$/.test(config.branch)) {
+      throw new Error('Invalid branch');
+    }
+  }
+  async prepareStudioUpdate(release: StudioRelease) {
+    const token = await this.installationToken();
+    const head = await this.head(token);
+    return prepareStudioBranch(
+      this.config.repository,
+      head,
+      release,
+      (endpoint, method, body) => this.call(endpoint, token, method, body),
+      this.config.branch,
+    );
+  }
+  async installationToken(): Promise<string> {
+    const now = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+    const body = Buffer.from(
+      JSON.stringify({ iat: now - 60, exp: now + 540, iss: this.config.appId }),
+    ).toString('base64url');
+    const payload = `${header}.${body}`;
+    const signer = createSign('RSA-SHA256');
+    signer.update(payload);
+    const jwt = `${payload}.${signer.sign(this.config.privateKey.replaceAll('\\n', '\n'), 'base64url')}`;
+    const result = record(
+      await this.call(
+        `/app/installations/${encodeURIComponent(this.config.installationId)}/access_tokens`,
+        jwt,
+        'POST',
+        {
+          repositories: [this.config.repository.split('/')[1]],
+          permissions: { contents: 'write' },
+        },
+      ),
+    );
+    return string(result['token'], 500);
+  }
+  async head(token: string) {
+    const result = record(
+      await this.call(
+        `/repos/${this.config.repository}/git/ref/heads/${this.config.branch}`,
+        token,
+      ),
+    );
+    return string(record(result['object'])['sha'], 64);
+  }
+  async read(file: string, ref: string, token: string) {
+    const result = record(
+      await this.call(
+        `/repos/${this.config.repository}/contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`,
+        token,
+      ),
+    );
+    if (result['encoding'] !== 'base64') {
+      throw new Error('Unsupported GitHub content encoding');
+    }
+    return Buffer.from(string(result['content'], 2_000_000), 'base64').toString('utf8');
+  }
+  async publicAssets(sha: string) {
+    if (!/^[a-f0-9]{40}$/.test(sha)) {
+      throw new Error('Invalid published revision');
+    }
+    const token = await this.installationToken();
+    return publicAssetTree(
+      await this.call(`/repos/${this.config.repository}/git/trees/${sha}?recursive=1`, token),
+    );
+  }
+  async acceptBase(_sha: string): Promise<void> {
+    /* Local baseline is written by the caller. */
+  }
+  async incoming(base: string): Promise<IncomingChanges> {
+    const token = await this.installationToken();
+    const sha = await this.head(token);
+    if (sha === base) {
+      return { sha, files: [] };
+    }
+    const comparison = record(
+      await this.call(`/repos/${this.config.repository}/compare/${base}...${sha}`, token),
+    );
+    if (comparison['status'] !== 'ahead') {
+      throw new Error('GitHub history diverged. Restore a shared ancestor before syncing.');
+    }
+    const rawChanges = comparison['files'];
+    if (!Array.isArray(rawChanges)) {
+      throw new Error('Invalid GitHub comparison');
+    }
+    let changes: readonly unknown[] = rawChanges;
+    if (changes.length >= 300) {
+      const trees = await Promise.all(
+        [base, sha].map((ref) =>
+          this.call(`/repos/${this.config.repository}/git/trees/${ref}?recursive=1`, token),
+        ),
+      );
+      changes = treeChanges(trees[0], trees[1]);
+    }
+    const files: IncomingFile[] = [];
+    for (const value of changes) {
+      const change = record(value);
+      files.push(...(await this.incomingFile(change, base, sha, token)));
+    }
+    return { sha, files };
+  }
+  private async incomingFile(
+    change: Record<string, unknown>,
+    base: string,
+    sha: string,
+    token: string,
+  ): Promise<IncomingFile[]> {
+    const file = string(change['filename'], 500);
+    const status = change['status'];
+    // Treat each side of a rename separately so moving into/out of Studio or
+    // deployment configuration cannot hide a site deletion or addition.
+    const paths =
+      status === 'renamed'
+        ? [
+            { file: string(change['previous_filename'], 500), status: 'removed' },
+            { file, status: 'added' },
+          ]
+        : [{ file, status }];
+    const files: IncomingFile[] = [];
+    for (const { file, status } of paths) {
+      if (independentlyDeployed(file)) {
+        continue;
+      }
+      // Runtime/config changes need a fresh container with dependencies installed.
+      if (!/^src\/.+\.(astro|json|md|mdx|css|ts|js)$/.test(file)) {
+        throw new Error(
+          `GitHub changed ${file}. Restart from a fresh repository revision before syncing runtime or binary changes.`,
+        );
+      }
+      files.push({
+        file,
+        before: status === 'added' ? null : await this.read(file, base, token),
+        after: status === 'removed' ? null : await this.read(file, sha, token),
+      });
+    }
+    return files;
+  }
+  async commit(files: readonly RepositoryFile[], expectedHead: string, message: string) {
+    if (!files.length || files.length > 1000) {
+      throw new Error('Publish requires between 1 and 1000 files');
+    }
+    const token = await this.installationToken();
+    if ((await this.head(token)) !== expectedHead) {
+      throw new GitHubChangedError();
+    }
+    const parent = record(
+      await this.call(`/repos/${this.config.repository}/git/commits/${expectedHead}`, token),
+    );
+    const baseTree = string(record(parent['tree'])['sha'], 64);
+    const changes = changedPublishFiles(
+      files,
+      await this.call(`/repos/${this.config.repository}/git/trees/${baseTree}?recursive=1`, token),
+    );
+    if (!changes.length) {
+      return {
+        sha: expectedHead,
+        url: `https://github.com/${this.config.repository}/commit/${expectedHead}`,
+      };
+    }
+    const entries = [];
+    for (const file of changes) {
+      if (file.deleted) {
+        entries.push({ path: file.path, mode: '100644', type: 'blob', sha: null });
+      } else if (file.encoding === 'base64') {
+        const blob = record(
+          await this.call(`/repos/${this.config.repository}/git/blobs`, token, 'POST', {
+            content: file.content,
+            encoding: 'base64',
+          }),
+        );
+        entries.push({
+          path: file.path,
+          mode: '100644',
+          type: 'blob',
+          sha: string(blob['sha'], 64),
+        });
+      } else {
+        entries.push({ path: file.path, mode: '100644', type: 'blob', content: file.content });
+      }
+    }
+    const tree = record(
+      await this.call(`/repos/${this.config.repository}/git/trees`, token, 'POST', {
+        base_tree: baseTree,
+        tree: entries,
+      }),
+    );
+    const commit = record(
+      await this.call(`/repos/${this.config.repository}/git/commits`, token, 'POST', {
+        message,
+        tree: string(tree['sha'], 64),
+        parents: [expectedHead],
+      }),
+    );
+    const sha = string(commit['sha'], 64);
+    await this.advanceRef(token, sha, expectedHead);
+    return { sha, url: `https://github.com/${this.config.repository}/commit/${sha}` };
+  }
+  private async advanceRef(token: string, sha: string, expectedHead: string) {
+    try {
+      await this.call(
+        `/repos/${this.config.repository}/git/refs/heads/${this.config.branch}`,
+        token,
+        'PATCH',
+        { sha, force: false },
+      );
+    } catch (error) {
+      // Retry only a confirmed rejected ref update, never an ambiguous network failure.
+      if (
+        error instanceof GitHubRequestError &&
+        [409, 422].includes(error.status) &&
+        (await this.head(token)) !== expectedHead
+      ) {
+        throw new GitHubChangedError();
+      }
+      throw error;
+    }
+  }
+  private async call(
+    endpoint: string,
+    token: string,
+    method = 'GET',
+    body?: unknown,
+  ): Promise<unknown> {
+    const response = await this.transport(`https://api.github.com${endpoint}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'Astro-Studio',
+        'Content-Type': 'application/json',
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      throw new GitHubRequestError(response.status);
+    }
+    const result: unknown = await response.json();
+    return result;
+  }
+}

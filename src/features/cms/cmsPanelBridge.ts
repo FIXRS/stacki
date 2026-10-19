@@ -1,3 +1,4 @@
+import { cmsTransport } from '../../ipc/editorEnvironment';
 import type { Data, Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
 import {
@@ -80,17 +81,17 @@ export function parseCmsCreate(input: unknown): { readonly rel: string } {
 
 export function readCmsFiles(projectPath: string) {
   const payload = parseIpcPayload('cms:list', projectPath);
-  return request(parseCmsFiles, () => window.avb.listCms(payload));
+  return request(parseCmsFiles, () => cmsTransport.listCms(payload));
 }
 
 export function readContentCollections(projectPath: string) {
   const payload = parseIpcPayload('content:collections', projectPath);
-  return request(parseContentCollections, () => window.avb.contentCollections(payload));
+  return request(parseContentCollections, () => cmsTransport.contentCollections(payload));
 }
 
 export function createCmsCollection(projectPath: string, name: string) {
   const payload = parseIpcPayload('cms:create', { projectPath, name });
-  return request(parseCmsCreate, () => window.avb.createCms(payload));
+  return request(parseCmsCreate, () => cmsTransport.createCms(payload));
 }
 
 function parseCmsFile(input: unknown): CmsPanelFile {

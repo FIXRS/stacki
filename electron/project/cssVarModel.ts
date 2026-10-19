@@ -1,9 +1,9 @@
 // The model the variables editor shows: one group per set of rules, blocks per
 // comment section or prefix, rows and columns of cells (cssVars.ts).
 
-import fs from 'fs';
+import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
-import { MAIN_LIMITS } from '../lib/mainLimits';
+import { MAIN_LIMITS } from './variableWorkspace';
 import { assert } from '../../shared/core/assert';
 import { toPosix, findStylesheets, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
 import {

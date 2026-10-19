@@ -1,3 +1,4 @@
+import { assetDropLimit, assetDeletionMessage } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetRequest } from '../../ui/assetPick';
 import type { AssetPanelEntry } from './assetPanelBridge';
@@ -36,7 +37,7 @@ import {
   assetTitle,
 } from './assetPaths';
 
-const FILE_DROP_COUNT_MAX = 1_000;
+const FILE_DROP_COUNT_MAX = assetDropLimit;
 type Toast = (message: string, kind: 'error') => void;
 
 export interface AssetUndo {
@@ -316,7 +317,8 @@ async function removeAsset(file: AssetFile, projectPath: string, showToast: Toas
   const confirmed = await confirmDialog({
     title: `Delete ${file.name}?`,
     body:
-      'The file moves to your Bin. Anything on the site still pointing at ' +
+      assetDeletionMessage +
+      ' Anything on the site still pointing at ' +
       `/${file.rel} will stop finding it.`,
     confirmLabel: 'Delete',
     danger: true,
@@ -388,14 +390,14 @@ async function uploadDropped(
   projectPath: string,
   showToast: Toast,
   destinationRel: string,
-  paths: readonly string[],
+  paths: readonly File[],
 ): Promise<void> {
   reportResult(await uploadAssets(projectPath, destinationRel, paths), showToast);
 }
 
 type DropPayload =
   | { readonly kind: 'asset'; readonly rel: string }
-  | { readonly kind: 'os'; readonly paths: readonly string[] };
+  | { readonly kind: 'os'; readonly paths: readonly File[] };
 
 // A drop carrying nothing usable is ok with no payload, not an error.
 function dropPayload(transfer: DataTransfer): Result<DropPayload | undefined, string> {
@@ -410,10 +412,7 @@ function dropPayload(transfer: DataTransfer): Result<DropPayload | undefined, st
   if (transfer.files.length > FILE_DROP_COUNT_MAX) {
     return { ok: false, error: `Drop at most ${FILE_DROP_COUNT_MAX} files at once.` };
   }
-  const paths = [...transfer.files]
-    .map((file) => window.avb.getFilePath(file))
-    .filter((path): path is string => path !== undefined && path !== '')
-    .map(pathText);
+  const paths = [...transfer.files];
   return paths.length === 0
     ? { ok: true, value: undefined }
     : { ok: true, value: { kind: 'os', paths } };
@@ -490,6 +489,7 @@ function AssetHeader({
         <button
           className="ghost"
           title={cwd ? 'New folder' : 'Open public/ or src/ first'}
+          aria-label="New folder"
           disabled={!cwd}
           onClick={() => state.setNewFolder(true)}
         >
@@ -498,6 +498,7 @@ function AssetHeader({
         <button
           className="ghost"
           title={cwd ? 'Upload assets' : 'Open public/ or src/ first'}
+          aria-label="Upload assets"
           disabled={!cwd}
           onClick={() => void actions.pickUpload(cwd)}
         >

@@ -1,3 +1,6 @@
+import { parsePreferenceName } from './preferences';
+import { parseStudioSource } from './studioSetup';
+import { parseStudioRequestId } from './studioProgress';
 import { parsePropertyChange, propertySource } from '../properties/propertyEditing';
 import { parseEdit, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
@@ -80,6 +83,12 @@ function imageBytes(input: unknown): number[] {
 }
 
 export const IPC_PAYLOADS = {
+  'studio:status': pathText,
+  'studio:install': object({
+    ...project,
+    source: parseStudioSource,
+    requestId: parseStudioRequestId,
+  }),
   'assets:delete': object({ ...relative }),
   'assets:dimensions': object({ ...relative }),
   'assets:list': pathText,
@@ -246,6 +255,7 @@ export const IPC_PAYLOADS = {
   'recents:remove': pathText,
   'selection:copy': object({ ...project, keys: strings }),
   'settings:get': nothing,
+  'settings:set': object({ setting: parsePreferenceName, enabled: boolean }),
   'shell:openExternal': pathText,
   'src:readSymbol': object({ ...source, name: text }),
   'src:readText': object({ ...relative }),

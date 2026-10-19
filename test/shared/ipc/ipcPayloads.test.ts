@@ -30,6 +30,7 @@ const noPayload = new Set([
   'dev:stop',
 ]);
 const pathPayload = new Set([
+  'studio:status',
   'project:close',
   'recents:add',
   'recents:remove',
@@ -128,11 +129,20 @@ const fields = {
   rows: 24,
   bytes: [0, 127, 255],
   mime: 'image/png',
+  setting: 'sound',
+  enabled: true,
 };
 
 for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
   test(`IPC payload: ${channel}`, () => {
-    const sample = noPayload.has(channel) ? undefined : pathPayload.has(channel) ? '/site' : fields;
+    const sample =
+      channel === 'studio:install'
+        ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
+        : noPayload.has(channel)
+          ? undefined
+          : pathPayload.has(channel)
+            ? '/site'
+            : fields;
     assert.doesNotThrow(() => parse(sample));
     assert.throws(() => parse(Symbol('invalid')), /Expected/);
     if (!noPayload.has(channel)) {
@@ -259,6 +269,8 @@ test('clipboard payloads accept bytes without truncation and reject invalid byte
       parseIpcPayload('terminal:clipboardImage', {
         bytes: new Uint8Array(CLIPBOARD_BYTES_MAX + 1),
         mime: 'image/png',
+        setting: 'sound',
+        enabled: true,
       }),
     /byte limit/,
   );
@@ -301,3 +313,17 @@ const terminalSuccessNeedsId: Assignable<
 > = false;
 void channelsStayDistinct;
 void terminalSuccessNeedsId;
+
+test('desktop preferences reject unknown keys and nonboolean toggle values', () => {
+  assert.deepEqual(parseIpcPayload('settings:set', { setting: 'sound', enabled: false }), {
+    setting: 'sound',
+    enabled: false,
+  });
+  for (const input of [
+    { setting: 'unknown', enabled: true },
+    { setting: 'sound', enabled: 'true' },
+    { setting: 'usageCountsEnabled' },
+  ]) {
+    assert.throws(() => parseIpcPayload('settings:set', input));
+  }
+});

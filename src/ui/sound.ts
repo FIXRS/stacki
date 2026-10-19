@@ -15,7 +15,7 @@ declare global {
 //
 // Off unless the setting says otherwise — an editor that makes noise the first
 // time you touch it is an editor people turn off, so this one starts silent and
-// is switched on from File ▸ Interface Sounds. Nothing here is constructed until
+// is switched on from File ▸ Settings ▸ Interface sounds. Nothing here is constructed until
 // the first note is asked for, so a session with the setting off never creates
 // an AudioContext at all.
 //

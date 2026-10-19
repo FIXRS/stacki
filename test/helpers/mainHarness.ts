@@ -98,6 +98,8 @@ function mainHarnessElectron(
 ) {
   const app = Object.assign(new EventEmitter(), {
     getPath: () => userData,
+    getVersion: () => '0.1.48',
+    getAppPath: () => path.resolve('.'),
     whenReady: () => ({ then: () => undefined }),
     isPackaged: false,
     isReady: () => false,

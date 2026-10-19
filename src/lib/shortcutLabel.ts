@@ -4,7 +4,14 @@ export function currentDesktopPlatform(): NodeJS.Platform {
   if (typeof window === 'undefined') {
     return 'linux';
   }
-  return window.avb?.platform ?? 'darwin';
+  return (
+    window.avb?.platform ??
+    (/Mac|iPhone|iPad/.test(navigator.platform)
+      ? 'darwin'
+      : /Win/.test(navigator.platform)
+        ? 'win32'
+        : 'linux')
+  );
 }
 
 export function shortcutLabel(

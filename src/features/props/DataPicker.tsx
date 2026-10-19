@@ -1,3 +1,4 @@
+import { useCodeAccess } from '../../ui/CodeAccess';
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
@@ -156,6 +157,7 @@ export interface DataPickerProps {
 }
 
 export default function DataPicker(props: DataPickerProps) {
+  const allowCode = useCodeAccess();
   const {
     entries,
     onStepItem,
@@ -176,7 +178,12 @@ export default function DataPicker(props: DataPickerProps) {
           stepping through them previews the page against other content and
           re-reads this list against it at the same time. */}
       {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
-      {sourceInspection && <LoopSourceSummary source={sourceInspection} onEdit={onEditSource} />}
+      {sourceInspection && (
+        <LoopSourceSummary
+          source={sourceInspection}
+          onEdit={allowCode ? onEditSource : undefined}
+        />
+      )}
       <div className="dp-search">
         <SearchIcon size={12} />
         <input
@@ -193,13 +200,13 @@ export default function DataPicker(props: DataPickerProps) {
           bound rather than about replacing it. Only ever rendered for a picker
           opened on a specific chip — the field's own handle opens this on
           nothing in particular, and there is no "the" value to edit then. */}
-      {onEdit && (
+      {allowCode && onEdit && (
         <div className="dp-foot" onMouseDown={(event) => event.preventDefault()} onClick={onEdit}>
           <PencilIcon size={11} />
           {editLabel}
         </div>
       )}
-      {footer && (
+      {allowCode && footer && (
         <div className="dp-foot" onMouseDown={(event) => event.preventDefault()} onClick={onWrite}>
           <CodeIcon size={11} />
           Write an expression…

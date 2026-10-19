@@ -1,0 +1,396 @@
+import { pushWrittenSource } from '../features/preview/pushWrittenSource';
+import { instrumentVariant } from '../features/preview/variantRuntime';
+import { mutateAsset } from '../features/assets/assetOperations';
+import { configureRenderPush } from '../features/preview/renderPushServer';
+import { managedAsset, MEDIA_EXT } from '../features/assets/assetStateTypes';
+import { readAssetState, saveAssetState } from '../features/assets/assetState';
+import { reauthorizeConnection } from '../features/collaboration/connectionLease';
+import { assetCatalog } from '../features/assets/assetCatalog';
+import { parseProfile } from '../features/auth/profile';
+import type { Duplex } from 'node:stream';
+import type { AstroIntegration } from 'astro';
+import { readFile, writeFile, access } from 'node:fs/promises';
+import path from 'node:path';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { markSourceFile } from '../../vendor/stacki/electron/previewServer/previewMarkers';
+import {
+  componentPreviewPlugin,
+  renderComponentPreviewPage,
+} from '../../vendor/stacki/electron/previewServer/componentPreview';
+import { createRooms } from '../features/collaboration/rooms';
+import { scanProject, safePath, preparePath, readSource } from '../features/project/projectServer';
+import { filePath, sourcePath, string, record, MAX_SOURCE } from '../shared/validation';
+import { featureRoutes } from './featureRoutes';
+import { saveAsset } from '../features/storage/assetStorage';
+
+interface Options {
+  readonly root: string;
+  readonly assets: string;
+  readonly port: number;
+  readonly editing?: 'source' | 'draft';
+}
+import type { ViteDevServer, HMRPayload, Plugin } from 'vite';
+export default function studio(options: Options): AstroIntegration {
+  const rooms = createRooms(options.root);
+  const features = featureRoutes(options.root, rooms);
+  return {
+    name: 'astro-studio-cms',
+    hooks: {
+      'astro:config:setup': async ({ updateConfig, addMiddleware, injectRoute, command }) => {
+        if (command === 'dev') {
+          const entrypoint = path.join(options.root, '.studio-state/component-preview.astro');
+          await writeFile(entrypoint, renderComponentPreviewPage());
+          injectRoute({ pattern: '/__avb/preview', entrypoint });
+        }
+        addMiddleware({
+          entrypoint: path.join(options.assets, 'previewMiddleware.mjs'),
+          order: 'pre',
+        });
+        updateConfig({
+          vite: {
+            plugins: [
+              componentPreviewPlugin([options.root]),
+              previewPlugin(options, features, rooms),
+            ],
+          },
+        });
+      },
+    },
+  };
+}
+function previewPlugin(
+  options: Options,
+  features: ReturnType<typeof featureRoutes>,
+  rooms: ReturnType<typeof createRooms>,
+): Plugin {
+  return {
+    name: 'studio-preview-markers',
+    apply: 'serve',
+    enforce: 'pre',
+    load(id: string) {
+      if (id.includes('?')) {
+        return undefined;
+      }
+      const marked = markSourceFile(id, [options.root]);
+      return marked
+        ? instrumentVariant(
+            marked.code,
+            path.relative(options.root, id).split(path.sep).join('/'),
+            path.join(options.assets, 'variantRuntime.mjs'),
+          ) +
+            (marked.page
+              ? `\n<meta name="studio-parent-origin" content="${process.env['STUDIO_PARENT_ORIGIN'] ?? ''}">` +
+                '\n<script is:inline type="module" src="/studio/morph.js"></script>\n<script is:inline type="module" async src="/studio/preview.js"></script>'
+              : '')
+        : undefined;
+    },
+    configureServer(server: ViteDevServer) {
+      configureStudioServer(server, options, features, rooms);
+      server.httpServer?.once('close', () => rooms.sockets.close());
+    },
+  };
+}
+
+function authorized(request: IncomingMessage, options: Options) {
+  const token = process.env['STUDIO_CONTAINER_TOKEN'];
+  if (token) {
+    return request.headers['x-studio-token'] === token;
+  }
+  const host = request.headers.host;
+  const allowed = [
+    `localhost:${options.port}`,
+    `127.0.0.1:${options.port}`,
+    `[::1]:${options.port}`,
+  ];
+  if (!host || !allowed.includes(host)) {
+    return false;
+  }
+  const origin = request.headers.origin;
+  return !origin || origin === `http://${host}`;
+}
+async function handleRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: Options,
+  features: ReturnType<typeof featureRoutes>,
+  rooms: ReturnType<typeof createRooms>,
+) {
+  response.setHeader('Cache-Control', 'no-store');
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  if (!authorized(request, options)) {
+    json(response, 403, { error: 'Unauthorized studio request' });
+    return;
+  }
+  const url = new URL(request.url ?? '/', 'http://studio');
+  if (url.pathname === '/studio/api/session') {
+    json(response, 200, { kind: 'local', editing: options.editing ?? 'draft' });
+    return;
+  }
+  if (await features(request, response, url.pathname, () => body(request))) {
+    return;
+  }
+  if (url.pathname === '/studio/api/preview-url' && request.method === 'GET') {
+    sendPreviewURL(request, response, url);
+    return;
+  }
+  if (url.pathname === '/studio/api/assets' && request.method === 'POST') {
+    const input: unknown = JSON.parse(await body(request));
+    json(response, 200, await rooms.coordinator.run(() => mutateAsset(options.root, input)));
+    return;
+  }
+  if (url.pathname === '/studio/api/assets' && request.method === 'GET') {
+    json(response, 200, await assetCatalog(options.root));
+    return;
+  }
+  if (url.pathname === '/studio/api/project' && request.method === 'GET') {
+    json(response, 200, await scanProject(options.root));
+    return;
+  }
+  if (url.pathname === '/studio/api/file' && request.method === 'GET') {
+    const file = sourcePath(url.searchParams.get('file'));
+    json(response, 200, { file, source: await readSource(options.root, file) });
+    return;
+  }
+  if (url.pathname === '/studio/api/asset' && request.method === 'GET') {
+    await sendAsset(response, options.root, url);
+    return;
+  }
+  if (url.pathname === '/studio/api/create' && request.method === 'POST') {
+    await createFile(request, response, options, rooms, url);
+    return;
+  }
+  if (url.pathname === '/studio/api/upload' && request.method === 'POST') {
+    await uploadAsset(request, response, options, rooms, url);
+    return;
+  }
+  const name =
+    url.pathname === '/studio' || url.pathname === '/studio/'
+      ? 'index.html'
+      : url.pathname.slice('/studio/'.length);
+  if (!['index.html', 'studio.js', 'studio.css', 'preview.js', 'morph.js'].includes(name)) {
+    json(response, 404, { error: 'Not found' });
+    return;
+  }
+  response.setHeader('Content-Type', mime(name));
+  response.end(await readFile(path.join(options.assets, name)));
+}
+function mime(file: string): string {
+  const extension = path.extname(file).slice(1);
+  return (
+    (
+      {
+        html: 'text/html; charset=utf-8',
+        js: 'text/javascript',
+        css: 'text/css',
+        svg: 'image/svg+xml',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+        avif: 'image/avif',
+        gif: 'image/gif',
+        pdf: 'application/pdf',
+        mp4: 'video/mp4',
+      } as Record<string, string>
+    )[extension] ?? 'application/octet-stream'
+  );
+}
+function json(response: ServerResponse, status: number, value: unknown) {
+  response.statusCode = status;
+  response.setHeader('Content-Type', 'application/json');
+  response.end(JSON.stringify(value));
+}
+async function body(request: IncomingMessage) {
+  return (await bodyBytes(request, MAX_SOURCE + 1000)).toString('utf8');
+}
+async function bodyBytes(request: IncomingMessage, maximum: number) {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const input of request) {
+    const value: unknown = input;
+    if (!Buffer.isBuffer(value) && typeof value !== 'string') {
+      throw new Error('Invalid request chunk');
+    }
+    const chunk = Buffer.from(value);
+    size += chunk.length;
+    if (size > maximum) {
+      throw new Error('Request is too large');
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+function configureStudioServer(
+  server: ViteDevServer,
+  options: Options,
+  features: ReturnType<typeof featureRoutes>,
+  rooms: ReturnType<typeof createRooms>,
+) {
+  const render = configureRenderPush(server, options.port, options.root);
+  const stop = rooms.onWrite((file) => pushWrittenSource(server, options.root, file, render));
+  server.httpServer?.once('close', stop);
+  interceptReloads(server, render);
+  server.middlewares.use((request, response, next) => {
+    if (!request.url?.startsWith('/studio')) {
+      next();
+      return;
+    }
+    void handleRequest(request, response, options, features, rooms).catch((error) =>
+      json(response, 400, {
+        error: error instanceof Error ? error.message : 'Request failed',
+      }),
+    );
+  });
+  server.httpServer?.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const url = new URL(request.url ?? '/', 'http://studio');
+    if (url.pathname !== '/studio/sync') {
+      return;
+    }
+    if (!authorized(request, options)) {
+      socket.destroy();
+      return;
+    }
+    void rooms
+      .get(url.searchParams.get('file') ?? '')
+      .then((room) => {
+        rooms.sockets.handleUpgrade(request, socket, head, (client) =>
+          room.attach(
+            client,
+            process.env['STUDIO_CONTAINER_TOKEN']
+              ? parseProfile({
+                  login: request.headers['x-studio-user'],
+                  id: Number(request.headers['x-studio-user-id']),
+                })
+              : undefined,
+            reauthorizeConnection(request),
+            url.searchParams.get('participant') ?? undefined,
+          ),
+        );
+      })
+      .catch(() => socket.destroy());
+  });
+  server.watcher.on('all', (event, file) => {
+    if (
+      ['change', 'add', 'unlink'].includes(event) &&
+      /\.(astro|json|md|mdx|mdoc|markdown|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/.test(file)
+    ) {
+      server.ws.send({ type: 'custom', event: 'studio:cms-changed' });
+    }
+  });
+  server.watcher.on('change', (file) => {
+    const relative = path.relative(options.root, file).split(path.sep).join('/');
+    if (relative.startsWith('src/')) {
+      void rooms.changed(relative);
+    }
+    if (/^(src|public)\/.+\.css$/.test(relative)) {
+      server.ws.send({ type: 'custom', event: 'studio:css-changed' });
+    }
+  });
+}
+
+function interceptReloads(server: ViteDevServer, render: () => void) {
+  const channels = new Set([
+    server.ws,
+    ...Object.values(server.environments ?? {})
+      .map((item) => item.hot)
+      .filter(Boolean),
+  ]);
+  for (const channel of channels) {
+    if (!channel) {
+      continue;
+    }
+    const send = channel.send.bind(channel);
+    channel.send = (payload: HMRPayload | string, data?: unknown) => {
+      if (typeof payload !== 'string' && payload.type === 'full-reload') {
+        render();
+        send({ type: 'custom', event: 'avb:page-changed' });
+        return;
+      }
+      if (typeof payload === 'string') {
+        send(payload, data);
+      } else {
+        send(payload);
+      }
+    };
+  }
+}
+
+async function createFile(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: Options,
+  rooms: ReturnType<typeof createRooms>,
+  _url: URL,
+) {
+  const input = record(JSON.parse(await body(request)));
+  const file = sourcePath(input['file']);
+  if (!/^src\/(pages|content|data)\//.test(file)) {
+    throw new Error('Create pages or collection items here');
+  }
+  await rooms.coordinator.run(async () => {
+    const destination = await preparePath(options.root, file);
+    await writeFile(destination, string(input['source']), { flag: 'wx' });
+    await rooms.get(file);
+  });
+  json(response, 201, { file });
+  return;
+}
+async function uploadAsset(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: Options,
+  rooms: ReturnType<typeof createRooms>,
+  url: URL,
+) {
+  const file = filePath(url.searchParams.get('file'));
+  managedAsset(file);
+  const bytes = await bodyBytes(request, 20_000_000);
+  await rooms.coordinator.run(async () => {
+    let exists = false;
+    try {
+      await access(await safePath(options.root, file));
+      exists = true;
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        throw error;
+      }
+    }
+    if (exists) {
+      throw new Error('An asset with this name already exists');
+    }
+    await saveAsset(options.root, file, bytes);
+    const state = await readAssetState(options.root);
+    if (state.deleted.includes(file)) {
+      await saveAssetState(options.root, {
+        ...state,
+        deleted: state.deleted.filter((item) => item !== file),
+      });
+    }
+  });
+  json(response, 201, { file });
+  return;
+}
+
+function sendPreviewURL(request: IncomingMessage, response: ServerResponse, url: URL) {
+  const page = url.searchParams.get('page') ?? '/';
+  if (!page.startsWith('/') || page.startsWith('//') || page.includes('\\')) {
+    throw new Error('Invalid preview path');
+  }
+  const hash = url.searchParams.get('mode') === 'interactive' ? '#avb-preview' : '#avb-design';
+  json(response, 200, { url: page + hash, origin: `http://${request.headers.host}` });
+}
+
+async function sendAsset(response: ServerResponse, root: string, url: URL) {
+  const file = filePath(url.searchParams.get('file'));
+  if (!MEDIA_EXT.test(file)) {
+    throw new Error('Unsupported asset');
+  }
+  const bytes = await readFile(await safePath(root, file));
+  response.setHeader('Content-Type', mime(file));
+  response.setHeader(
+    'Content-Security-Policy',
+    "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
+  );
+  response.end(bytes);
+}

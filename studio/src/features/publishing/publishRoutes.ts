@@ -1,0 +1,24 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Publisher } from './publish';
+
+export function publishRoute(
+  publisher: Publisher,
+  request: IncomingMessage,
+  response: ServerResponse,
+  pathname: string,
+) {
+  if (pathname !== '/studio/api/publish') {
+    return false;
+  }
+  if (request.method !== 'GET' && request.method !== 'POST') {
+    response.writeHead(405, { Allow: 'GET, POST' });
+    response.end();
+    return true;
+  }
+  const state = request.method === 'POST' ? publisher.start() : publisher.state;
+  response.statusCode = state.kind === 'building' ? 202 : 200;
+  response.setHeader('Content-Type', 'application/json');
+  response.setHeader('Cache-Control', 'no-store');
+  response.end(JSON.stringify(state));
+  return true;
+}

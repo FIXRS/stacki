@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const cssVars = require('#dist/electron/project/cssVars.js');
 
 test('variables refresh coalesces watcher bursts and ignores obsolete projects', async () => {
   const output = repoPath('node_modules/.stacki-test/variables-refresh.cjs');
@@ -46,7 +47,16 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
     act(async () => {
       root.render(React.createElement(Panel, { project: { path: project }, onSelect() {} }));
     });
-  const snapshot = (name) => ({ files: [{ rel: name, name, groups: [], count: 0 }], values: {} });
+  const fixture = await cssVars.readVariables(repoPath('test/fixtures/css-vars'));
+  assert.ok(fixture.files[0].count > 0, 'refresh fixture contains real variables');
+  const snapshot = (name) => ({
+    files: [
+      { ...fixture.files[0], rel: name, name },
+      { rel: 'empty.css', name: 'empty.css', groups: [], count: 0 },
+      { rel: 'broken.css', name: 'broken.css', groups: [], error: 'Cannot read stylesheet' },
+    ],
+    values: fixture.values,
+  });
   try {
     await show('/first');
     assert.equal(reads.length, 1);
@@ -62,6 +72,8 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
     });
     assert.equal(reads.length, 2, 'all watcher events request one follow-up');
     assert.match(document.body.textContent, /first.css/);
+    assert.doesNotMatch(document.body.textContent, /empty.css/);
+    assert.match(document.body.textContent, /broken.cssunreadable/);
     await show('/second');
     assert.equal(reads.length, 3);
     assert.equal(reads[2].project, '/second');

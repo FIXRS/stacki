@@ -1,3 +1,4 @@
+import { cmsTransport } from '../../ipc/editorEnvironment';
 import type {
   IpcResults,
   WireCollection,
@@ -190,14 +191,14 @@ async function request<Value>(
 
 export function readContentEntries(projectPath: string, name: string) {
   const payload = parseIpcPayload('content:entries', { projectPath, name });
-  return request(parseContentEntries, () => window.avb.contentEntries(payload));
+  return request(parseContentEntries, () => cmsTransport.contentEntries(payload));
 }
 
 export function readContentTargets(projectPath: string, name: string) {
   const payload = parseIpcPayload('content:targets', { projectPath, name });
   return request(
     (input) => list(object({ id: text, title: text }))(record(input)['targets']),
-    () => window.avb.contentTargets(payload),
+    () => cmsTransport.contentTargets(payload),
   );
 }
 
@@ -206,26 +207,27 @@ export function writeContentEntry(
   entry: { readonly file: string; readonly locator: readonly (string | number)[] },
   edits: readonly unknown[],
   body: string | undefined,
+  expected?: { readonly data: unknown; readonly body: string | undefined },
 ) {
   const input =
     body === undefined ? { projectPath, entry, edits } : { projectPath, entry, edits, body };
   const payload = parseIpcPayload('content:writeEntry', input);
-  return request(parseWrite, () => window.avb.writeContentEntry(payload));
+  return request(parseWrite, () => cmsTransport.writeContentEntry(payload, expected));
 }
 
 export function validateContentEntry(projectPath: string, collection: string, value: unknown) {
   const payload = parseIpcPayload('content:validate', { projectPath, collection, data: value });
-  return request(parseContentValidation, () => window.avb.validateContentEntry(payload));
+  return request(parseContentValidation, () => cmsTransport.validateContentEntry(payload));
 }
 
 export function planContentRename(projectPath: string, name: string, from: string, to: string) {
   const payload = parseIpcPayload('content:renamePlan', { projectPath, name, from, to });
-  return request(parseContentRenamePlan, () => window.avb.contentRenamePlan(payload));
+  return request(parseContentRenamePlan, () => cmsTransport.contentRenamePlan(payload));
 }
 
 export function renameContentEntry(projectPath: string, name: string, from: string, to: string) {
   const payload = parseIpcPayload('content:rename', { projectPath, name, from, to });
-  return request(parseRename, () => window.avb.renameContentEntry(payload));
+  return request(parseRename, () => cmsTransport.renameContentEntry(payload));
 }
 
 function optionalFields<Value extends Readonly<Record<string, unknown>>>(value: Value) {

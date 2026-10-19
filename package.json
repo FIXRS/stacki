@@ -1,7 +1,7 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "0.1.48",
+  "version": "0.1.49",
   "description": "Stacki — a visual builder for Astro projects, with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
@@ -61,7 +61,14 @@
     "dev:launch": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
     "dev:vite": "vite",
     "dev:electron": "wait-on tcp:5173 && npm run dev:window",
-    "dev:window": "node dist/scripts/build/devElectron.js"
+    "dev:window": "node dist/scripts/build/devElectron.js",
+    "studio:install": "npm --prefix studio ci",
+    "studio:build": "npm --prefix studio run build",
+    "studio:dev": "npm --prefix studio run dev",
+    "studio:verify": "npm --prefix studio run verify",
+    "studio:release": "npm --prefix studio run release:bundle",
+    "create-stacki:build": "node dist/scripts/createStacki/build.js",
+    "precreate-stacki:build": "npm run build:scripts && npm run studio:release"
   },
   "dependencies": {
     "@astrojs/compiler": "^4.0.0",

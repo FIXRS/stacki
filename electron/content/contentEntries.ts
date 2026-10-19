@@ -1,3 +1,4 @@
+import { cmsDirectoryPath, cmsSourcePath } from '../lib/contentPaths';
 import fs from 'fs';
 import path from 'path';
 
@@ -218,7 +219,7 @@ const patternsOf = (pattern: LoaderInfo['pattern']): RegExp[] => {
 
 function globEntries(projectPath: string, collection: ContentCollection): ListResult {
   const loader = collection.loader ?? {};
-  const root = path.resolve(projectPath, String(loader.base ?? '').replace(/^\.\//, ''));
+  const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
   const matchers = patternsOf(loader.pattern);
   const files = walkFiles(root).filter((rel) => matchers.some((re) => re.test(rel)));
   files.sort();
@@ -367,7 +368,7 @@ const errorMessage = (error: unknown): string =>
 function fileEntries(projectPath: string, collection: ContentCollection): ListResult {
   const loader = collection.loader ?? {};
   const rel = toPosix(String(loader.file ?? '')).replace(/^\.\//, '');
-  const abs = path.resolve(projectPath, rel);
+  const abs = cmsSourcePath(projectPath, rel);
   const format = formatFor(rel);
   if (!format) {
     return {
@@ -439,7 +440,7 @@ function writeEntry(
   edits: readonly EntryEdit[],
   { body }: { readonly body?: string } = {},
 ): { ok: true; changed: boolean } {
-  const abs = path.resolve(projectPath, entry.file);
+  const abs = cmsSourcePath(projectPath, entry.file);
   const format = formatFor(entry.file);
   if (!format) {
     throw new Error(`Stacki cannot write ${path.extname(entry.file)} files.`);
@@ -481,7 +482,7 @@ function writeEntry(
 function countEntries(projectPath: string, collection: ContentCollection): number {
   const loader = collection.loader ?? {};
   if (loader.kind === 'glob') {
-    const root = path.resolve(projectPath, String(loader.base ?? '').replace(/^\.\//, ''));
+    const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
     const matchers = patternsOf(loader.pattern);
     return walkFiles(root).filter((rel) => matchers.some((re) => re.test(rel))).length;
   }
@@ -521,7 +522,7 @@ function coveredPaths(
       // pattern are owned by it; hiding the whole directory made every sibling
       // disappear from the file-based CMS.
       if (isDataDirectory(base)) {
-        const root = path.resolve(projectPath, base);
+        const root = cmsDirectoryPath(projectPath, base);
         const matchers = patternsOf(loader.pattern);
         for (const relative of walkFiles(root)) {
           if (matchers.some((matcher) => matcher.test(relative))) {

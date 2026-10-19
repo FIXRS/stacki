@@ -1,8 +1,9 @@
+import { PropPreviewContext } from './propPreviewContext';
 // The control a prop field shows for its kind of value: a binding, style,
 // attribute, class, slot, an option, a boolean, a number, a link, media, an
 // imported asset, an object, a list, an expression or text (PropField.tsx).
 
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { definedFields } from '../../../shared/core/boundary';
 import { resolveAssetImport } from '../../ipc/assetBridge';
@@ -203,6 +204,7 @@ export function SlotControl({ state }: { readonly state: PropControlState }) {
   );
 }
 export function EnumControl({ state }: { readonly state: PropControlState }) {
+  const preview = useContext(PropPreviewContext);
   const { field, value, onChange, placeholderFor, label } = state;
   assert(field.options?.length, 'Enum control: options exist');
 
@@ -248,6 +250,21 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
       {label}
       <Dropdown
         value={selected}
+        {...(preview
+          ? {
+              onPrepare: () =>
+                preview.prepare(
+                  field.name,
+                  choices.map((option) =>
+                    option === defaultText ? undefined : field.numeric ? Number(option) : option,
+                  ),
+                ),
+              onPreview: (next: string) =>
+                preview.hover(next === '' ? undefined : field.numeric ? Number(next) : next),
+              onCancelPreview: preview.cancel,
+              onCommitPreview: preview.commit,
+            }
+          : {})}
         // Says what happens when nothing is picked. For a conditional
         // default that's the condition itself — better than naming one of
         // the two answers as if it were the only one.

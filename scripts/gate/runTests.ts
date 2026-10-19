@@ -134,6 +134,11 @@ const prettierCache = path.join(root, 'node_modules', '.cache', 'prettier', 'gat
 // The checks only read what the builds produced, so they run side by side.
 const staticChecks: readonly TestCommand[] = [
   {
+    name: 'studio verify',
+    command: node,
+    argumentsList: [path.join(root, 'scripts/policy/studioChecks.mts'), '--full'],
+  },
+  {
     name: 'tsc --noEmit',
     command: node,
     argumentsList: [

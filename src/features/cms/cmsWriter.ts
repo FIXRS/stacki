@@ -30,7 +30,7 @@ type Snapshot =
  * file's shape, or a whole value an undo restores. */
 type QueuedWrite =
   | { readonly kind: 'items'; readonly items: readonly unknown[] }
-  | { readonly kind: 'data'; readonly data: unknown };
+  | { readonly kind: 'data'; readonly data: unknown; readonly expected: unknown };
 type WriteState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'queued'; readonly write: QueuedWrite }
@@ -102,7 +102,12 @@ class CmsWriter {
     const after =
       write.kind === 'items' ? reassemble(this.snapshot.collection, write.items) : write.data;
     this.state = { kind: 'writing', pending: undefined };
-    const result = await writeCms(this.options.projectPath, this.options.rel, after);
+    const result = await writeCms(
+      this.options.projectPath,
+      this.options.rel,
+      after,
+      write.kind === 'data' ? write.expected : undefined,
+    );
     assert(this.state.kind === 'writing', 'CMS save: active write lost its state');
     const pending = this.state.pending;
     if (!result.ok) {
@@ -122,18 +127,18 @@ class CmsWriter {
     this.options.record({
       label: 'content edit',
       coalesceKey: `cms:${this.options.rel}`,
-      undo: () => this.restore(before),
-      redo: () => this.restore(after),
+      undo: () => this.restore(before, after),
+      redo: () => this.restore(after, before),
     });
   }
   // Undo shares the write slot with edits. The edits made before it reach disk
   // first; the restored value then replaces anything queued since, which it
   // would have overwritten on disk anyway.
-  private async restore(value: unknown): Promise<void> {
+  private async restore(value: unknown, expected: unknown): Promise<void> {
     if (!(await this.flush())) {
       return;
     }
-    this.enqueue({ kind: 'data', data: value });
+    this.enqueue({ kind: 'data', data: value, expected });
     if (!(await this.flush())) {
       return;
     }

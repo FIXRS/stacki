@@ -27,7 +27,8 @@ const {
   labelForRule,
 } = require('#dist/electron/project/cssVars.js');
 
-const DEFAULT = path.join(os.homedir(), 'Documents', 'Projects', 'lumos-framework');
+const { repoPath } = require('../../helpers/sources');
+const DEFAULT = repoPath('test/fixtures/css-vars');
 const source = path.resolve(process.argv[2] || process.env.STACKI_CSS_FIXTURE || DEFAULT);
 
 const failures = [];

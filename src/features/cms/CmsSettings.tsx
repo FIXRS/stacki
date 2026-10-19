@@ -1,3 +1,4 @@
+import { collectionDeletionMessage } from '../../ipc/editorEnvironment';
 import React, { useState } from 'react';
 import type { Collection, CmsField, FieldType } from './cmsSchema';
 import type { DeclaredTypes } from './cmsTypes';
@@ -151,8 +152,8 @@ function DeleteCollectionCard({
     <div className="cms-card cms-danger">
       <h3>Delete collection</h3>
       <p className="cms-note">
-        Moves src/{collection.rel} to the Trash. Pages that import it keep working — they switch to
-        an empty list.
+        {collectionDeletionMessage} Pages that import src/{collection.rel} keep working — they
+        switch to an empty list.
       </p>
       <button
         className="ghost danger"

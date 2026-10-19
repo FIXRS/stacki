@@ -1,3 +1,4 @@
+import { useCodeAccess } from '../../ui/CodeAccess';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
@@ -476,6 +477,7 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
   );
 }
 function AttributeBinding({ state }: { readonly state: AttributeState }) {
+  const allowCode = useCodeAccess();
   const {
     draftValue,
     setDraftValue,
@@ -532,20 +534,17 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
           }}
         />
       </div>
-      <button
-        type="button"
-        className="attr-expand-toggle"
-        title="Expand value"
-        aria-label="Expand value"
-        onClick={() => {
-          const host = valueRef.current;
-          if (host) {
-            setBigAt(expandedAttributeEditorPosition(host));
-          }
-        }}
-      >
-        <MaximizeIcon size={12} />
-      </button>
+      {allowCode && (
+        <button
+          type="button"
+          className="attr-expand-toggle"
+          title="Expand value"
+          aria-label="Expand value"
+          onClick={() => openExpandedAttribute(valueRef.current ?? undefined, setBigAt)}
+        >
+          <MaximizeIcon size={12} />
+        </button>
+      )}
     </>
   );
 }
@@ -756,4 +755,13 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
       onClose={() => setEditor(undefined)}
     />
   );
+}
+
+function openExpandedAttribute(
+  host: HTMLElement | undefined,
+  open: (position: FieldPosition) => void,
+): void {
+  if (host) {
+    open(expandedAttributeEditorPosition(host));
+  }
 }

@@ -1,3 +1,4 @@
+import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Data } from '../../../shared/core/boundary';
 import type { IpcResults, WireValidationIssue } from '../../../shared/ipc/ipcResults';
@@ -111,9 +112,10 @@ function useContentEditor(props: ContentViewProps) {
   const load = useContentLoad(props, setState, setSelected);
   useEffect(() => {
     void load();
-    return window.avb.onCmsChanged(() => void load());
+    return cmsTransport.onCmsChanged(() => void load());
   }, [load]);
   useEffect(() => {
+    timers.flush();
     setDraft(undefined);
     setIssues([]);
     setExpanded(new Set());
@@ -125,7 +127,7 @@ function useContentEditor(props: ContentViewProps) {
   const dataValue = draft?.data ?? entry?.data;
   const data = dataValue === undefined ? {} : dataValue;
   const body = draft ? draft.body : entry?.body;
-  const save = useContentSave(props, entry, setState, setSaved, timers.saved);
+  const save = useContentSave(props, entry, setState, setSaved, timers.saved, setDraft);
   const change = useContentChange(props, setDraft, setIssues, timers, save);
   return {
     state,
@@ -151,6 +153,8 @@ type TimerRef = React.MutableRefObject<ReturnType<typeof setTimeout> | undefined
 
 // Every value here is a React ref, written in place by the editor's handlers.
 interface EditorTimers {
+  readonly flush: () => void;
+  readonly pending: React.MutableRefObject<(() => void) | undefined>;
   readonly save: TimerRef;
   readonly check: TimerRef;
   readonly saved: TimerRef;
@@ -162,15 +166,25 @@ function useEditorTimers(): EditorTimers {
   const check = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const saved = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const validationGeneration = useRef(0);
-  const timers = useMemo(() => ({ save, check, saved, validationGeneration }), []);
+  const pending = useRef<(() => void) | undefined>(undefined);
+  const flush = useCallback(() => {
+    clearTimer(save);
+    const apply = pending.current;
+    pending.current = undefined;
+    apply?.();
+  }, []);
+  const timers = useMemo(
+    () => ({ save, check, saved, validationGeneration, pending, flush }),
+    [flush],
+  );
   useEffect(
     () => () => {
-      clearTimer(save);
+      flush();
       clearTimer(check);
       clearTimer(saved);
       validationGeneration.current += 1;
     },
-    [],
+    [flush],
   );
   return timers;
 }
@@ -211,6 +225,7 @@ function useContentSave(
   setState: React.Dispatch<React.SetStateAction<ContentEntries | undefined>>,
   setSaved: React.Dispatch<React.SetStateAction<boolean>>,
   savedTimer: EditorTimers['saved'],
+  setDraft: React.Dispatch<React.SetStateAction<Draft | undefined>>,
 ) {
   const { onSaved, showToast } = props;
   const projectPath = props.project.path;
@@ -229,6 +244,7 @@ function useContentSave(
         { file: entry.file, locator: entry.locator },
         edits,
         bodyChanged ? next.body : undefined,
+        { data: entry.data, body: entry.body },
       );
       if (!result.ok) {
         showToast?.(result.error, 'error');
@@ -236,9 +252,10 @@ function useContentSave(
       }
       showSaved(setSaved, savedTimer);
       onSaved?.();
-      setState((current) => updateSavedEntry(current, entry.file, next));
+      setState((current) => updateSavedEntry(current, entry, next));
+      setDraft((current) => (current === next ? undefined : current));
     },
-    [entry, onSaved, projectPath, savedTimer, setSaved, setState, showToast],
+    [entry, onSaved, projectPath, savedTimer, setSaved, setState, setDraft, showToast],
   );
 }
 
@@ -253,7 +270,7 @@ function showSaved(
 
 function updateSavedEntry(
   state: ContentEntries | undefined,
-  file: string,
+  selected: ContentEntry,
   next: Draft,
 ): ContentEntries | undefined {
   if (!state) {
@@ -262,7 +279,7 @@ function updateSavedEntry(
   return {
     ...state,
     entries: state.entries.map((entry) => {
-      if (entry.file !== file) {
+      if (entry.file !== selected.file || entry.id !== selected.id) {
         return entry;
       }
       const updated = { ...entry, data: next.data };
@@ -287,7 +304,9 @@ function useContentChange(
       } = timers;
       setDraft(next);
       clearTimer(saveTimerRef);
-      saveTimerRef.current = setTimeout(() => void save(next), SAVE_DELAY_MS);
+      const { pending } = timers;
+      pending.current = () => void save(next);
+      saveTimerRef.current = setTimeout(timers.flush, SAVE_DELAY_MS);
       clearTimer(checkTimerRef);
       generationRef.current += 1;
       const generation = generationRef.current;

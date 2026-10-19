@@ -1,0 +1,88 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { readVariables } from '../../../vendor/stacki/electron/project/cssVarModel';
+import { checksum, type createRooms } from '../collaboration/rooms';
+import { walk } from '../project/projectServer';
+import { record, string } from '../../shared/validation';
+import { applyVariableOperation } from './variableOperations';
+import { VARIABLE_ROOT, withVariableWorkspace } from './variableWorkspace';
+
+type Rooms = ReturnType<typeof createRooms>;
+export function variableRoutes(root: string, rooms: Rooms) {
+  return async (
+    request: IncomingMessage,
+    response: ServerResponse,
+    pathname: string,
+    readBody: () => Promise<string>,
+  ) => {
+    if (pathname !== '/studio/api/variables') {
+      return false;
+    }
+    const input = request.method === 'POST' ? record(JSON.parse(await readBody())) : undefined;
+    if (request.method !== 'GET' && request.method !== 'POST') {
+      throw new Error('Use GET or POST for variables');
+    }
+    const result = await rooms.coordinator.run(async () => {
+      const before = await variableSources(root, rooms);
+      if (!input) {
+        return withVariableWorkspace(before, () => ({
+          ...readVariables(VARIABLE_ROOT),
+          versions: Object.fromEntries([...before].map(([file, text]) => [file, checksum(text)])),
+        }));
+      }
+      return editVariables(rooms, before, input);
+    });
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify(result));
+    return true;
+  };
+}
+async function variableSources(root: string, rooms: Rooms) {
+  const paths = [...(await walk(root, 'src')), ...(await walk(root, 'public'))].filter((file) =>
+    /\.(astro|md|mdx|css|ts|js)$/.test(file),
+  );
+  if (paths.length > 1000) {
+    throw new Error('Variable scan exceeds 1,000 source files');
+  }
+  const sources = new Map<string, string>();
+  let total = 0;
+  for (const file of paths) {
+    const text = await rooms.read(file);
+    total += Buffer.byteLength(text);
+    if (total > 32_000_000) {
+      throw new Error('Variable scan exceeds 32 MB');
+    }
+    sources.set(file, text);
+  }
+  return sources;
+}
+async function editVariables(
+  rooms: Rooms,
+  before: Map<string, string>,
+  input: Record<string, unknown>,
+) {
+  const next = new Map(before);
+  const result = withVariableWorkspace(next, () =>
+    applyVariableOperation(string(input['operation'], 50), input['payload']),
+  );
+  if (!result.ok) {
+    return result;
+  }
+  const versions = record(input['versions']);
+  const changed = [...next].filter(([file, text]) => before.get(file) !== text);
+  // Check every file before committing any of a multi-file rename or mode edit.
+  for (const [file] of changed) {
+    if (
+      input['operation'] !== 'restoreCssVariables' &&
+      versions[file] !== checksum(before.get(file) ?? '')
+    ) {
+      return { ok: false, error: 'A collaborator changed this source. Refresh and try again.' };
+    }
+  }
+  const targets = await Promise.all(
+    changed.map(async ([file, text]) => ({ room: await rooms.get(file), text })),
+  );
+  for (const { room, text } of targets) {
+    await room.setSource(text);
+  }
+  return { ok: true };
+}

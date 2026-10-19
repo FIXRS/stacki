@@ -220,6 +220,11 @@ const check = (what, condition, detail) => {
   check('choosing Delete asks first', !!dialog(), document.body.innerHTML.slice(-200));
   check('and has not deleted anything yet', deleted.length === 0, deleted.join());
 
+  check(
+    'the dialog says where it went',
+    /moves to your Bin/.test(dialog()?.textContent ?? ''),
+    'the confirm does not say what happens',
+  );
   const said = await answer('cancel');
   check(
     'the dialog can be answered',
@@ -264,12 +269,6 @@ const check = (what, condition, detail) => {
     'and only inside the asset roots',
     /assetAbs\(projectPath, rel\)/.test(handler),
     handler.slice(0, 200),
-  );
-  const panel = fs.readFileSync(repoPath('src/features/assets/AssetsPanel.tsx'), 'utf8');
-  check(
-    'the dialog says where it went',
-    /moves to your Bin/.test(panel),
-    'the confirm does not say what happens',
   );
 
   if (failures.length) {

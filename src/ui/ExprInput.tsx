@@ -1,3 +1,4 @@
+import { useCodeAccess, ManagedValue } from './CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   EditorView,
@@ -173,6 +174,9 @@ interface ExprRefs {
 }
 
 export default function ExprInput(props: ExprInputProps) {
+  return useCodeAccess() ? <EditableExprInput {...props} /> : <ManagedValue />;
+}
+function EditableExprInput(props: ExprInputProps) {
   const { syncValue, chip = '', chipsOf, invalid, className = '' } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | undefined>(undefined);

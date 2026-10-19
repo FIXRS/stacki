@@ -19,6 +19,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm --prefix studio ci
       - run: npm run format:check
       - run: npm run check:policy
       - run: npm run typecheck
@@ -38,6 +39,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm --prefix studio ci
       # Electron's Linux browser probes require Chromium's setuid sandbox
       # helper to be owned by root; npm installs it with ordinary file modes.
       - if: runner.os == 'Linux'

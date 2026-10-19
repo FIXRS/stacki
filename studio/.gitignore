@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.studio/
+.env
+.env.*
+!.env.example
+test-results/
+.wrangler/
+*.tgz
+
+.DS_Store
+
+.studio-image/
+
+# Assembled from the canonical Stacki source by scripts/assemble.ts.
+vendor/stacki/
+release/
+
+# Project-specific secrets and draft state.
+.dev.vars*
+.studio-state/

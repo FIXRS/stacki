@@ -74,7 +74,7 @@ export default function LeftRail({
       {tabs.map(({ id, Icon, title, shortcut }) => (
         <button
           key={id}
-          aria-label={`${title} (${shortcut})`}
+          aria-label={shortcut ? `${title} (${shortcut})` : title}
           aria-pressed={active === id}
           className={`rail-btn ${active === id ? 'on' : ''}`}
           onMouseEnter={showSoon(id)}
@@ -89,7 +89,8 @@ export default function LeftRail({
       ))}
       {tipTab && tip && (
         <div className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
-          {tipTab.title} ({tipTab.shortcut})
+          {tipTab.title}
+          {tipTab.shortcut ? ` (${tipTab.shortcut})` : ''}
         </div>
       )}
     </div>

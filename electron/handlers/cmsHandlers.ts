@@ -1,3 +1,4 @@
+import { cmsIncludesGeneral } from '../lib/contentPaths';
 // The CMS panel's IPC: the collections and entries a project keeps as files,
 // read and written as data, with their asset references and field metadata.
 
@@ -82,7 +83,7 @@ function registerCmsListHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
             files.push(
               ...readCmsSource(full, entryRel, {
                 page: false,
-                includeGeneralOnly: /^data\//i.test(entryRel),
+                includeGeneralOnly: cmsIncludesGeneral(entryRel),
               }),
             );
           }

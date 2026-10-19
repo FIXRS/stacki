@@ -158,6 +158,8 @@ const { markSourceFile, markChunkFile } = require(`,
   `);
 const { componentPreviewPlugin } = require(`,
   `);
+const { studioEntryPlugin } = require(`,
+  `);
 const PROJECT_DIRS = `,
   `;
 
@@ -496,7 +498,8 @@ export default {
   },
   vite: {
     ...(base.vite || {}),
-    plugins: [componentPreviewPlugin(PROJECT_DIRS), avbMarkers, avbMorph,
+    plugins: [studioEntryPlugin(PROJECT_DIRS[0]), componentPreviewPlugin(PROJECT_DIRS),
+      avbMarkers, avbMorph,
       ...((base.vite && base.vite.plugins) || [])],
   },
 };

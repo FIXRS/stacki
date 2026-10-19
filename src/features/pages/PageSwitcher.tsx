@@ -30,6 +30,10 @@ export default function PageSwitcher<T extends Page>(props: PageSwitcherProps<T>
           isCollectionRoute(props.currentPage?.name) ? 'collection' : ''
         }`}
         title="Switch page"
+        aria-label="Current page"
+        aria-haspopup="listbox"
+        aria-expanded={state.open}
+        data-file={props.currentPage?.path}
         onClick={() => state.setOpen((open) => !open)}
       >
         <PageGlyph page={props.currentPage} size={12} />
@@ -75,7 +79,10 @@ function usePageSwitcher<T extends Page>({ pages, currentPage, onSelect }: PageS
     };
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
         setOpen(false);
+        buttonRef.current?.focus();
       }
     };
     document.addEventListener('mousedown', onDown);
@@ -121,7 +128,10 @@ function usePagePosition(
     }
     const rectangle = buttonRef.current.getBoundingClientRect();
     setPosition({
-      left: Math.max(8, rectangle.left + rectangle.width / 2 - 140),
+      left: Math.max(
+        8,
+        Math.min(window.innerWidth - 288, rectangle.left + rectangle.width / 2 - 140),
+      ),
       top: rectangle.bottom + 6,
     });
   }, [open, buttonRef]);
@@ -159,6 +169,7 @@ function PageMenu<T extends Page>({
       <input
         ref={state.inputRef}
         className="page-menu-search"
+        aria-label="Search pages"
         value={state.query}
         placeholder="Search pages…"
         spellCheck={false}
@@ -168,7 +179,7 @@ function PageMenu<T extends Page>({
         }}
         onKeyDown={onInputKey}
       />
-      <div className="page-menu-list">
+      <div className="page-menu-list" role="listbox" aria-label="Pages">
         {state.filtered.map((page, index) => (
           <PageRow
             key={page.path}
@@ -201,6 +212,9 @@ function PageRow({
   const collection = isCollectionRoute(page.name) ? 'collection' : '';
   return (
     <div
+      role="option"
+      aria-selected={current}
+      data-file={page.path}
       className={`page-menu-item ${collection} ${highlighted ? 'highlight' : ''} ${
         current ? 'current' : ''
       }`}

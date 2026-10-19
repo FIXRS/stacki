@@ -1,0 +1,21 @@
+import type { AuthConfig } from '../features/auth/githubLogin';
+import type { PreviewContainer } from './worker';
+
+export interface Environment extends AuthConfig {
+  readonly EDITOR_ACCESS?: string;
+  readonly SITE_DEPLOYMENT_URL?: string;
+  readonly AI_BASE_URL?: string;
+  readonly AI_MODEL?: string;
+  readonly AI_MODELS?: string;
+  readonly AI_API_KEY?: string;
+  readonly PREVIEW: DurableObjectNamespace<PreviewContainer>;
+  readonly DRAFTS: R2Bucket;
+  readonly ASSETS: Fetcher;
+  readonly PREVIEW_ORIGIN: string;
+  readonly CONTAINER_TOKEN: string;
+  readonly GITHUB_APP_ID: string;
+  readonly GITHUB_INSTALLATION_ID: string;
+  readonly GITHUB_PRIVATE_KEY: string;
+  readonly GITHUB_REPOSITORY: string;
+  readonly GITHUB_BRANCH: string;
+}

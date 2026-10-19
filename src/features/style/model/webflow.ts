@@ -1,3 +1,4 @@
+import { styleTransport } from '../../../ipc/editorEnvironment';
 // Project-backed replacement for the Webflow Designer integration.
 //
 // The panel above this module is unchanged from moden: it asks for "embeds"
@@ -295,7 +296,10 @@ function documentForSource(source: EmbedSource, code: string): EmbedDocument {
 async function readSource(source: EmbedSource): Promise<string> {
   if (source.origin.kind === 'file' || source.origin.kind === 'astro') {
     const result = await variableEdit('readStyleFile', source.origin.path);
-    return result.ok ? (result.css ?? '') : '';
+    if (!result.ok) {
+      throw new Error(result.error || 'Could not read stylesheet');
+    }
+    return result.css ?? '';
   }
   const node = nodeById(source.origin.nodeId);
   return String(node?.inner ?? '');
@@ -382,7 +386,7 @@ export async function writeEmbedDocument(
       embedDocument.source.origin.kind === 'astro'
     ) {
       const { path } = embedDocument.source.origin;
-      await window.avb.writeStyleFile({ filePath: path, css: code });
+      await styleTransport.writeStyleFile({ filePath: path, css: code, base: before });
       // A <style> node's write goes through the page model, which the app
       // already snapshots — only stylesheets need their own history entry.
       if (before !== code) {
@@ -434,7 +438,7 @@ async function writeStyleFileAndReload(
   text: string,
 ): Promise<void> {
   embedWriteCount += 1;
-  await window.avb.writeStyleFile({ filePath: path, css: text });
+  await styleTransport.writeStyleFile({ filePath: path, css: text, base: embedDocument.code });
   // Re-derive the doc from what the file now holds, the same way it was first
   // read — for a component file that means re-splitting its markup, not
   // treating the whole file as one region of CSS.

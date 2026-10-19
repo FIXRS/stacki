@@ -1,0 +1,107 @@
+{
+  "name": "@stacki/studio",
+  "version": "0.1.49",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "dev": "npm run build && node dist/cli.mjs dev test/fixtures/site --background",
+    "check": "tsc --noEmit && tsc -p tsconfig.worker.json",
+    "test": "tsx --test test/*.test.ts",
+    "test:browser": "tsx test/browser.ts",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run check && npm run lint && npm run format:check && npm test && npm run build",
+    "prepack": "npm run build",
+    "assemble": "tsx scripts/assemble.ts",
+    "prebuild": "npm run assemble",
+    "precheck": "npm run assemble",
+    "pretest": "npm run assemble",
+    "release:bundle": "npm run build && tsx scripts/release.ts"
+  },
+  "dependencies": {
+    "@astrojs/compiler": "^4.0.0",
+    "@cloudflare/containers": "^0.3.7",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.12",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.14",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@lezer/highlight": "^1.2.5",
+    "@uiw/react-codemirror": "^4.25.12",
+    "codemirror": "^6.0.2",
+    "json5": "^2.2.3",
+    "jsonc-parser": "^3.3.1",
+    "known-css-properties": "^0.37.0",
+    "postcss": "^8.5.30",
+    "postcss-selector-parser": "^7.1.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "smol-toml": "^1.9.1",
+    "typescript": "^5.9.3",
+    "ws": "^8.18.0",
+    "y-indexeddb": "^9.0.12",
+    "yaml": "^2.9.1",
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261016.1",
+    "@types/node": "^22.19.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/ws": "^8.18.0",
+    "astro": "^7.3.8",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "jiti": "^2.7.0",
+    "playwright": "^1.56.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.20.0",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.4",
+    "wrangler": "^4.151.1"
+  },
+  "description": "A collaborative, source-preserving visual CMS for Astro",
+  "bin": {
+    "astro-studio": "dist/cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/server/integration.ts",
+      "import": "./dist/integration.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "scripts",
+    "vendor",
+    "cloudflare/wrangler.jsonc",
+    "Dockerfile",
+    ".dockerignore",
+    "tsconfig.json",
+    "README.md",
+    "docs",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "astro": "^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "astro": {
+      "optional": true
+    }
+  }
+}

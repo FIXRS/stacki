@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { onVariablesChanged } from '../../ipc/editorEnvironment';
 import type {
   VariableBlock,
   VariableCell,
@@ -172,7 +173,7 @@ function useVariableData(
     });
     currentRead.current = reader.refresh;
     void reader.refresh();
-    const unsubscribe = window.avb.onCssChanged(() => {
+    const unsubscribe = onVariablesChanged(() => {
       void reader.refresh();
     });
     return () => {

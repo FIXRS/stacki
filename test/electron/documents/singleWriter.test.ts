@@ -93,6 +93,12 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/preview/previewWorktree.ts': {
     appendFileSync: { count: 1, reason: 'git exclude file of the preview worktree' },
   },
+  'electron/previewServer/studioLocal.ts': {
+    writeFileSync: {
+      count: 2,
+      reason: 'generated Studio dev config in node_modules and session metadata ignore rules',
+    },
+  },
   'electron/project/scaffold.ts': {
     writeFileSync: { count: 1, reason: 'a new project, scaffolded before it is opened' },
   },
@@ -101,6 +107,14 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   },
   'electron/terminal/terminal.ts': {
     writeFileSync: { count: 1, reason: 'a pasted clipboard image in the app temp directory' },
+  },
+  // Studio releases are new tool source staged outside website documents;
+  // the second write ignores transaction metadata in Git. No website text is edited.
+  'electron/project/studioInstall.ts': {
+    writeFile: {
+      count: 2,
+      reason: 'staged Studio release files and transaction metadata ignore rules',
+    },
   },
   'electron/project/thumbs.ts': {
     writeFileSync: { count: 2, reason: 'project thumbnails in userData' },

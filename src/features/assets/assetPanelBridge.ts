@@ -59,8 +59,11 @@ export function pickUploadAssets(projectPath: string, destinationRel: string) {
 export function uploadAssets(
   projectPath: string,
   destinationRel: string,
-  filePaths: readonly string[],
+  files: readonly (File | string)[],
 ) {
+  const filePaths = files
+    .map((file) => (typeof file === 'string' ? file : window.avb.getFilePath(file)))
+    .filter((file): file is string => !!file);
   const payload = parseIpcPayload('assets:upload', {
     projectPath: toProjectPath(projectPath),
     destRel: parseAssetDestination(destinationRel),
