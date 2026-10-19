@@ -2,7 +2,8 @@
 // hidden, and ignores a startup reply for a terminal already disposed.
 // Method: TerminalDock is bundled with xterm and the bridge replaced by
 // recording fakes, mounted in jsdom, and driven through open, hide and dispose
-// while the fakes report what was created and written.
+// while the fakes report what was created and written. Animation frames are
+// drained explicitly: two frames do not reliably complete in a 10ms sleep on Windows.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -81,8 +82,9 @@ test(
     Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetHeight', { get: () => 240 });
     global.IS_REACT_ACT_ENVIRONMENT = true;
     global.getComputedStyle = dom.window.getComputedStyle;
-    global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
-    global.cancelAnimationFrame = clearTimeout;
+    const frames = animationFrames();
+    global.requestAnimationFrame = frames.request;
+    global.cancelAnimationFrame = frames.cancel;
     global.ResizeObserver = class {
       observe() {}
       disconnect() {}
@@ -125,9 +127,7 @@ test(
       await React.act(async () =>
         root.render(React.createElement(Dock, { projectPath: '/site', open, onClose: () => {} })),
       );
-      await React.act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      });
+      await React.act(async () => frames.flush());
     };
     try {
       await render(false);
@@ -176,3 +176,33 @@ test(
     }
   },
 );
+
+// Own the scheduling boundary instead of racing a wall-clock timeout. Each
+// drain executes a snapshot, so callbacks scheduled for the next frame stay
+// ordered and cancelled callbacks never run.
+function animationFrames() {
+  const callbacks = new Map();
+  let nextId = 0;
+  return {
+    request: (callback) => {
+      nextId++;
+      callbacks.set(nextId, callback);
+      return nextId;
+    },
+    cancel: (id) => callbacks.delete(id),
+    flush: () => {
+      for (let frame = 0; frame < 8; frame++) {
+        if (callbacks.size === 0) {
+          return;
+        }
+        const batch = [...callbacks];
+        for (const [id, callback] of batch) {
+          if (callbacks.delete(id)) {
+            callback(performance.now());
+          }
+        }
+      }
+      assert.equal(callbacks.size, 0, 'terminal initialization settles within eight frames');
+    },
+  };
+}
