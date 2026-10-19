@@ -30,11 +30,21 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The toolbar button that opens the guide's menu: a group of its own, styled
-   as the device group beside it. A lone button has no sliding indicator, so it
-   carries the indicator's fill itself while the guide is shown. */
+/* The guide is a single toolbar control, so it needs no surrounding group rim. */
+.device-btns.guide-btns {
+  background: transparent;
+  padding: 0;
+}
+.device-btns.guide-btns button {
+  padding: 6px 10px;
+  border: 0;
+  background: var(--bg-input);
+}
 .device-btns.guide-btns button.on {
   background: rgba(255, 255, 255, 0.12);
+}
+.device-btns.guide-btns button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 /* The menu takes the panel's label column at its own width: the panel's
