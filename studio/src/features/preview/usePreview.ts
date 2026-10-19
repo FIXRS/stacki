@@ -6,6 +6,8 @@ import {
   setCanvasFrame,
   noteCanvasReady,
 } from '../../../vendor/stacki/src/editor/canvasQuery';
+import { parsePreviewMessage } from '../../../vendor/stacki/src/features/preview/previewMessages';
+import type { GuideMetrics } from '../../../vendor/stacki/src/features/preview/guideModel';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request, routeFor } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
@@ -18,6 +20,8 @@ export function usePreview(
   onOpen?: (id: string, occurrence: number) => void,
 ) {
   const [outlines, setOutlines] = useState(emptyOutlines);
+  // What the column guide is drawn from; undefined until the page reports.
+  const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
   const frame = useRef<HTMLIFrameElement>(null);
   const loadListeners = useRef(new Set<() => void>());
   const subscribeLoad = useCallback((listener: () => void) => {
@@ -31,11 +35,12 @@ export function usePreview(
   const callbacks = useRef({ onSelect, onOpen, report });
   callbacks.current = { onSelect, onOpen, report };
   const target = usePreviewTarget(file, enabled, callbacks);
-  usePreviewMessages(frame, target, callbacks, setOutlines);
+  usePreviewMessages(frame, target, callbacks, { setOutlines, setGuide });
 
   return {
     frame,
     outlines,
+    guide,
     subscribeLoad,
     reveal: (id: string, occurrence = 0) => {
       reveal.current = { type: 'studio:reveal', id, occurrence };
@@ -66,8 +71,12 @@ function usePreviewMessages(
     onOpen: ((id: string, occurrence: number) => void) | undefined;
     report: (error: unknown) => void;
   }>,
-  setOutlines: (state: OutlineState) => void,
+  setters: {
+    readonly setOutlines: (state: OutlineState) => void;
+    readonly setGuide: (metrics: GuideMetrics) => void;
+  },
 ) {
+  const { setOutlines, setGuide } = setters;
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const patch = () => {
@@ -86,10 +95,7 @@ function usePreviewMessages(
       ) {
         return;
       }
-      const outlines = parseOutlines(event.data);
-      if (outlines) {
-        setOutlines(outlines);
-      }
+      receiveMeasurements(event.data, setOutlines, setGuide);
       receiveStudioSignals(event.data, patch);
       if (isMessage(event.data, 'avb:query-result')) {
         receiveCanvasReply(event.data);
@@ -122,7 +128,23 @@ function usePreviewMessages(
       window.removeEventListener('studio:source-updated', patch);
       window.removeEventListener('message', receive);
     };
-  }, [target, frame, callbacks, setOutlines]);
+  }, [target, frame, callbacks, setOutlines, setGuide]);
+}
+// What the page measured: the outlines it draws, and what the column guide is
+// drawn from, read through the shared parser.
+function receiveMeasurements(
+  data: unknown,
+  setOutlines: (state: OutlineState) => void,
+  setGuide: (metrics: GuideMetrics) => void,
+) {
+  const outlines = parseOutlines(data);
+  if (outlines) {
+    setOutlines(outlines);
+  }
+  const message = parsePreviewMessage(data);
+  if (message?.kind === 'guide') {
+    setGuide(message.metrics);
+  }
 }
 function messageOccurrence(data: Record<string, unknown>) {
   const value = data['occurrence'];

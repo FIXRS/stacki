@@ -174,3 +174,67 @@ test('forwarded shortcuts parse each variant and ignore every other or malformed
     assert.equal(parseShortcutMessage(input), undefined);
   }
 });
+
+test('guide measurements parse, absent values stay absent, and bounds hold', () => {
+  const guide = {
+    type: 'avb:guide',
+    viewportWidth: 1440,
+    rootFontSize: 16,
+    margin: 48,
+    gutter: 32,
+    widthMax: undefined,
+    columnCount: 12,
+    columnVariable: '--_column-count',
+    variables: { '--pad': 40, '--missing': undefined },
+    counts: { '--cols': 10, '--pad': undefined },
+  };
+  assert.deepEqual(parsePreviewMessage(guide), {
+    kind: 'guide',
+    metrics: {
+      viewportWidthPx: 1440,
+      rootFontPx: 16,
+      marginPx: 48,
+      gutterPx: 32,
+      widthMaxPx: undefined,
+      columns: { count: 12, variable: '--_column-count' },
+      variablesPx: { '--pad': 40, '--missing': undefined },
+      variableCounts: { '--cols': 10, '--pad': undefined },
+    },
+  });
+  // Counts arrive as the page read them: the range is the model's to apply.
+  for (const count of [0, 49, 140, 999]) {
+    const counts = { '--cols': count };
+    assert.equal(parsePreviewMessage({ ...guide, counts }).metrics.variableCounts['--cols'], count);
+    const site = { ...guide, columnCount: count };
+    assert.equal(parsePreviewMessage(site).metrics.columns.count, count);
+  }
+  for (const variable of ['--site-column-count', '--site-columns', '--_column-count']) {
+    const site = { ...guide, columnCount: 10, columnVariable: variable };
+    assert.deepEqual(parsePreviewMessage(site).metrics.columns, { count: 10, variable });
+  }
+  assert.equal(
+    parsePreviewMessage({ ...guide, columnCount: undefined }).metrics.columns,
+    undefined,
+  );
+  for (const bad of [
+    { margin: -1 },
+    { gutter: Number.NaN },
+    { widthMax: 100_001 },
+    { viewportWidth: '1440' },
+    { rootFontSize: 0 },
+    { rootFontSize: 1_001 },
+    { columnCount: 2.5 },
+    { columnVariable: '--anything' },
+    { margin: PLATFORM_NULL },
+    { variables: undefined },
+    { variables: { '--pad': -1 } },
+    { variables: { 'pad;color:red': 4 } },
+    { variables: { '--a': 1, '--b': 2, '--c': 3, '--d': 4, '--e': 5 } },
+    { counts: undefined },
+    { counts: { '--cols': 2.5 } },
+    { counts: { 'cols;color:red': 4 } },
+    { counts: { '--a': 1, '--b': 2, '--c': 3, '--d': 4, '--e': 5 } },
+  ]) {
+    assert.equal(parsePreviewMessage({ ...guide, ...bad }), undefined, JSON.stringify(bad));
+  }
+});

@@ -2,11 +2,12 @@
 // it tracks, scrolling a node into view and the viewport height to freeze; and
 // starting the frame once the document is ready.
 
-import { isElement, isText } from './frameBasics';
+import { PROBE_ATTR, isElement, isText } from './frameBasics';
 import { queryAuthoredStyles } from './frameStyleSources';
 import { list, pathText, text } from '../../shared/core/boundary';
 import { LIMITS } from '../../shared/core/limits';
 import { freezeViewportHeight, report } from './frameViewport';
+import { startGuide, type GuideFrame } from './frameGuide';
 import {
   PATH_ATTR,
   STAMP_ATTRIBUTE,
@@ -24,7 +25,6 @@ import {
 } from './frameRegions';
 import { ownClasses, resetThinCache } from './frameMeasure';
 import {
-  PROBE_ATTR,
   forgetReportedKeys,
   paintOpened,
   scrollPathIntoView,
@@ -136,6 +136,7 @@ export function listenForQueries(): void {
       reportRender();
       return;
     }
+    guideFrame?.receive(data);
     if (data['type'] === 'avb:track' && Array.isArray(data['paths'])) {
       track(data, data['paths']);
     }
@@ -380,9 +381,13 @@ const track = (data: Record<string, unknown>, paths: unknown[]) => {
   }
 };
 
+// The column guide's page side, once the frame has started.
+let guideFrame: GuideFrame | undefined;
+
 const start = () => {
   report();
   startOutlines();
+  guideFrame = startGuide((message) => window.parent.postMessage(message, '*'));
   // Tell the app which route this frame is on (used by interactive
   // preview mode to follow link navigation).
   try {

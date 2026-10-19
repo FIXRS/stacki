@@ -303,6 +303,17 @@ const SOURCE_LAYERS = {
     ],
     // The history panel draws commits with git's file and branch widgets.
     history: ['features/git/BranchActions', 'features/git/FileBrowser', 'features/git/FileStatus'],
+    // The column guide's menu is built from the style panel's controls.
+    preview: [
+      'features/style/LayerPopover',
+      'features/style/SizeKit',
+      'features/style/VariableConnect',
+      'features/style/components/ColorSwatch',
+      'features/style/components/DragSlider',
+      'features/style/components/FieldLabel',
+      'features/style/components/Select',
+      'features/style/components/useScrub',
+    ],
     // A variable's value is edited with the style panel's value editors.
     variables: [
       'features/style/CustomValueEditor',

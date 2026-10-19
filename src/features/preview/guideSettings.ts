@@ -1,0 +1,277 @@
+// The column guide's settings, kept per project in this app's local storage —
+// never in the project, which the guide only reads. A project opened again
+// shows the guide as it was left: on or off, its colour, its count and list.
+//
+// Stored records outlive app versions, so what storage holds is parsed like
+// any other input. Each field is parsed on its own: one that does not parse
+// takes its default, and the others are kept.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { assert } from '../../../shared/core/assert';
+import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
+import {
+  GUIDE_DEFAULTS,
+  GUIDE_LIMITS,
+  clampGuideOpacity,
+  guideVariableNames,
+  isGuideColumnPick,
+  parseGuideColumnChoices,
+  parseGuideLength,
+  parseGuideVariableName,
+  resolveGuide,
+  type GuideMetrics,
+  type GuideSettings,
+  type GuideSize,
+  type ResolvedGuide,
+} from './guideModel';
+import type { GuideMenuProps } from './GuideMenu';
+
+const GUIDE_STORAGE_PREFIX = 'stacki.columnGuide:';
+// A stored record is a handful of short fields; anything longer is not one.
+const GUIDE_STORED_CHARS_MAX = 2_048;
+
+export type GuideUpdate = (update: (settings: GuideSettings) => GuideSettings) => void;
+
+/** How a host reaches its preview frame: the desktop canvas and Studio each link their own way. */
+export interface GuideFrameLink {
+  readonly post: (message: unknown) => void;
+  /** Calls the listener each time a frame loads; returns the unsubscribe. */
+  readonly subscribeLoad: (listener: () => void) => () => void;
+}
+
+/** What the canvas draws: present while the guide is on and the frame has measured. */
+export interface ShownGuide {
+  readonly guide: ResolvedGuide;
+  readonly settings: GuideSettings;
+}
+
+/**
+ * The column guide of one canvas, as the desktop preview and Studio both use
+ * it: the settings saved under `projectKey`, the variables the frame is told
+ * to measure, and what the toolbar's menu and the overlay are drawn from.
+ */
+export function useColumnGuide(options: {
+  readonly projectKey: string | undefined;
+  readonly metrics: GuideMetrics | undefined;
+  readonly available: boolean;
+  readonly frame: GuideFrameLink;
+}): { readonly menu: GuideMenuProps; readonly shown: ShownGuide | undefined } {
+  const [settings, update] = useGuideSettings(options.projectKey);
+  useGuideVariables(guideVariableNames(settings), options.frame);
+  const metrics = options.metrics;
+  const guide = metrics === undefined ? undefined : resolveGuide(metrics, settings);
+  const menu = { settings, update, metrics, guide, available: options.available };
+  if (guide === undefined) {
+    return { menu, shown: undefined };
+  }
+  return { menu, shown: settings.visible ? { guide, settings } : undefined };
+}
+
+/** The settings for the open project, and the one way to change them. */
+export function useGuideSettings(
+  projectKey: string | undefined,
+): readonly [GuideSettings, GuideUpdate] {
+  const [settings, setSettings] = useState<GuideSettings>(() => loadGuideSettings(projectKey));
+  useEffect(() => setSettings(loadGuideSettings(projectKey)), [projectKey]);
+  const update = useCallback<GuideUpdate>(
+    (change) =>
+      setSettings((previous) => {
+        const next = change(previous);
+        saveGuideSettings(projectKey, next);
+        return next;
+      }),
+    [projectKey],
+  );
+  useGuideShortcut(update);
+  return [settings, update] as const;
+}
+
+// The frame measures the menu's variables once told their names: whenever they
+// change, and on every load, since a new page starts from none. The names are
+// compared as one key, and the link is read through a ref, so a host whose
+// functions change on every render sends nothing extra.
+function useGuideVariables(names: readonly string[], frame: GuideFrameLink): void {
+  const key = names.join('\n');
+  const link = useRef(frame);
+  useEffect(() => {
+    link.current = frame;
+  });
+  useEffect(() => {
+    const send = (): void =>
+      link.current.post({ type: 'avb:guide-variables', names: key === '' ? [] : key.split('\n') });
+    send();
+    return link.current.subscribeLoad(send);
+  }, [key]);
+}
+
+/** A stored record as settings; every field it lacks or garbles is the default. */
+export function parseGuideSettings(input: unknown): GuideSettings {
+  if (typeof input !== 'object' || input === null) {
+    return GUIDE_DEFAULTS;
+  }
+  const value = new Map<string, unknown>(Object.entries(input));
+  const visible = value.get('visible');
+  const numbers = value.get('numbers');
+  const columnChoices = parseGuideColumnChoices(value.get('columnChoices'));
+  return {
+    visible: typeof visible === 'boolean' ? visible : GUIDE_DEFAULTS.visible,
+    ...columnsOr(value.get('columns'), columnChoices ?? GUIDE_DEFAULTS.columnChoices),
+    columnVariable: parseGuideVariableName(value.get('columnVariable')),
+    color: colorOr(value.get('color')),
+    opacity: opacityOr(value.get('opacity')),
+    numbers: typeof numbers === 'boolean' ? numbers : GUIDE_DEFAULTS.numbers,
+    margin: sizeOr(value.get('margin')),
+    gutter: sizeOr(value.get('gutter')),
+    widthMax: sizeOr(value.get('widthMax')),
+  };
+}
+
+/** A colour the guide can paint: a literal CSS colour, within the length bound. */
+export function parseGuideColor(input: unknown): string | undefined {
+  if (typeof input !== 'string') {
+    return undefined;
+  }
+  const value = input.trim();
+  if (value.length === 0) {
+    return undefined;
+  }
+  if (value.length > GUIDE_LIMITS.colorCharsMax) {
+    return undefined;
+  }
+  // A variable means nothing in the app's document, where the guide is drawn.
+  if (value.includes('var(')) {
+    return undefined;
+  }
+  return CSS.supports('color', value) ? value : undefined;
+}
+
+// ⇧G shows or hides the guide, outside fields. The canvas replays it as the
+// key "G" with no modifier flags (electron/preload/frameDesign.ts), so the
+// capital letter is what says Shift.
+function useGuideShortcut(update: GuideUpdate): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (event.key !== 'G') {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (target.closest('input, textarea, select, [contenteditable="true"]')) {
+          return;
+        }
+      }
+      event.preventDefault();
+      update((settings) => ({ ...settings, visible: !settings.visible }));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [update]);
+}
+
+function storageKey(projectKey: string): string {
+  assert(projectKey.length > 0, 'Guide settings: project key is non-empty');
+  assert(projectKey.length <= BOUNDARY_LIMITS.pathLengthMax, 'Guide settings: key within limit');
+  return GUIDE_STORAGE_PREFIX + projectKey;
+}
+
+function loadGuideSettings(projectKey: string | undefined): GuideSettings {
+  if (projectKey === undefined) {
+    return GUIDE_DEFAULTS;
+  }
+  const key = storageKey(projectKey);
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) {
+      return GUIDE_DEFAULTS;
+    }
+    if (raw.length > GUIDE_STORED_CHARS_MAX) {
+      return GUIDE_DEFAULTS;
+    }
+    const stored: unknown = JSON.parse(raw);
+    return parseGuideSettings(stored);
+  } catch {
+    // Unreadable storage or a corrupt record: the defaults, never a failed load.
+    return GUIDE_DEFAULTS;
+  }
+}
+
+function saveGuideSettings(projectKey: string | undefined, settings: GuideSettings): void {
+  if (projectKey === undefined) {
+    return;
+  }
+  const key = storageKey(projectKey);
+  const raw = JSON.stringify(settings);
+  assert(raw.length <= GUIDE_STORED_CHARS_MAX, 'Guide settings: record within limit');
+  try {
+    localStorage.setItem(key, raw);
+  } catch {
+    // Storage can be unavailable; the live setting still applies.
+  }
+}
+
+// A picked count stands only while the list still offers it; otherwise the
+// guide defers to the project's count.
+function columnsOr(
+  input: unknown,
+  columnChoices: readonly number[],
+): Pick<GuideSettings, 'columns' | 'columnChoices'> {
+  if (isGuideColumnPick(input)) {
+    if (columnChoices.includes(input)) {
+      return { columns: input, columnChoices };
+    }
+  }
+  return { columns: GUIDE_DEFAULTS.columns, columnChoices };
+}
+
+function colorOr(input: unknown): string {
+  return parseGuideColor(input) ?? GUIDE_DEFAULTS.color;
+}
+
+function opacityOr(input: unknown): number {
+  if (typeof input === 'number') {
+    return Number.isFinite(input) ? clampGuideOpacity(input) : GUIDE_DEFAULTS.opacity;
+  }
+  return GUIDE_DEFAULTS.opacity;
+}
+
+// A menu value is stored as the record it is, and read back through the
+// parsers a typed one goes through, so both answer to the same bounds. Absent
+// or unreadable, it is unset: the default applies.
+function sizeOr(input: unknown): GuideSize | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const value = new Map<string, unknown>(Object.entries(input));
+  switch (value.get('kind')) {
+    case 'length':
+      return storedLength(value.get('length'));
+    case 'variable': {
+      const name = parseGuideVariableName(value.get('name'));
+      return name === undefined ? undefined : { kind: 'variable', name };
+    }
+    default:
+      return undefined;
+  }
+}
+
+function storedLength(input: unknown): GuideSize | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const value = new Map<string, unknown>(Object.entries(input));
+  const amount = value.get('amount');
+  const unit = value.get('unit');
+  if (typeof amount !== 'number') {
+    return undefined;
+  }
+  if (unit !== 'px') {
+    if (unit !== 'rem') {
+      return undefined;
+    }
+  }
+  const length = parseGuideLength(`${amount}${unit}`);
+  return length === undefined ? undefined : { kind: 'length', length };
+}

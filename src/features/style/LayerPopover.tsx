@@ -16,11 +16,15 @@ export default function LayerPopover({
   anchorEl: anchorElement,
   onClose,
   ariaLabel,
+  span: placedSpan,
   children,
 }: {
   anchorEl: HTMLElement;
   onClose: () => void;
   ariaLabel?: string;
+  /** Where it sits across, for an anchor outside the style panel (the preview
+   *  toolbar): there is no panel to span, so the caller places it. */
+  span?: { readonly left: number; readonly width: number };
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -37,7 +41,7 @@ export default function LayerPopover({
   const scrolls = usePopoverOverflow(boxRef);
   // Read once, at mount, so the popover has its real width for the very first
   // layout — the flip decision below measures a height that depends on it.
-  const [span] = useState(() => panelSpan(anchorElement));
+  const [span] = useState(() => placedSpan ?? panelSpan(anchorElement));
   const top = usePopoverTop(ref, anchorElement);
   usePopoverDismiss(ref, anchorElement, onClose);
   return createPortal(

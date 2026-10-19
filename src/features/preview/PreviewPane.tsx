@@ -12,6 +12,8 @@ import type { PreviewVerdict } from '../../../shared/page/previewToken';
 import type { PreviewReloadReason } from './previewMessages';
 import './previewViewport.css';
 import type { LiveValue } from '../../ui/liveValue';
+import { GuideOverlay } from './GuideOverlay';
+import { useColumnGuide, type ShownGuide } from './guideSettings';
 
 export { deviceForWidth } from './PreviewToolbar';
 
@@ -50,6 +52,8 @@ interface PreviewPaneProps {
   readonly focusWhole?: boolean;
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
+  /** The open project: the column guide's settings are kept per project. */
+  readonly projectPath?: string | undefined;
 }
 
 export default function PreviewPane(props: PreviewPaneProps) {
@@ -57,6 +61,12 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const runtime = usePreviewRuntime({ ...props, selPath: props.selPath }, url);
   const dimensions = usePreviewDimensions();
   const sizing = usePreviewSizing(props.device, dimensions, props.onDevice);
+  const columnGuide = useColumnGuide({
+    projectKey: props.projectPath,
+    metrics: runtime.guide,
+    available: props.device !== 'canvas',
+    frame: runtime,
+  });
   return (
     <>
       <PreviewToolbar
@@ -74,9 +84,16 @@ export default function PreviewPane(props: PreviewPaneProps) {
                 onFit: () => props.onDevice('desktop'),
               },
             })}
+        guide={columnGuide.menu}
       />
       <div className="preview-frame-wrap" ref={sizing.wrapRef}>
-        <PreviewContent props={props} url={url} runtime={runtime} sizing={sizing} />
+        <PreviewContent
+          props={props}
+          url={url}
+          runtime={runtime}
+          sizing={sizing}
+          shownGuide={columnGuide.shown}
+        />
       </div>
     </>
   );
@@ -90,11 +107,13 @@ function PreviewContent({
   url,
   runtime,
   sizing,
+  shownGuide,
 }: {
   readonly props: PreviewPaneProps;
   readonly url: string | undefined;
   readonly runtime: Runtime;
   readonly sizing: Sizing;
+  readonly shownGuide: ShownGuide | undefined;
 }) {
   if (url && props.device === 'canvas') {
     return (
@@ -106,7 +125,15 @@ function PreviewContent({
     );
   }
   if (url) {
-    return <DesignPreview props={props} url={url} runtime={runtime} sizing={sizing} />;
+    return (
+      <DesignPreview
+        props={props}
+        url={url}
+        runtime={runtime}
+        sizing={sizing}
+        shownGuide={shownGuide}
+      />
+    );
   }
   return <PreviewPlaceholder props={props} />;
 }
@@ -116,11 +143,13 @@ function DesignPreview({
   url,
   runtime,
   sizing,
+  shownGuide,
 }: {
   readonly props: PreviewPaneProps;
   readonly url: string;
   readonly runtime: Runtime;
   readonly sizing: Sizing;
+  readonly shownGuide: ShownGuide | undefined;
 }) {
   const width = sizing.width;
   const scale = sizing.viewport.scale;
@@ -159,6 +188,8 @@ function DesignPreview({
           borderRadius: width ? 10 * scale : 0,
         }}
       >
+        {/* First in the layer, so the outlines and spacing bands paint over it. */}
+        {shownGuide && <GuideOverlay {...shownGuide} scale={scale} />}
         <PreviewOverlays
           rects={runtime.rects}
           spacing={runtime.spacing}

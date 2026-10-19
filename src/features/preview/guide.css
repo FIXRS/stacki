@@ -1,0 +1,110 @@
+/* The column guide over the preview (GuideOverlay.tsx). It fills the overlay
+   layer, which is the visible part of the page, so the columns stay put while
+   the page scrolls under them. Colour and opacity come from the guide's
+   settings, inline. */
+.guide-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.guide-column {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  /* The numbers keep a small gap above the bottom edge. */
+  padding-bottom: 0.6rem;
+}
+.guide-column-fill {
+  position: absolute;
+  inset: 0;
+}
+.guide-column-number {
+  position: relative;
+  font-family: var(--font);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The toolbar button that opens the guide's menu: a group of its own, styled
+   as the device group beside it. A lone button has no sliding indicator, so it
+   carries the indicator's fill itself while the guide is shown. */
+.device-btns.guide-btns button.on {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* The menu takes the panel's label column at its own width: the panel's
+   popovers narrow it for short labels, and "Max width" is not one. */
+.guide-menu {
+  --embed-editor_size-label-w: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The switch keeps its own width inside the row's grid cell, so its knob
+   sits on its track. */
+.guide-menu .cms-toggle {
+  justify-self: start;
+}
+
+/* The column dropdown takes the row's width, less the pencil beside it. */
+.guide-columns-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.guide-columns-field > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Over an icon, the browser looks for a tooltip on the icon and never reaches
+   its button's title. The menu's icons let the pointer through, so the
+   pencil and the variable buttons show their tooltip wherever they are
+   hovered. */
+.guide-menu .embed-editor_icon-btn svg,
+.guide-menu .embed-editor_varconnect-dot svg {
+  pointer-events: none;
+}
+
+/* The list's editor reads as the content panel's tags. Its field takes the
+   room the chips leave, and "Reset list" sits at the end in the chips' grey. */
+.guide-column-choices input {
+  min-width: 56px;
+}
+.guide-column-choices .guide-column-reset {
+  margin-left: auto;
+  padding: 2px 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+  background: transparent;
+}
+
+/* A count out of range reads red, and so does every note that says a value
+   is not what the guide uses. */
+.guide-column-choices input.guide-column-out,
+.guide-menu .guide-note-error {
+  color: var(--color-danger);
+}
+
+/* The note starts where the row labels' text does: they carry the label
+   pill's inner padding. No word is left alone on the last line. */
+.guide-menu .embed-editor_more-note {
+  padding-inline: var(--space-2);
+  text-wrap: pretty;
+}
+
+/* The guide's popover takes the side panels' colour, as part of the canvas
+   chrome, and its controls the panel's own surface steps (.u-surface-page):
+   the panel's grey at rest, one step lighter on hover. */
+.embed-editor_layer-popover-box:has(> .guide-menu) {
+  --surface-control: var(--color-bg-surface);
+  --surface-control-hover: var(--color-bg-surface-raised);
+  background: var(--bg-panel);
+}

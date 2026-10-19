@@ -6,6 +6,11 @@ import type { Peer } from '../collaboration/presence';
 import { spacingHover } from './spacingHover';
 import { useLiveValue } from '../../../vendor/stacki/src/ui/liveValue';
 import { PreviewOverlays } from '../../../vendor/stacki/src/features/preview/PreviewOverlays';
+import { GuideOverlay } from '../../../vendor/stacki/src/features/preview/GuideOverlay';
+import {
+  useColumnGuide,
+  type ShownGuide,
+} from '../../../vendor/stacki/src/features/preview/guideSettings';
 import { outlineInfo } from './outlineInfo';
 import type { CSSProperties } from 'react';
 import {
@@ -23,6 +28,8 @@ import type { usePreview } from './usePreview';
 interface Props {
   readonly dimensions: ReturnType<typeof usePreviewDimensions>;
   readonly file: string;
+  /** The project's folder name: with the site's address, the column guide's settings key. */
+  readonly projectName: string;
   readonly collaborators: readonly Peer[];
   readonly collection: boolean;
   readonly document: SharedDocument | undefined;
@@ -38,6 +45,14 @@ interface Props {
 export function PreviewCanvas(props: Props) {
   const sizing = usePreviewSizing(props.device, props.dimensions, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
+  // The browser keeps storage per site address; the folder name keeps two
+  // projects served from the same local address apart.
+  const columnGuide = useColumnGuide({
+    projectKey: `${location.origin} ${props.projectName}`,
+    metrics: props.preview.guide,
+    available: props.device !== 'canvas' && !props.collection,
+    frame: { post: props.preview.send, subscribeLoad: props.preview.subscribeLoad },
+  });
   return (
     <main className="studio-center">
       <div className="studio-preview-toolbar">
@@ -56,6 +71,7 @@ export function PreviewCanvas(props: Props) {
                   onFit: () => props.onDevice('desktop'),
                 },
               })}
+          guide={columnGuide.menu}
         />
 
         <CursorChatButton
@@ -69,7 +85,7 @@ export function PreviewCanvas(props: Props) {
       {props.collection && props.document ? (
         <CollectionEditor document={props.document} />
       ) : (
-        <PreviewSurface props={props} sizing={sizing} />
+        <PreviewSurface props={props} sizing={sizing} shownGuide={columnGuide.shown} />
       )}
     </main>
   );
@@ -77,9 +93,11 @@ export function PreviewCanvas(props: Props) {
 function PreviewSurface({
   props,
   sizing,
+  shownGuide,
 }: {
   readonly props: Props;
   readonly sizing: ReturnType<typeof usePreviewSizing>;
+  readonly shownGuide: ShownGuide | undefined;
 }) {
   const loading = usePreviewLoading(
     props.preview.url,
@@ -106,6 +124,7 @@ function PreviewSurface({
             key={loading.attempt}
             props={props}
             sizing={sizing}
+            shownGuide={shownGuide}
             loaded={loading.loaded}
           />
         ))}
@@ -116,10 +135,12 @@ function PreviewSurface({
 function DesignFrame({
   props,
   sizing,
+  shownGuide,
   loaded,
 }: {
   readonly props: Props;
   readonly sizing: ReturnType<typeof usePreviewSizing>;
+  readonly shownGuide: ShownGuide | undefined;
   readonly loaded: () => void;
 }) {
   return (
@@ -161,16 +182,18 @@ function DesignFrame({
           </div>
         )}
       </div>
-      <CanvasOverlays props={props} sizing={sizing} />
+      <CanvasOverlays props={props} sizing={sizing} shownGuide={shownGuide} />
     </>
   );
 }
 function CanvasOverlays({
   props,
   sizing,
+  shownGuide,
 }: {
   readonly props: Props;
   readonly sizing: ReturnType<typeof usePreviewSizing>;
+  readonly shownGuide: ShownGuide | undefined;
 }) {
   const spacing = useLiveValue(spacingHover);
   const style: CSSProperties = {
@@ -180,6 +203,8 @@ function CanvasOverlays({
   };
   return (
     <div className={`preview-overlay-layer ${sizing.width ? '' : 'full'}`} style={style}>
+      {/* First in the layer, so the outlines and spacing bands paint over it. */}
+      {shownGuide && <GuideOverlay {...shownGuide} scale={sizing.viewport.scale} />}
       <CollaboratorOutlines
         peers={props.collaborators}
         nodes={props.nodes}

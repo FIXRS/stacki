@@ -132,6 +132,7 @@ function EditorContent({
         onDevice={setDevice}
         dimensions={props.view.dimensions}
         file={props.file}
+        projectName={props.project.name}
         showSettings={() => {
           setMobileSettings(!mobileSettings);
           setPanel(undefined);
