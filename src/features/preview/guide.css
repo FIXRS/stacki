@@ -46,6 +46,9 @@
 .device-btns.guide-btns button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.18);
 }
+.device-btns.guide-btns button svg {
+  pointer-events: none;
+}
 
 /* The menu takes the panel's label column at its own width: the panel's
    popovers narrow it for short labels, and "Max width" is not one. */
