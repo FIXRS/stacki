@@ -20,6 +20,7 @@ import {
 } from './structureModel';
 import CodeEditor from '../../ui/CodeEditor';
 import { ContextMenu, NodeList } from './StructureTree';
+import { clearDrag } from '../../editor/dragState';
 import { parseNavigatorDrop } from './navigatorDrop';
 import { NO_LIVE_TEXT, useLiveValue, type LiveValue } from '../../ui/liveValue';
 
@@ -208,6 +209,7 @@ function useTreeState(props: EditableProps): TreeState {
   const [contextMenu, setContextMenu] = useState<ContextPosition | undefined>(undefined);
   const bodyRef = useRef<HTMLDivElement>(null);
   const tooltip = useHeaderTooltip();
+  useDropTargetCleanup(setDropTarget);
   useArrowNavigation(props, toggled, setToggled);
   useSelectionExpansion(props, setToggled);
   useRevealRow(bodyRef, props.revealTick ?? 0, props.selectedId);
@@ -223,6 +225,29 @@ function useTreeState(props: EditableProps): TreeState {
     bodyRef,
     ...tooltip,
   };
+}
+
+// Palette drags can end outside this panel, so cancellation belongs to the window.
+function useDropTargetCleanup(setDropTarget: TreeState['setDropTarget']): void {
+  useEffect(() => {
+    const clear = (): void => {
+      clearDrag();
+      setDropTarget(undefined);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        clear();
+      }
+    };
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('dragend', clear);
+      window.removeEventListener('drop', clear);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [setDropTarget]);
 }
 
 function useHeaderTooltip(): Pick<TreeState, 'tooltip' | 'showTooltip' | 'hideTooltip'> {
@@ -504,7 +529,15 @@ function NavigatorBody({
     <div
       className="panel-body"
       ref={state.bodyRef}
-      onDragLeave={() => state.setDropTarget(undefined)}
+      onDragOver={() => state.setDropTarget(undefined)}
+      onDragLeave={(event) => {
+        if (event.relatedTarget instanceof Node) {
+          if (event.currentTarget.contains(event.relatedTarget)) {
+            return;
+          }
+        }
+        state.setDropTarget(undefined);
+      }}
     >
       {!props.clientMode && <FrontmatterRow props={props} />}
       <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
@@ -555,6 +588,7 @@ function EmptyDropTarget({
       onDragOver={(event) => {
         if (isDndPayload(event)) {
           event.preventDefault();
+          event.stopPropagation();
           state.setDropTarget({ kind: 'gap', ...location });
         }
       }}

@@ -3185,6 +3185,7 @@ body > .embed-editor_provenance {
    the first so they don't stack into a large blank strip (each stays a
    distinct drop target for its own nesting level). */
 .nav-gap {
+  position: relative;
   height: 7px;
 }
 .nav-gap + .nav-gap {
@@ -3192,10 +3193,14 @@ body > .embed-editor_provenance {
 }
 
 .drop-indicator {
+  /* The marker must not move the gap or become a new drag target. */
+  position: absolute;
+  inset: 50% 0 auto;
+  transform: translateY(-50%);
+  pointer-events: none;
   height: 2px;
   border-radius: 1px;
   background: var(--accent);
-  margin: 2px 0;
   box-shadow: 0 0 6px rgba(0, 153, 255, 0.6);
 }
 .drop-zone-empty {
@@ -8103,11 +8108,12 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   margin-right: 4px;
   border: 0;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text);
+  opacity: 0.65;
+  transition: opacity 0.1s;
   font-size: 11px;
 }
 .panel-header .asset-select-link:hover:not(:disabled) {
   background: transparent;
-  color: var(--text);
-  text-decoration: underline;
+  opacity: 1;
 }

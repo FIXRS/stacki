@@ -40,8 +40,8 @@ const check = (what, condition, detail) => {
   });
   const { relativeTime, dayGroup, summarize } = require(bundlePath);
 
-  // A fixed "now" so these read the same in June as in December.
-  const now = new Date('2026-08-18T15:00:00Z').getTime();
+  // Local afternoon keeps the same-day fixture away from midnight in every timezone.
+  const now = new Date(2026, 7, 18, 15).getTime();
   const ago = (ms) => new Date(now - ms).toISOString();
   const MIN = 60000;
   const HOUR = 60 * MIN;

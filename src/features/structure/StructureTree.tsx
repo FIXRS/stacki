@@ -317,7 +317,10 @@ function treeRowHandlers(props: TreeRowProps) {
         ...(tag === undefined ? {} : { tag }),
       });
     },
-    onDragEnd: clearDrag,
+    onDragEnd: (): void => {
+      clearDrag();
+      props.setDropTarget(undefined);
+    },
     onDragOver: (event: React.DragEvent<HTMLDivElement>): void => {
       if (props.canHostChildren && acceptsDrag(node) && props.isDndPayload(event)) {
         event.preventDefault();
