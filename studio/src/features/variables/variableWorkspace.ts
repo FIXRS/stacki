@@ -18,7 +18,7 @@ function files() {
   return current;
 }
 function relative(absolute: string) {
-  return sourcePath(path.relative(VARIABLE_ROOT, absolute));
+  return sourcePath(path.relative(VARIABLE_ROOT, absolute).split(path.sep).join('/'));
 }
 function readFileSync(absolute: string, _encoding: 'utf8') {
   const text = files().get(relative(absolute));
@@ -39,7 +39,7 @@ export interface VariableEntry {
   readonly isDirectory: () => boolean;
 }
 function readdirSync(directory: string, _options: { withFileTypes: true }): VariableEntry[] {
-  const prefix = path.relative(VARIABLE_ROOT, directory);
+  const prefix = path.relative(VARIABLE_ROOT, directory).split(path.sep).join('/');
   if (prefix && !/^(src|public)(\/|$)/.test(prefix)) {
     return [];
   }

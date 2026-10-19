@@ -78,7 +78,7 @@ async function editProperties(
   }
   const changes = plan.value.map((entry) => ({
     ...entry,
-    file: sourcePath(path.relative(root, entry.file)),
+    file: sourcePath(path.relative(root, entry.file).split(path.sep).join('/')),
   }));
   await commitProperties(rooms, changes);
   return ok({ ...readComponentProperties(await rooms.read(file)), undo: batches.record(changes) });

@@ -738,9 +738,11 @@ const check = (what, condition, detail) => {
       String(makeButton()?.disabled),
     );
     await hover();
+    const createShortcut = process.platform === 'darwin' ? '⌘⇧A' : 'Ctrl+Shift+A';
     check(
       'and the tooltip names the shortcut that does the same thing',
-      /new component/i.test(tip()?.textContent || '') && /⌘⇧A/.test(tip()?.textContent || ''),
+      /new component/i.test(tip()?.textContent || '') &&
+        (tip()?.textContent || '').includes(createShortcut),
       tip()?.textContent,
     );
     await act(async () => {

@@ -231,9 +231,20 @@ export class Publisher {
 }
 export async function runBuild(root: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn('npm', ['run', 'build'], {
+    const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'], {
+      // Windows executes npm's command shim through its shell; arguments are fixed.
+      shell: process.platform === 'win32',
       cwd: root,
-      env: { PATH: process.env['PATH'], HOME: process.env['HOME'], NODE_ENV: 'production' },
+      env: {
+        PATH: process.env['PATH'],
+        HOME: process.env['HOME'],
+        SystemRoot: process.env['SystemRoot'],
+        ComSpec: process.env['ComSpec'],
+        TEMP: process.env['TEMP'],
+        TMP: process.env['TMP'],
+        USERPROFILE: process.env['USERPROFILE'],
+        NODE_ENV: 'production',
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let log = '';

@@ -155,15 +155,12 @@ test('content edits reject stale entry data even after a background refresh, and
       from: 'hello',
       to: 'greeting',
     });
-    assert.ok(
-      (
-        await fixture.post(
-          'content:rename',
-          { ...target, from: 'hello', to: 'greeting' },
-          plan['versions'],
-        )
-      )['value'],
+    const renamed = await fixture.post(
+      'content:rename',
+      { ...target, from: 'hello', to: 'greeting' },
+      plan['versions'],
     );
+    assert.ok(renamed['value'], JSON.stringify(renamed));
     const inventory = JSON.parse(
       await fixture.rooms.read('src/data/studio-cms-deleted.json'),
     ) as unknown;

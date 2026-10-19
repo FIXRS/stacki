@@ -164,7 +164,12 @@ function importersOf(projectPath: string, targetAbs: string): Importer[] {
       return bound.map((name) => `${indent}const ${name} = [];\n`).join('');
     });
     if (names.length || next !== text) {
-      hits.push({ file, rel: path.relative(path.join(projectPath, 'src'), file), names, next });
+      hits.push({
+        file,
+        rel: path.relative(path.join(projectPath, 'src'), file).split(path.sep).join('/'),
+        names,
+        next,
+      });
     }
   }
   return hits;
