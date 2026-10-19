@@ -146,7 +146,8 @@ const PIXEL =
   const actions = all('.actions button').map((button) => button.textContent.trim());
   check(
     'the actions read in that order',
-    actions.join(' | ') === 'Open Project… | Start from Lumos… | Empty Astro project…',
+    actions.join(' | ') ===
+      'Open Project… | Start from Lumos… | Open from GitHub… | Empty Astro project…',
     actions.join(' | '),
   );
   check(
@@ -157,8 +158,8 @@ const PIXEL =
       .join(' | '),
   );
   check(
-    'and the blank one is the quiet third',
-    all('.actions button')[2].classList.contains('quiet'),
+    'and the blank one is the quiet fourth',
+    all('.actions button')[3].classList.contains('quiet'),
   );
   check('nothing tells the user a picture is old', !/out of date/i.test(text()), text());
   check('and nothing offers to fix it', all('.recent-refresh').length === 0);

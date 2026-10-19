@@ -191,7 +191,11 @@ const check = (what, condition, detail) => {
   await press(menuButton(0), 'a menu button on the first tile');
   check('pressing it opens a menu', rows().length > 0, container.innerHTML.slice(0, 160));
   check('with Delete in it', rows().includes('Delete'), rows().join());
-  check('and nothing else', rows().length === 1, rows().join());
+  check(
+    'and both image formats',
+    rows().join('|') === 'Convert to WEBP|Convert to AVIF|Delete',
+    rows().join(),
+  );
 
   // --- it asks before it does it ---------------------------------------------------
   //

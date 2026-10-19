@@ -12,6 +12,7 @@ import {
   TrashIcon,
 } from '../../ui/Icons';
 import { RenameInput } from './PageDialogs';
+import { pageRenameBase, routeName } from './routeName';
 import { allowDragEffect } from '../../editor/dragState';
 
 export type PageEditing =
@@ -217,11 +218,8 @@ function startPageDrag(event: React.DragEvent<HTMLDivElement>, page: PageTreePag
 
 function commitPageRename(page: PageTreePage, text: string, actions: PageTreeActions): void {
   actions.setEditing({ kind: 'none' });
-  const base = text
-    .trim()
-    .replace(/\.(astro|md)$/i, '')
-    .replace(/[^\w-]+/g, '-');
-  if (!base || base === stripPageExtension(page.base)) {
+  const base = pageRenameBase(page.base, text);
+  if (!base) {
     return;
   }
   const directory = pageDirectory(page.name);
@@ -230,7 +228,7 @@ function commitPageRename(page: PageTreePage, text: string, actions: PageTreeAct
 
 function commitFolderRename(rel: string, text: string, actions: PageTreeActions): void {
   actions.setEditing({ kind: 'none' });
-  const name = text.trim().replace(/[^\w-]+/g, '-');
+  const name = routeName(text);
   const parts = rel.split('/');
   if (!name || name === parts.at(-1)) {
     return;

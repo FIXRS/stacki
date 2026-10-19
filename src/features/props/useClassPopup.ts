@@ -24,7 +24,8 @@ export function useClassPopup(
       const width = viewport?.width ?? window.innerWidth;
       const offsetTop = viewport?.offsetTop ?? 0;
       const offsetLeft = viewport?.offsetLeft ?? 0;
-      const wanted = count * 26 + 10;
+      // Keep the menu compact while every matching class remains scrollable.
+      const wanted = Math.min(count * 26 + 10, 322);
       const box = popupBox(
         { top: rect.top - offsetTop, bottom: rect.bottom - offsetTop },
         wanted,

@@ -1,3 +1,4 @@
+import CloneRepositoryModal from './CloneRepositoryModal';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   chooseExistingProject,
@@ -19,6 +20,7 @@ interface WelcomeScreenProps {
 }
 
 export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps) {
+  const [cloning, setCloning] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [newProjectDirectory, setNewProjectDirectory] = useState<string | undefined>(undefined);
   const [starterDirectory, setStarterDirectory] = useState<string | undefined>(undefined);
@@ -34,6 +36,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
         openExisting={() => void actions.openExisting()}
         startFromLumos={() => void actions.startFromLumos()}
         createNew={() => void actions.createNew()}
+        cloneRepository={() => setCloning(true)}
       />
       <RecentRail
         projects={recent.projects}
@@ -41,6 +44,15 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
         open={onOpen}
         remove={(projectPath) => void recent.remove(projectPath)}
       />
+      {cloning && (
+        <CloneRepositoryModal
+          onClose={() => setCloning(false)}
+          onOpen={(directory) => {
+            setCloning(false);
+            onOpen(directory);
+          }}
+        />
+      )}
       {starterDirectory && (
         <StarterWizard
           parentPath={starterDirectory}
@@ -194,12 +206,14 @@ function WelcomeHero({
   openExisting,
   startFromLumos,
   createNew,
+  cloneRepository,
 }: {
   readonly hasRecents: boolean;
   readonly error: string | undefined;
   readonly openExisting: () => void;
   readonly startFromLumos: () => void;
   readonly createNew: () => void;
+  readonly cloneRepository: () => void;
 }) {
   return (
     <div className="welcome-hero">
@@ -214,6 +228,7 @@ function WelcomeHero({
             Start from Lumos…
           </button>
         </div>
+        <button onClick={cloneRepository}>Open from GitHub…</button>
         <button className="quiet" onClick={createNew}>
           Empty Astro project…
         </button>

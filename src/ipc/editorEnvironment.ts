@@ -106,3 +106,5 @@ export function editVariables<Name extends keyof typeof variableCommands>(
 
 export const hasVariableCommand = (name: keyof PreloadBridge): boolean =>
   typeof window.avb[name] === 'function';
+
+export const canConvertAssets = true;

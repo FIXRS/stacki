@@ -1,3 +1,5 @@
+import { registerImageConversionHandler } from './handlers/imageConversionHandler';
+import { registerGitRepositoryHandlers } from './handlers/gitRepositoryHandlers';
 import { listenForPreviewFailures } from './preview/previewFailure';
 import { registerStudioHandlers } from './handlers/studioHandlers';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
@@ -902,6 +904,8 @@ registerComponentHandlers(host);
 registerContentHandlers(host);
 registerCssVariableHandlers(host);
 registerGitHandlers(host);
+registerGitRepositoryHandlers(host);
+registerImageConversionHandler(host);
 registerPageHandlers(host);
 registerPreviewHandlers(host);
 registerProjectHandlers(host);

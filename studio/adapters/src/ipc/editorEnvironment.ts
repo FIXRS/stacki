@@ -18,3 +18,5 @@ export function assetSources(
 }
 
 export const hasVariableCommand = (_name: string): boolean => true;
+
+export const canConvertAssets = false;

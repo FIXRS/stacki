@@ -288,7 +288,11 @@ function classFamilyOf(cls: string, suggestions: readonly string[], tokens: read
   const pool = new Set([...suggestions, ...tokens]);
   return [...pool].filter((name) => name.startsWith(prefix)).sort(collator.compare);
 }
-function classMatches(draft: string, suggestions: readonly string[], tokens: readonly string[]) {
+export function classMatches(
+  draft: string,
+  suggestions: readonly string[],
+  tokens: readonly string[],
+) {
   const query = draft.trim().toLowerCase();
   const matches = query
     ? suggestions
@@ -299,7 +303,6 @@ function classMatches(draft: string, suggestions: readonly string[], tokens: rea
           const bp = right.toLowerCase().startsWith(query) ? 0 : 1;
           return ap - bp || left.length - right.length;
         })
-        .slice(0, 12)
     : [];
 
   return matches;

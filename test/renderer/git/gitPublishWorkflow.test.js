@@ -61,6 +61,7 @@ test('clean publishing skips the initial commit and forwards validated payloads'
     },
   };
   const result = await publishGitProject('/project', {
+    kind: 'new',
     repoName: 'project',
     isPrivate: true,
     onStep: (step) => steps.push(step),
@@ -90,6 +91,7 @@ test('dirty publishing commits before creating the repository', async () => {
     },
   };
   const result = await publishGitProject('/project', {
+    kind: 'new',
     repoName: 'project',
     isPrivate: false,
     onStep: (step) => steps.push(step),
@@ -103,7 +105,7 @@ test('dirty publishing commits before creating the repository', async () => {
 });
 
 test('expected publish failures are values and stop later operations', async () => {
-  const request = { repoName: 'project', isPrivate: true, onStep() {} };
+  const request = { kind: 'new', repoName: 'project', isPrivate: true, onStep() {} };
   global.window = {
     avb: {
       gitInfo: async () => {
@@ -160,12 +162,18 @@ test('invalid requests and contract bugs remain loud', async () => {
     },
   };
   assert.deepEqual(
-    await publishGitProject('/project', { repoName: ' ', isPrivate: true, onStep() {} }),
+    await publishGitProject('/project', {
+      kind: 'new',
+      repoName: ' ',
+      isPrivate: true,
+      onStep() {},
+    }),
     { ok: false, error: 'Enter a repository name.' },
   );
   assert.equal(called, false);
   await assert.rejects(
     publishGitProject('x'.repeat(32769), {
+      kind: 'new',
       repoName: 'project',
       isPrivate: true,
       onStep() {},
@@ -175,10 +183,36 @@ test('invalid requests and contract bugs remain loud', async () => {
   global.window = { avb: { gitInfo: async () => ({ ...cleanInfo, ahead: 'zero' }) } };
   await assert.rejects(
     publishGitProject('/project', {
+      kind: 'new',
       repoName: 'project',
       isPrivate: true,
       onStep() {},
     }),
     /Expected number/,
   );
+});
+
+test('existing destination connects without creating a new repository', async () => {
+  const calls = [];
+  global.window = {
+    avb: {
+      gitInfo: async () => cleanInfo,
+      gitConnect: async (payload) => {
+        calls.push(payload);
+        return published;
+      },
+      gitPublish: async () => {
+        throw new Error('Must not create a repository');
+      },
+    },
+  };
+  assert.deepEqual(
+    await publishGitProject('/project', {
+      kind: 'existing',
+      repository: 'owner/site',
+      onStep() {},
+    }),
+    { ok: true, value: published.url },
+  );
+  assert.deepEqual(calls, [{ projectPath: '/project', repository: 'owner/site' }]);
 });

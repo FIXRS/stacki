@@ -20,6 +20,7 @@ interface InvokeChannels {
   readonly pickUploadAssets: 'assets:pickUpload';
   readonly uploadAssets: 'assets:upload';
   readonly moveAsset: 'assets:move';
+  readonly convertAsset: 'assets:convert';
   readonly renameAsset: 'assets:rename';
   readonly deleteAsset: 'assets:delete';
   readonly mkdirAssets: 'assets:mkdir';
@@ -112,6 +113,9 @@ interface InvokeChannels {
   readonly gitRestoreFile: 'git:restoreFile';
   readonly gitRestoreProject: 'git:restoreProject';
   readonly gitPush: 'git:push';
+  readonly gitRepositories: 'git:repositories';
+  readonly gitClone: 'git:clone';
+  readonly gitConnect: 'git:connect';
   readonly gitPublish: 'git:publish';
   readonly openExternal: 'shell:openExternal';
   readonly pendingProject: 'project:pending';

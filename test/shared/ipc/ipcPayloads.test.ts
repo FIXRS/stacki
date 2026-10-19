@@ -24,6 +24,7 @@ const noPayload = new Set([
   'native:redo',
   'settings:get',
   'recents:list',
+  'git:repositories',
   'project:openDialog',
   'project:newDialog',
   'project:parentDialog',
@@ -122,6 +123,8 @@ const fields = {
   path: 'src/pages/index.astro',
   message: 'Update',
   repoName: 'site',
+  repository: 'owner/site',
+  format: 'webp',
   isPrivate: true,
   id: 'term-1',
   cwd: '/site',
@@ -136,13 +139,15 @@ const fields = {
 for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
   test(`IPC payload: ${channel}`, () => {
     const sample =
-      channel === 'studio:install'
-        ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
-        : noPayload.has(channel)
-          ? undefined
-          : pathPayload.has(channel)
-            ? '/site'
-            : fields;
+      channel === 'assets:convert'
+        ? { projectPath: '/site', rel: 'public/hero.png', format: 'webp' }
+        : channel === 'studio:install'
+          ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
+          : noPayload.has(channel)
+            ? undefined
+            : pathPayload.has(channel)
+              ? '/site'
+              : fields;
     assert.doesNotThrow(() => parse(sample));
     assert.throws(() => parse(Symbol('invalid')), /Expected/);
     if (!noPayload.has(channel)) {

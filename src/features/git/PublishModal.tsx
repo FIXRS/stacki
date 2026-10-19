@@ -1,14 +1,15 @@
+import RepositoryPicker from '../../ui/RepositoryPicker';
+import { parseGitHubRepository } from '../../../shared/ipc/githubRepository';
 import { useEffect, useRef, useState } from 'react';
 import type { Result } from '../../../shared/core/result';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { CheckIcon, ExternalIcon } from '../../ui/Icons';
 import { repoSlug, useGitHubStatus } from './gitPublish';
 
-export interface PublishRequest {
-  readonly repoName: string;
-  readonly isPrivate: boolean;
-  readonly onStep: (step: string) => void;
-}
+export type PublishRequest = (
+  | { readonly kind: 'new'; readonly repoName: string; readonly isPrivate: boolean }
+  | { readonly kind: 'existing'; readonly repository: string }
+) & { readonly onStep: (step: string) => void };
 interface Props {
   readonly projectPath: string;
   readonly defaultName: string;
@@ -34,6 +35,7 @@ function usePublishForm({ defaultName, onPublish, projectPath }: Props) {
       .replace(/[^a-z0-9-]+/g, '-')
       .replace(/^-+|-+$/g, ''),
   );
+  const [kind, setKind] = useState<'new' | 'existing'>('new');
   const [isPrivate, setIsPrivate] = useState(true);
   const preflight = useGitHubStatus(projectPath);
   const [state, setState] = useState<PublishState>({ kind: 'form' });
@@ -51,12 +53,21 @@ function usePublishForm({ defaultName, onPublish, projectPath }: Props) {
     if (running.current || !ready || !name.trim()) {
       return;
     }
+    if (kind === 'existing') {
+      try {
+        parseGitHubRepository(name.trim());
+      } catch {
+        setState({ kind: 'form', error: 'Enter a repository as owner/name.' });
+        return;
+      }
+    }
     running.current = true;
     setState({ kind: 'publishing', step: 'Preparing…' });
     try {
       const result = await onPublish({
-        repoName: name.trim(),
-        isPrivate,
+        ...(kind === 'new'
+          ? { kind, repoName: name.trim(), isPrivate }
+          : { kind, repository: name.trim() }),
         onStep: (step) => {
           if (lifetime.current === 'active') {
             setState({ kind: 'publishing', step });
@@ -72,7 +83,7 @@ function usePublishForm({ defaultName, onPublish, projectPath }: Props) {
       running.current = false;
     }
   };
-  return { name, setName, isPrivate, setIsPrivate, preflight, state, ready, go };
+  return { name, setName, kind, setKind, isPrivate, setIsPrivate, preflight, state, ready, go };
 }
 type Form = ReturnType<typeof usePublishForm>;
 function PublishDialog(props: Props) {
@@ -147,30 +158,48 @@ function PublishFields({ form }: { readonly form: Form }) {
   const publishing = form.state.kind === 'publishing';
   return (
     <>
-      <div>
-        <label>Repository name</label>
-        <input
-          autoFocus
-          maxLength={BOUNDARY_LIMITS.textLengthMax}
-          value={form.name}
-          disabled={publishing}
-          onChange={(event) => form.setName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              void form.go();
-            }
-          }}
-        />
-      </div>
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={form.isPrivate}
-          disabled={publishing}
-          onChange={(event) => form.setIsPrivate(event.target.checked)}
-        />
-        Private repository
-      </label>
+      <select
+        aria-label="Repository destination"
+        value={form.kind}
+        disabled={publishing}
+        onChange={(event) => {
+          form.setKind(event.target.value === 'existing' ? 'existing' : 'new');
+          form.setName('');
+        }}
+      >
+        <option value="new">Create a new repository</option>
+        <option value="existing">Use an existing repository</option>
+      </select>
+      {form.kind === 'existing' ? (
+        <RepositoryPicker value={form.name} onChange={form.setName} disabled={publishing} />
+      ) : (
+        <>
+          <div>
+            <label>Repository name</label>
+            <input
+              autoFocus
+              maxLength={BOUNDARY_LIMITS.textLengthMax}
+              value={form.name}
+              disabled={publishing}
+              onChange={(event) => form.setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  void form.go();
+                }
+              }}
+            />
+          </div>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={form.isPrivate}
+              disabled={publishing}
+              onChange={(event) => form.setIsPrivate(event.target.checked)}
+            />
+            Private repository
+          </label>
+        </>
+      )}
     </>
   );
 }
@@ -217,8 +246,10 @@ function PublishProgress({ form, branch }: { readonly form: Form; readonly branc
       if (status.authed) {
         return (
           <div className="hint-text">
-            Commits any pending changes, creates the repo as {form.isPrivate ? 'private' : 'public'}
-            , and pushes <strong>{branch}</strong>
+            {form.kind === 'existing'
+              ? 'Commits changes and pushes without overwriting remote history.'
+              : `Creates a ${form.isPrivate ? 'private' : 'public'} repository and pushes`}{' '}
+            <strong>{branch}</strong>
             {status.user ? ` to ${status.user}` : ''}.
           </div>
         );

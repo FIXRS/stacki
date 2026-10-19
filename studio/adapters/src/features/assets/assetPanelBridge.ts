@@ -1,3 +1,4 @@
+import type { ImageFormat } from '../../../shared/ipc/assetConversion';
 import type { Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
@@ -193,4 +194,13 @@ async function request<Value>(
     return { ok: false, error: cleanError(error) };
   }
   return { ok: true, value: parse(response) };
+}
+
+// Encoding currently belongs to the desktop host, not the Cloudflare worker.
+export function convertAsset(
+  _projectPath: string,
+  _rel: string,
+  _format: ImageFormat,
+): Promise<Result<never, string>> {
+  return Promise.resolve({ ok: false, error: 'Image conversion requires the desktop app.' });
 }

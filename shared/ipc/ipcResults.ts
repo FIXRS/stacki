@@ -1,3 +1,4 @@
+import type { ConversionResult } from './assetConversion';
 import type { StudioStatus, StudioInstallResult } from './studioSetup';
 import type { StudioInstallProgress } from './studioProgress';
 
@@ -133,6 +134,7 @@ export interface IpcResults {
   readonly 'assets:readText': {
     readonly text: string;
   };
+  readonly 'assets:convert': ConversionResult;
   readonly 'assets:rename': {
     readonly ok: true;
   };
@@ -422,6 +424,9 @@ export interface IpcResults {
     readonly parked: boolean;
     readonly branch: undefined | string;
   };
+  readonly 'git:repositories': readonly string[];
+  readonly 'git:clone': IpcResults['project:openDialog'];
+  readonly 'git:connect': IpcResults['git:publish'];
   readonly 'git:publish': {
     readonly ok: true;
     readonly url: undefined | string;

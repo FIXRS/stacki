@@ -116,6 +116,12 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
       reason: 'staged Studio release files and transaction metadata ignore rules',
     },
   },
+  'electron/project/imageConversion.ts': {
+    writeFileSync: {
+      count: 1,
+      reason: 'exclusive binary image creation; references use document actors',
+    },
+  },
   'electron/project/thumbs.ts': {
     writeFileSync: { count: 2, reason: 'project thumbnails in userData' },
   },

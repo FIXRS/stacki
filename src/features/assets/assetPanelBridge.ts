@@ -1,3 +1,4 @@
+import { parseConversionResult, type ImageFormat } from '../../../shared/ipc/assetConversion';
 import type { Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
@@ -210,4 +211,9 @@ async function request<Value>(
     return { ok: false, error: cleanError(error) };
   }
   return { ok: true, value: parse(response) };
+}
+
+export function convertAsset(projectPath: string, rel: string, format: ImageFormat) {
+  const payload = parseIpcPayload('assets:convert', { projectPath, rel, format });
+  return request(parseConversionResult, () => window.avb.convertAsset(payload));
 }

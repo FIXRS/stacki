@@ -53,6 +53,7 @@ function projectBridge() {
     pickUploadAssets: invoke('assets:pickUpload'),
     uploadAssets: invoke('assets:upload'),
     moveAsset: invoke('assets:move'),
+    convertAsset: invoke('assets:convert'),
     renameAsset: invoke('assets:rename'),
     deleteAsset: invoke('assets:delete'),
     mkdirAssets: invoke('assets:mkdir'),
@@ -203,6 +204,9 @@ function pageBridge() {
     gitRestoreFile: invoke('git:restoreFile'),
     gitRestoreProject: invoke('git:restoreProject'),
     gitPush: invoke('git:push'),
+    gitRepositories: invoke('git:repositories'),
+    gitClone: invoke('git:clone'),
+    gitConnect: invoke('git:connect'),
     gitPublish: invoke('git:publish'),
 
     openExternal: invoke('shell:openExternal'),

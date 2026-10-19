@@ -1,3 +1,5 @@
+import { parseImageFormat, parseImagePath } from './assetConversion';
+import { parseGitHubRepository } from './githubRepository';
 import { parsePreferenceName } from './preferences';
 import { parseStudioSource } from './studioSetup';
 import { parseStudioRequestId } from './studioProgress';
@@ -96,6 +98,7 @@ export const IPC_PAYLOADS = {
   'assets:move': object({ ...project, fromRel: pathText, toDirRel: pathText }),
   'assets:pickUpload': object({ ...project, destRel: pathText }),
   'assets:readText': object({ ...relative }),
+  'assets:convert': object({ ...project, rel: parseImagePath, format: parseImageFormat }),
   'assets:rename': object({ ...relative, newName: text }),
   'assets:upload': object({ ...project, destRel: pathText, filePaths: optional(list(pathText)) }),
   'assets:writeText': object({ ...relative, text }),
@@ -184,6 +187,9 @@ export const IPC_PAYLOADS = {
   }),
   'git:merge': object({ ...branch }),
   'git:park': object({ ...project }),
+  'git:repositories': nothing,
+  'git:clone': object({ repository: parseGitHubRepository }),
+  'git:connect': object({ ...project, repository: parseGitHubRepository }),
   'git:publish': object({ ...project, repoName: text, isPrivate: boolean }),
   'git:push': object({ ...branch }),
   'git:resolveMerge': object({ ...branch, choices: optional(dictionary(data)) }),

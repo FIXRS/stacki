@@ -175,3 +175,18 @@ exact version because a formatter upgrade reformats code, and that must be a del
 
 **Does:** the renderer dev server and production bundler. **Why not the platform:** browsers load
 modules but do not bundle, transform TSX, or hot-reload. **Cost:** build-time only.
+
+### `sharp`
+
+**Does:** bounded image decoding, orientation, resizing, WebP and AVIF encoding.
+**Why not the platform:** Node has no image encoder and browser canvas does not
+promise AVIF output. **Cost:** codec binaries, memory and CPU; jobs are serial,
+with pixel, byte and processing-time limits. See `docs/image-conversion.md`.
+
+### `@img/sharp-wasm32`
+
+**Does:** portable sharp codecs, including both architectures of the universal
+Mac app. **Why not the platform:** a native codec binary cannot run on another
+CPU architecture. **Cost:** a bundled WASM codec and its runtime; slower than
+native encoding but bounded by the same conversion limits. Bundled licenses
+are retained; Mac packages exclude architecture-specific sharp binaries.

@@ -7957,3 +7957,22 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   font-size: 11px;
   white-space: pre-wrap;
 }
+
+.asset-batch-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  align-items: center;
+  font-size: 12px;
+}
+.asset-select {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+}

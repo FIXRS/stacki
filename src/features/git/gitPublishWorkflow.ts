@@ -1,3 +1,4 @@
+import { connectRepository } from '../../ipc/repositoryBridge';
 import type { Result } from '../../../shared/core/result';
 import type { PublishRequest } from './PublishModal';
 import { assert } from '../../../shared/core/assert';
@@ -11,8 +12,14 @@ export async function publishGitProject(
   request: PublishRequest,
 ): Promise<Result<string | undefined, string>> {
   // Validate the complete request before committing anything on disk.
-  const payload = parseIpcPayload('git:publish', { projectPath, ...request });
-  if (payload.repoName.trim().length === 0) {
+  const payload =
+    request.kind === 'existing'
+      ? {
+          kind: 'existing' as const,
+          ...parseIpcPayload('git:connect', { projectPath, ...request }),
+        }
+      : { kind: 'new' as const, ...parseIpcPayload('git:publish', { projectPath, ...request }) };
+  if (payload.kind === 'new' && payload.repoName.trim().length === 0) {
     return { ok: false, error: 'Enter a repository name.' };
   }
   const state = await readGitInfo(projectPath);
@@ -22,6 +29,9 @@ export async function publishGitProject(
   if (!state.value.isRepo) {
     return { ok: false, error: 'Initialize a Git repository before publishing.' };
   }
+  if (state.value.remote) {
+    return { ok: false, error: 'This project already has a remote. Use Push to publish changes.' };
+  }
   assert(state.value.ahead >= 0, 'Git publish: ahead count must be nonnegative');
   assert(Number.isSafeInteger(state.value.ahead), 'Git publish: ahead count must be an integer');
   if (state.value.dirty || state.value.branch === '(no commits yet)') {
@@ -30,6 +40,11 @@ export async function publishGitProject(
     if (!committed.ok) {
       return committed;
     }
+  }
+  if (payload.kind === 'existing') {
+    request.onStep('Connecting repository and pushing…');
+    const result = await connectRepository(projectPath, payload.repository);
+    return result.ok ? { ok: true, value: result.value.url } : result;
   }
   request.onStep('Creating repository and pushing…');
   const published = await createGitHubRepository(projectPath, payload.repoName, {

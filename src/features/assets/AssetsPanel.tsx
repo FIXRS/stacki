@@ -1,3 +1,4 @@
+import { AssetBatchTools, useAssetBatch, convertible, type AssetBatch } from './AssetBatchTools';
 import { assetDropLimit, assetDeletionMessage } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetRequest } from '../../ui/assetPick';
@@ -56,6 +57,7 @@ interface AssetsPanelProps {
 }
 
 interface AssetPanelState {
+  readonly batch: AssetBatch;
   readonly entries: readonly AssetPanelEntry[];
   readonly missing: boolean;
   readonly cwd: string;
@@ -69,6 +71,9 @@ interface AssetPanelState {
 }
 
 export default function AssetsPanel(props: AssetsPanelProps) {
+  return <ProjectAssets key={props.project.path} {...props} />;
+}
+function ProjectAssets(props: AssetsPanelProps) {
   const state = useAssetPanelState(props);
   const actions = useAssetActions(props, state);
   if (state.missing && state.entries.length === 0) {
@@ -78,6 +83,7 @@ export default function AssetsPanel(props: AssetsPanelProps) {
 }
 
 function useAssetPanelState(props: AssetsPanelProps): AssetPanelState {
+  const batch = useAssetBatch(props.project.path, props.showToast);
   const [entries, setEntries] = useState<readonly AssetPanelEntry[]>([]);
   const [missing, setMissing] = useState(false);
   const [cwd, setCwd] = useState('');
@@ -95,6 +101,7 @@ function useAssetPanelState(props: AssetsPanelProps): AssetPanelState {
     setDragTarget(undefined);
   }, [props.project.path]);
   return {
+    batch,
     entries,
     missing,
     cwd,
@@ -461,6 +468,7 @@ function AssetPanelBody({
         {...(props.pick === undefined ? {} : { pick: props.pick })}
         {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })}
       />
+      {!props.pick && <AssetBatchTools batch={state.batch} files={files} />}
       <AssetBreadcrumbs state={state} actions={actions} />
       <AssetContents
         props={props}
@@ -691,6 +699,16 @@ function AssetTile({
       title={assetTitle(file, { editable, picking: Boolean(props.pick) })}
       onClick={props.pick ? () => props.pick?.onPick(file.rel, file) : undefined}
     >
+      {!props.pick && state.batch.selecting && (
+        <input
+          type="checkbox"
+          className="asset-select"
+          aria-label={`Select ${file.name}`}
+          checked={state.batch.selected.has(file.rel)}
+          disabled={state.batch.progress !== undefined}
+          onChange={() => state.batch.toggle(file.rel)}
+        />
+      )}
       <AssetThumb
         file={file}
         className={editable && !props.pick ? 'editable' : ''}
@@ -712,6 +730,7 @@ function AssetTile({
           className="asset-tile-menu"
           title={`Options for ${file.name}`}
           items={[
+            ...(convertible(file) ? conversionMenu(file, state.batch) : []),
             {
               label: 'Delete',
               icon: <TrashIcon size={13} />,
@@ -794,4 +813,15 @@ function blurRenameInput(event: React.KeyboardEvent<HTMLInputElement>): void {
 // An uncontrolled input's text is the element's own state, cleared in place.
 function clearInput(inputElement: HTMLInputElement): void {
   inputElement.value = '';
+}
+
+function conversionMenu(file: AssetFile, batch: AssetBatch) {
+  return (['webp', 'avif'] as const)
+    .filter((format) => !file.name.toLowerCase().endsWith('.' + format))
+    .map((format) => ({
+      label: `Convert to ${format.toUpperCase()}`,
+      onSelect: () => {
+        void batch.run([file], format);
+      },
+    }));
 }
