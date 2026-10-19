@@ -1,6 +1,6 @@
 // The column guide's settings, kept per project in this app's local storage —
 // never in the project, which the guide only reads. A project opened again
-// shows the guide as it was left: on or off, its colour, its count and list.
+// shows the guide as it was left: on or off, its colour and its count or variable connection.
 //
 // Stored records outlive app versions, so what storage holds is parsed like
 // any other input. Each field is parsed on its own: one that does not parse
@@ -15,10 +15,10 @@ import {
   clampGuideOpacity,
   guideVariableNames,
   isGuideColumnPick,
-  parseGuideColumnChoices,
   parseGuideLength,
   parseGuideVariableName,
   resolveGuide,
+  type GuideColumnSetting,
   type GuideMetrics,
   type GuideSettings,
   type GuideSize,
@@ -112,11 +112,9 @@ export function parseGuideSettings(input: unknown): GuideSettings {
   const value = new Map<string, unknown>(Object.entries(input));
   const visible = value.get('visible');
   const numbers = value.get('numbers');
-  const columnChoices = parseGuideColumnChoices(value.get('columnChoices'));
   return {
     visible: typeof visible === 'boolean' ? visible : GUIDE_DEFAULTS.visible,
-    ...columnsOr(value.get('columns'), columnChoices ?? GUIDE_DEFAULTS.columnChoices),
-    columnVariable: parseGuideVariableName(value.get('columnVariable')),
+    columns: columnsOr(value.get('columns'), value.get('columnVariable')),
     color: colorOr(value.get('color')),
     opacity: opacityOr(value.get('opacity')),
     numbers: typeof numbers === 'boolean' ? numbers : GUIDE_DEFAULTS.numbers,
@@ -212,18 +210,32 @@ function saveGuideSettings(projectKey: string | undefined, settings: GuideSettin
   }
 }
 
-// A picked count stands only while the list still offers it; otherwise the
-// guide defers to the project's count.
-function columnsOr(
-  input: unknown,
-  columnChoices: readonly number[],
-): Pick<GuideSettings, 'columns' | 'columnChoices'> {
+// Old versions stored a preset number or "project" with a separate variable.
+// Keep deliberate choices while migrating the old automatic default to 12.
+function columnsOr(input: unknown, legacyVariable: unknown): GuideColumnSetting {
   if (isGuideColumnPick(input)) {
-    if (columnChoices.includes(input)) {
-      return { columns: input, columnChoices };
-    }
+    return { kind: 'count', count: input };
   }
-  return { columns: GUIDE_DEFAULTS.columns, columnChoices };
+  if (input === 'project') {
+    const name = parseGuideVariableName(legacyVariable);
+    return name === undefined ? GUIDE_DEFAULTS.columns : { kind: 'variable', name };
+  }
+  if (typeof input !== 'object' || input === null) {
+    return GUIDE_DEFAULTS.columns;
+  }
+  const value = new Map<string, unknown>(Object.entries(input));
+  switch (value.get('kind')) {
+    case 'count': {
+      const count = value.get('count');
+      return isGuideColumnPick(count) ? { kind: 'count', count } : GUIDE_DEFAULTS.columns;
+    }
+    case 'variable': {
+      const name = parseGuideVariableName(value.get('name'));
+      return name === undefined ? GUIDE_DEFAULTS.columns : { kind: 'variable', name };
+    }
+    default:
+      return GUIDE_DEFAULTS.columns;
+  }
 }
 
 function colorOr(input: unknown): string {

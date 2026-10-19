@@ -257,7 +257,7 @@ function parseGuideColumns(countInput: unknown, variableInput: unknown): GuideMe
 }
 
 // A whole number as the page read it. Whether the guide can use it is the
-// model's to decide (guideProjectCount), so the menu can say why it does not.
+// model's to decide, so invalid variable values remain distinguishable from counts.
 function declaredCount(input: unknown): number | undefined {
   return optional(count)(input);
 }

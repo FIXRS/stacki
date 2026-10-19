@@ -1,34 +1,27 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react';
-import { CloseIcon, GuideIcon, PencilIcon } from '../../ui/Icons';
+import { GuideIcon } from '../../ui/Icons';
 import useDismiss from '../../ui/useDismiss';
 import LayerPopover from '../style/LayerPopover';
 import ColorSwatch from '../style/components/ColorSwatch';
 import FieldLabel from '../style/components/FieldLabel';
 import DragSlider from '../style/components/DragSlider';
-import Select from '../style/components/Select';
 import useScrub from '../style/components/useScrub';
 import { stepSizeKey, useFollowingDraft } from '../style/SizeKit';
 import VariableConnect from '../style/VariableConnect';
 import {
-  GUIDE_COLUMN_CHOICES_DEFAULT,
   GUIDE_COLUMN_COUNT_DEFAULT,
   GUIDE_DEFAULTS,
-  GUIDE_FLUID_DEFAULTS,
+  GUIDE_LENGTH_DEFAULTS,
   GUIDE_LIMITS,
   GUIDE_PROJECT_VARIABLES,
-  addGuideColumnChoice,
   clampGuideOpacity,
-  fluidText,
-  guideColumnOptions,
-  guideProjectCount,
+  guideLengthText,
+  type GuideLength,
   guideSizeText,
+  guideColumnText,
+  parseGuideColumnSetting,
   isGuideColumnPick,
-  parseGuideColumnCount,
   parseGuideSize,
-  removeGuideColumnChoice,
-  resetGuideColumnChoices,
-  type GuideColumnOption,
-  type GuideColumnSetting,
   type GuideMetrics,
   type GuideSettings,
   type GuideSize,
@@ -109,7 +102,7 @@ function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
         value={settings.visible}
         onChange={(visible) => update((previous) => ({ ...previous, visible }))}
       />
-      <ColumnsRow settings={settings} update={update} metrics={metrics} />
+      <ColumnsRow settings={settings} update={update} />
       <ColorRow settings={settings} update={update} />
       <OpacityRow settings={settings} update={update} />
       <SwitchRow
@@ -123,7 +116,7 @@ function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
         value={guide?.margin}
         setting={settings.margin}
         projectVariable={GUIDE_PROJECT_VARIABLES.margin}
-        placeholder={fluidText(GUIDE_FLUID_DEFAULTS.margin)}
+        fallback={GUIDE_LENGTH_DEFAULTS.margin}
         onChange={(margin) => update((previous) => ({ ...previous, margin }))}
       />
       <SizeRow
@@ -131,7 +124,7 @@ function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
         value={guide?.gutter}
         setting={settings.gutter}
         projectVariable={GUIDE_PROJECT_VARIABLES.gutter}
-        placeholder={fluidText(GUIDE_FLUID_DEFAULTS.gutter)}
+        fallback={GUIDE_LENGTH_DEFAULTS.gutter}
         onChange={(gutter) => update((previous) => ({ ...previous, gutter }))}
       />
       <SizeRow
@@ -139,7 +132,7 @@ function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
         value={guide?.widthMax}
         setting={settings.widthMax}
         projectVariable={GUIDE_PROJECT_VARIABLES.widthMax}
-        placeholder="None"
+        fallback={GUIDE_LENGTH_DEFAULTS.widthMax}
         onChange={(widthMax) => update((previous) => ({ ...previous, widthMax }))}
       />
       <GuideMenuNotes settings={settings} guide={guide} metrics={metrics} />
@@ -147,221 +140,37 @@ function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
   );
 }
 
-// The counts in order, the one the guide defers to named "(Project)" or
-// "(Default)". The pencil opens the list's editor under the row.
-function ColumnsRow({
-  settings,
-  update,
-  metrics,
-}: Pick<GuideMenuProps, 'settings' | 'update' | 'metrics'>) {
-  const [editing, setEditing] = useState(false);
-  const projectCount = metrics === undefined ? undefined : guideProjectCount(metrics, settings);
-  const options = guideColumnOptions(settings.columnChoices, projectCount);
-  return (
-    <>
-      <div className="embed-editor_size-row">
-        <ResetLabel
-          label="Columns"
-          changed={settings.columns !== GUIDE_DEFAULTS.columns}
-          onReset={() => update((previous) => ({ ...previous, columns: GUIDE_DEFAULTS.columns }))}
-        />
-        <div className="guide-columns-field">
-          <Select
-            value={columnValue(settings.columns, options)}
-            options={options.map(columnItem)}
-            ariaLabel="Column count"
-            onChange={(value) =>
-              update((previous) => ({ ...previous, columns: columnSetting(value) }))
-            }
-          />
-          <button
-            type="button"
-            className={`embed-editor_icon-btn ${editing ? 'is-active' : ''}`}
-            aria-pressed={editing}
-            title="Edit column counts"
-            aria-label="Edit column counts"
-            onClick={() => setEditing(!editing)}
-          >
-            <PencilIcon />
-          </button>
-        </div>
-      </div>
-      {editing ? (
-        <>
-          <ColumnChoices
-            settings={settings}
-            update={update}
-            options={options}
-            projectCount={projectCount}
-          />
-          <ColumnVariableRow settings={settings} update={update} metrics={metrics} />
-          <div className="embed-editor_display-menu-divider" />
-        </>
-      ) : undefined}
-    </>
-  );
-}
-
-// The list as the content panel's tags: a chip per count, an × on each one
-// that can go, and a field that adds a count. The default count and the
-// project's stay, and the field closes once the menu holds its limit.
-function ColumnChoices({
-  settings,
-  update,
-  options,
-  projectCount,
-}: Pick<GuideMenuProps, 'settings' | 'update'> & {
-  readonly options: readonly GuideColumnOption[];
-  readonly projectCount: number | undefined;
-}) {
-  const [draft, setDraft] = useState('');
-  const outOfRange = draft !== '' && parseGuideColumnCount(draft) === undefined;
-  const add = (count: number): void =>
-    update((previous) => ({
-      ...previous,
-      columnChoices: addGuideColumnChoice(previous.columnChoices, count, projectCount),
-    }));
-  const remove = (count: number): void =>
-    update((previous) =>
-      previous.columnChoices.includes(count) ? removeGuideColumnChoice(previous, count) : previous,
-    );
-  const edited = settings.columnChoices.join() !== GUIDE_COLUMN_CHOICES_DEFAULT.join();
-  return (
-    <>
-      <div className="content-tags guide-column-choices">
-        {options.map((option) => (
-          <span key={option.count} className="content-chip">
-            {option.count}
-            {columnRemovable(option) ? (
-              <button
-                type="button"
-                className="ghost"
-                title={`Remove ${option.count}`}
-                aria-label={`Remove ${option.count}`}
-                onClick={() => remove(option.count)}
-              >
-                <CloseIcon size={9} />
-              </button>
-            ) : undefined}
-          </span>
-        ))}
-        <ColumnAdd
-          draft={draft}
-          outOfRange={outOfRange}
-          full={options.length >= GUIDE_LIMITS.columnChoicesMax}
-          onDraft={setDraft}
-          onAdd={add}
-        />
-        {edited ? (
-          <button
-            type="button"
-            className="ghost guide-column-reset"
-            onClick={() => update(resetGuideColumnChoices)}
-          >
-            Reset list
-          </button>
-        ) : undefined}
-      </div>
-      {outOfRange ? (
-        <p className="embed-editor_more-note guide-note-error">{COUNT_RANGE}</p>
-      ) : undefined}
-    </>
-  );
-}
-
-// The variable the "(Project)" entry reads. Untouched, it shows the one the
-// guide found, as a chip, or "None"; a name typed or picked replaces it, and
-// emptied or reset, the guide looks for its own again. The list leaves out
-// colours and fonts, as for any property that takes a number.
-function ColumnVariableRow({
-  settings,
-  update,
-  metrics,
-}: Pick<GuideMenuProps, 'settings' | 'update' | 'metrics'>) {
-  const onChange = (columnVariable: string | undefined): void =>
-    update((previous) => ({ ...previous, columnVariable }));
+// Columns use the panel's ordinary variable-capable field, with a literal
+// default so the visible value always describes what the overlay draws.
+function ColumnsRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'update'>) {
+  const reset = (): void =>
+    update((previous) => ({ ...previous, columns: GUIDE_DEFAULTS.columns }));
   const commit = (text: string): void => {
     if (text.trim() === '') {
-      onChange(undefined);
+      reset();
       return;
     }
-    const size = parseGuideSize(text);
-    if (size?.kind === 'variable') {
-      onChange(size.name);
+    const columns = parseGuideColumnSetting(text);
+    if (columns !== undefined) {
+      update((previous) => ({ ...previous, columns }));
     }
   };
-  const shown = settings.columnVariable ?? metrics?.columns?.variable;
+  const changed =
+    settings.columns.kind === 'variable' || settings.columns.count !== GUIDE_COLUMN_COUNT_DEFAULT;
   return (
     <div className="embed-editor_size-row">
-      <ResetLabel
-        label="Variable"
-        changed={settings.columnVariable !== undefined}
-        onReset={() => onChange(undefined)}
-      />
+      <ResetLabel label="Columns" changed={changed} onReset={reset} />
       <div className="embed-editor_field">
         <GuideField
-          value={shown === undefined ? '' : `var(${shown})`}
-          ariaLabel="Column count variable"
-          placeholder="None"
-          title="A project variable holding a whole number (--name)."
+          value={guideColumnText(settings.columns)}
+          ariaLabel="Column count"
+          title={`${COUNT_RANGE} Or connect a project variable.`}
           variables="Connect the column count to a variable"
           variableProperty="column-count"
           onCommit={commit}
         />
       </div>
     </div>
-  );
-}
-
-// The tag field's input. It takes digits only, two at most, so the range is
-// all a count can miss; Enter adds one within it, and leaving the field adds
-// it and clears the text, a count out of range included.
-function ColumnAdd({
-  draft,
-  outOfRange,
-  full,
-  onDraft,
-  onAdd,
-}: {
-  readonly draft: string;
-  readonly outOfRange: boolean;
-  readonly full: boolean;
-  readonly onDraft: (draft: string) => void;
-  readonly onAdd: (count: number) => void;
-}) {
-  const add = (): boolean => {
-    const count = parseGuideColumnCount(draft);
-    if (count === undefined) {
-      return false;
-    }
-    onAdd(count);
-    return true;
-  };
-  return (
-    <input
-      className={outOfRange ? 'guide-column-out' : undefined}
-      value={draft}
-      inputMode="numeric"
-      maxLength={2}
-      disabled={full}
-      placeholder={full ? `${GUIDE_LIMITS.columnChoicesMax} at most` : 'Add…'}
-      aria-label="Add a column count"
-      aria-invalid={outOfRange}
-      title={COUNT_RANGE}
-      onChange={(event) => onDraft(event.target.value.replace(/\D/g, '').slice(0, 2))}
-      onBlur={() => {
-        add();
-        onDraft('');
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          if (add()) {
-            onDraft('');
-          }
-        }
-      }}
-    />
   );
 }
 
@@ -472,7 +281,7 @@ function SwitchRow({
 // A margin, gutter or maximum width: a length in px or rem, or a variable of
 // the project's own, picked from the panel's variable list or typed. Untouched,
 // it shows the default it draws with: the project's Lumos variable as a chip,
-// or the fluid range the placeholder names. Emptied or reset, it goes back to
+// or the fixed rem value. Emptied or reset, it goes back to
 // that default. Like every field in the panel, it is always editable: the
 // guide only draws, so changing it never touches the project.
 function SizeRow({
@@ -480,14 +289,14 @@ function SizeRow({
   value,
   setting,
   projectVariable,
-  placeholder,
+  fallback,
   onChange,
 }: {
   readonly label: string;
   readonly value: GuideValue | undefined;
   readonly setting: GuideSize | undefined;
   readonly projectVariable: string;
-  readonly placeholder: string;
+  readonly fallback: GuideLength;
   readonly onChange: (size: GuideSize | undefined) => void;
 }) {
   const commit = (text: string): void => {
@@ -509,9 +318,8 @@ function SizeRow({
       />
       <div className="embed-editor_field">
         <GuideField
-          value={sizeShown(value, setting, projectVariable)}
+          value={sizeShown(value, setting, projectVariable, fallback)}
           ariaLabel={label}
-          placeholder={placeholder}
           title={sizeTitle(value, setting, projectVariable)}
           variables={`Connect ${label} to a variable`}
           onCommit={commit}
@@ -547,26 +355,14 @@ function GuideMenuNotes({
   );
 }
 
-// Why a column variable is not what the guide counts with: it gives no whole
-// number, or one outside the menu's range. The menu's own variable and the
-// one the guide found are checked alike.
+// Only an explicitly connected variable can affect the column count.
 function columnCountNotes(settings: GuideSettings, metrics: GuideMetrics): readonly string[] {
-  const notes: string[] = [];
-  const name = settings.columnVariable;
-  if (name !== undefined) {
-    const note = columnCountNote(name, metrics.variableCounts[name]);
-    if (note !== undefined) {
-      notes.push(note);
-    }
+  if (settings.columns.kind === 'count') {
+    return [];
   }
-  const detected = metrics.columns;
-  if (detected !== undefined) {
-    const note = columnCountNote(detected.variable, detected.count);
-    if (note !== undefined) {
-      notes.push(note);
-    }
-  }
-  return notes;
+  const name = settings.columns.name;
+  const note = columnCountNote(name, metrics.variableCounts[name]);
+  return note === undefined ? [] : [note];
 }
 
 function columnCountNote(name: string, declared: number | undefined): string | undefined {
@@ -678,16 +474,17 @@ function withVariables(
 }
 
 // The field's text: the menu's own value, else the project's variable it
-// defaults to (shown as a chip), else empty for the placeholder's default.
+// defaults to (shown as a chip), else the fixed rem default.
 function sizeShown(
   value: GuideValue | undefined,
   setting: GuideSize | undefined,
   projectVariable: string,
+  fallback: GuideLength,
 ): string {
   if (setting !== undefined) {
     return guideSizeText(setting);
   }
-  return value?.source === 'project' ? `var(${projectVariable})` : '';
+  return value?.source === 'project' ? `var(${projectVariable})` : guideLengthText(fallback);
 }
 
 // The field's tooltip: where the value comes from, what it is at this width,
@@ -734,51 +531,6 @@ function missingVariables(settings: GuideSettings, guide: ResolvedGuide): readon
     }
   }
   return [...names];
-}
-
-// The entry the setting selects: a pick equal to the count the guide defers
-// to is that entry, as the list holds that count once.
-function columnValue(setting: GuideColumnSetting, options: readonly GuideColumnOption[]): string {
-  if (setting === 'project') {
-    return 'project';
-  }
-  const deferred = options.find((option) => option.source !== 'list');
-  return deferred?.count === setting ? 'project' : String(setting);
-}
-
-function columnItem(option: GuideColumnOption): { readonly value: string; readonly label: string } {
-  switch (option.source) {
-    case 'project':
-      return { value: 'project', label: `${option.count} (Project)` };
-    case 'default':
-      return { value: 'project', label: `${option.count} (Default)` };
-    case 'list':
-      return { value: String(option.count), label: String(option.count) };
-    default: {
-      const exhaustive: never = option.source;
-      return exhaustive;
-    }
-  }
-}
-
-// Every count of the list can go but the default, and the count the guide
-// defers to, which the list shows whether or not it holds it.
-function columnRemovable(option: GuideColumnOption): boolean {
-  if (option.source === 'list') {
-    return option.count !== GUIDE_COLUMN_COUNT_DEFAULT;
-  }
-  return false;
-}
-
-function columnSetting(value: string): GuideColumnSetting {
-  if (value === 'project') {
-    return value;
-  }
-  const count = Number(value);
-  if (!isGuideColumnPick(count)) {
-    throw new Error(`Guide menu: ${value} is not an offered column count`);
-  }
-  return count;
 }
 
 // Below the button, as wide as the menu, kept inside the window.

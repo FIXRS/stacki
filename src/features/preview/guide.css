@@ -65,43 +65,16 @@
   justify-self: start;
 }
 
-/* The column dropdown takes the row's width, less the pencil beside it. */
-.guide-columns-field {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.guide-columns-field > :first-child {
-  flex: 1;
-  min-width: 0;
-}
-
 /* Over an icon, the browser looks for a tooltip on the icon and never reaches
    its button's title. The menu's icons let the pointer through, so the
-   pencil and the variable buttons show their tooltip wherever they are
+   variable buttons show their tooltip wherever they are
    hovered. */
 .guide-menu .embed-editor_icon-btn svg,
 .guide-menu .embed-editor_varconnect-dot svg {
   pointer-events: none;
 }
 
-/* The list's editor reads as the content panel's tags. Its field takes the
-   room the chips leave, and "Reset list" sits at the end in the chips' grey. */
-.guide-column-choices input {
-  min-width: 56px;
-}
-.guide-column-choices .guide-column-reset {
-  margin-left: auto;
-  padding: 2px 4px;
-  font-size: 11px;
-  color: var(--text-faint);
-  background: transparent;
-}
-
-/* A count out of range reads red, and so does every note that says a value
-   is not what the guide uses. */
-.guide-column-choices input.guide-column-out,
+/* A note warns when a connected variable cannot supply a usable value. */
 .guide-menu .guide-note-error {
   color: var(--color-danger);
 }

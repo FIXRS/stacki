@@ -1,8 +1,8 @@
 // Goal: a stored guide record from any app version reads back as usable
 // settings, and a bad field costs only that field. Methodology: parse a full record,
 // then records missing or garbling each field in turn, and check every other
-// field survives. The column list and the count picked from it are checked
-// together, since a pick only stands while the list offers it. Colours go
+// field survives. Legacy column presets migrate to literals or explicit
+// variable connections, and new records round-trip without a preset list. Colours go
 // through CSS.supports, which Node lacks, so a stand-in accepts the literal
 // colours a browser would.
 const test = require('node:test');
@@ -22,9 +22,7 @@ const { GUIDE_DEFAULTS, GUIDE_LIMITS } = require('../../helpers/rendererModule')
 
 const STORED = {
   visible: true,
-  columns: 16,
-  columnChoices: [6, 8, 12, 16],
-  columnVariable: '--grid-columns',
+  columns: { kind: 'count', count: 16 },
   color: '#00ff88',
   opacity: 0.15,
   numbers: false,
@@ -35,15 +33,16 @@ const STORED = {
 
 test('a stored record reads back whole', () => {
   assert.deepEqual(parseGuideSettings(STORED), STORED);
-  assert.deepEqual(parseGuideSettings({ ...STORED, columns: 'project' }).columns, 'project');
+  const bound = { ...STORED, columns: { kind: 'variable', name: '--cols' } };
+  assert.deepEqual(parseGuideSettings(bound), bound);
 });
 
-test('the guide is off by default, grey at 0.06, numbered, deferring to the project', () => {
+test('the guide is off by default, grey at 0.06, numbered, with a literal 12 columns', () => {
   assert.equal(GUIDE_DEFAULTS.visible, false);
   assert.equal(GUIDE_DEFAULTS.color, 'rgb(146, 146, 146)');
   assert.equal(GUIDE_DEFAULTS.opacity, 0.06);
   assert.equal(GUIDE_DEFAULTS.numbers, true);
-  assert.equal(GUIDE_DEFAULTS.columns, 'project');
+  assert.deepEqual(GUIDE_DEFAULTS.columns, { kind: 'count', count: 12 });
 });
 
 test('anything that is not a record is the defaults', () => {
@@ -57,8 +56,6 @@ test('a garbled field falls back alone', () => {
   const garbled = {
     visible: 'yes',
     columns: 12.5,
-    columnChoices: [6, 6, 12],
-    columnVariable: 'cols;color:red',
     color: 'var(--brand)',
     opacity: Number.NaN,
     numbers: 0,
@@ -84,22 +81,41 @@ test('margin, gutter and maximum width are unset by default, and a stored size c
   }
 });
 
-test('a stored list reads back sorted, and a bad one is the default list', () => {
-  const read = (columnChoices) => parseGuideSettings({ ...STORED, columnChoices }).columnChoices;
-  assert.deepEqual(read([16, 12, 4]), [4, 12, 16]);
-  assert.deepEqual(read([12]), [12]);
-  const tooLong = [4, 5, 6, 7, 8, 9, 10, 11, 12];
-  assert.equal(tooLong.length, GUIDE_LIMITS.columnChoicesMax + 1);
-  for (const bad of [undefined, '12', [6, 8], [3, 12], [12, 25], [12, 7.5], [12, '8'], tooLong]) {
-    assert.deepEqual(read(bad), GUIDE_DEFAULTS.columnChoices, JSON.stringify(bad));
+test('legacy counts survive independently of the removed preset list', () => {
+  for (const count of [4, 13, 24]) {
+    const legacy = { ...STORED, columns: count, columnChoices: [12] };
+    assert.deepEqual(parseGuideSettings(legacy).columns, { kind: 'count', count });
   }
+  const legacy = { ...STORED, columns: 'project', columnVariable: '--cols' };
+  assert.deepEqual(parseGuideSettings(legacy).columns, { kind: 'variable', name: '--cols' });
+  assert.deepEqual(parseGuideSettings({ columns: 'project' }).columns, GUIDE_DEFAULTS.columns);
+  assert.deepEqual(parseGuideSettings({ columns: 8, columnVariable: '--cols' }).columns, {
+    kind: 'count',
+    count: 8,
+  });
 });
 
-test('a picked count the list does not offer defers to the project', () => {
-  assert.equal(parseGuideSettings({ ...STORED, columns: 13 }).columns, 'project');
-  assert.equal(parseGuideSettings({ ...STORED, columns: 24 }).columns, 'project');
-  const listed = { ...STORED, columns: 13, columnChoices: [12, 13] };
-  assert.equal(parseGuideSettings(listed).columns, 13);
+test('malformed stored column settings reset to 12 without changing other fields', () => {
+  const badValues = [
+    { kind: 'count' },
+    { kind: 'count', count: 3 },
+    { kind: 'count', count: 25 },
+    { kind: 'count', count: 4.5 },
+    { kind: 'count', count: '12' },
+    { kind: 'variable' },
+    { kind: 'variable', name: '--bad name' },
+    { kind: 'variable', name: `--${'a'.repeat(GUIDE_LIMITS.variableCharsMax)}` },
+    { kind: 'other', count: 8 },
+    [],
+    0,
+    Infinity,
+  ];
+  for (const columns of badValues) {
+    assert.deepEqual(parseGuideSettings({ ...STORED, columns }), {
+      ...STORED,
+      columns: GUIDE_DEFAULTS.columns,
+    });
+  }
 });
 
 test('a stored opacity is pulled back into range', () => {

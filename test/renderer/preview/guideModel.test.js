@@ -1,33 +1,28 @@
 // Goal: the column guide lands where the project's content box is, takes each
 // value from the right source, and refuses what it cannot draw. Methodology:
 // resolve hand-built measurements against settings — Lumos's values, a project
-// that declares nothing (fluid defaults at both ends and the middle), menu
+// that declares nothing (fixed rem defaults at different root font sizes), menu
 // lengths and menu variables declared or missing, a capped wide screen — then
 // corrupt the inputs (zero columns, gutters wider than the box, lengths and
-// names out of bounds) and check the assertions and parsers say so. The menu's
-// column list is built, added to and cut back around its bounds: the default
-// count, the project's count, and eight entries.
+// names out of bounds) and check the assertions and parsers say so. Column
+// counts default to 12, or follow only the explicitly connected variable.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
   GUIDE_DEFAULTS,
-  GUIDE_FLUID_DEFAULTS,
+  GUIDE_LENGTH_DEFAULTS,
   GUIDE_LIMITS,
-  addGuideColumnChoice,
   clampGuideOpacity,
-  fluidPx,
-  guideColumnOptions,
   guideColumns,
+  guideColumnText,
+  parseGuideColumnSetting,
   guideLengthText,
-  guideProjectCount,
   guideSizeText,
   guideVariableNames,
   parseGuideColumnCount,
   parseGuideLength,
   parseGuideSize,
-  removeGuideColumnChoice,
-  resetGuideColumnChoices,
   resolveGuide,
 } = require('../../helpers/rendererModule')('src/features/preview/guideModel.ts');
 
@@ -61,39 +56,34 @@ test('project values win for the margin, gutter and maximum width', () => {
   assert.deepEqual(guide.gutter, { px: 32, source: 'project' });
   assert.deepEqual(guide.widthMax, { px: 1440, source: 'project' });
   assert.equal(guide.columnCount, 12);
-  assert.equal(guide.columnSource, 'project');
+  assert.equal(guide.columnSource, 'stacki');
 });
 
 test('a count picked in Stacki overrides the project count', () => {
-  const guide = resolveGuide(LUMOS_WIDE, { ...GUIDE_DEFAULTS, columns: 16 });
+  const guide = resolveGuide(LUMOS_WIDE, {
+    ...GUIDE_DEFAULTS,
+    columns: { kind: 'count', count: 16 },
+  });
   assert.equal(guide.columnCount, 16);
   assert.equal(guide.columnSource, 'stacki');
   assert.deepEqual(guide.margin, { px: 48, source: 'project' });
 });
 
-test('a project that declares nothing is drawn from the menu, else the fluid defaults', () => {
-  const settings = { ...GUIDE_DEFAULTS, margin: length(2, 'rem') };
-  const guide = resolveGuide(NOTHING_DECLARED, settings);
-  assert.deepEqual(guide.margin, { px: 32, source: 'fixed' });
-  // At 1000px, Lumos's 16→32px gutter range (320→1440px) is at 16 + 16 × 680 / 1120.
-  assert.equal(guide.gutter.source, 'default');
-  assert.ok(Math.abs(guide.gutter.px - (16 + (16 * 680) / 1120)) < 1e-9);
-  assert.equal(guide.widthMax, undefined);
-  assert.equal(guide.columnCount, 12);
-  assert.equal(guide.columnSource, 'stacki');
-});
-
-test('fluid defaults hold their ends outside 320–1440px and follow the root font', () => {
-  const margin = GUIDE_FLUID_DEFAULTS.margin;
-  assert.equal(fluidPx(margin, 200, 16), 16);
-  assert.equal(fluidPx(margin, 320, 16), 16);
-  assert.equal(fluidPx(margin, 880, 16), 32);
-  assert.equal(fluidPx(margin, 1440, 16), 48);
-  assert.equal(fluidPx(margin, 2560, 16), 48);
-  // A 20px root scales the rem ends: 20 and 60px, as Lumos's own clamp() would.
-  assert.equal(fluidPx(margin, 200, 20), 20);
-  assert.equal(fluidPx(margin, 4000, 20), 60);
-  assert.throws(() => fluidPx({ pxMin: 2, pxMax: 1 }, 500, 16), /a fluid range grows/);
+test('missing layout variables use 3rem margin, 1rem gutter, and 90rem max width', () => {
+  for (const rootFontPx of [16, 20]) {
+    const guide = resolveGuide({ ...NOTHING_DECLARED, rootFontPx }, GUIDE_DEFAULTS);
+    assert.deepEqual(guide.margin, { px: 3 * rootFontPx, source: 'default' });
+    assert.deepEqual(guide.gutter, { px: rootFontPx, source: 'default' });
+    assert.deepEqual(guide.widthMax, { px: 90 * rootFontPx, source: 'default' });
+    assert.equal(guide.columnCount, 12);
+  }
+  assert.deepEqual(GUIDE_LENGTH_DEFAULTS.margin, { amount: 3, unit: 'rem' });
+  const custom = resolveGuide(NOTHING_DECLARED, { ...GUIDE_DEFAULTS, margin: length(2, 'rem') });
+  assert.deepEqual(custom.margin, { px: 32, source: 'fixed' });
+  const partial = resolveGuide({ ...NOTHING_DECLARED, marginPx: 10 }, GUIDE_DEFAULTS);
+  assert.deepEqual(partial.margin, { px: 10, source: 'project' });
+  assert.deepEqual(partial.gutter, { px: 16, source: 'default' });
+  assert.deepEqual(partial.widthMax, { px: 1440, source: 'default' });
 });
 
 test('a menu variable is used as the page resolves it, and a missing one falls back', () => {
@@ -109,7 +99,7 @@ test('a menu variable is used as the page resolves it, and a missing one falls b
   assert.equal(guide.gutter.source, 'default');
   assert.deepEqual(guide.widthMax, { px: 900, source: 'variable' });
   const missingCap = resolveGuide(metrics, { ...settings, widthMax: variable('--none') });
-  assert.equal(missingCap.widthMax, undefined);
+  assert.deepEqual(missingCap.widthMax, { px: 1440, source: 'default' });
 });
 
 test('the menu outranks the project, whose value is the default it falls back to', () => {
@@ -155,45 +145,68 @@ test('the frame is asked about each menu variable once', () => {
   };
   assert.deepEqual(guideVariableNames(settings), ['--pad']);
   assert.deepEqual(guideVariableNames(GUIDE_DEFAULTS), []);
-  const counted = { ...settings, gutter: variable('--gap'), columnVariable: '--cols' };
+  const counted = { ...settings, gutter: variable('--gap'), columns: variable('--cols') };
   assert.deepEqual(guideVariableNames(counted), ['--pad', '--gap', '--cols']);
 });
 
-test('the project count: the menu variable as a count, then the known ones, then 12', () => {
-  const ownVariable = { ...GUIDE_DEFAULTS, columnVariable: '--cols' };
-  const declared = { ...LUMOS_WIDE, variableCounts: { '--cols': 10 } };
-  assert.equal(guideProjectCount(declared, ownVariable), 10);
-  assert.equal(resolveGuide(declared, ownVariable).columnCount, 10);
-  assert.equal(resolveGuide(declared, ownVariable).columnSource, 'project');
-  // Undeclared, or not a whole number, the variable gives way to the known ones.
-  const undeclared = { ...LUMOS_WIDE, variableCounts: { '--cols': undefined } };
-  assert.equal(guideProjectCount(undeclared, ownVariable), 12);
-  assert.equal(guideProjectCount(NOTHING_DECLARED, ownVariable), undefined);
-  assert.equal(resolveGuide(NOTHING_DECLARED, ownVariable).columnCount, 12);
-  assert.equal(resolveGuide(NOTHING_DECLARED, ownVariable).columnSource, 'stacki');
-  // A count picked in the menu still wins over the variable.
-  assert.equal(resolveGuide(declared, { ...ownVariable, columns: 16 }).columnCount, 16);
+test('columns default to literal 12 even when the project declares another count', () => {
+  const metrics = { ...LUMOS_WIDE, columns: { count: 8, variable: '--site-columns' } };
+  assert.deepEqual(GUIDE_DEFAULTS.columns, { kind: 'count', count: 12 });
+  assert.equal(guideColumnText(GUIDE_DEFAULTS.columns), '12');
+  assert.equal(resolveGuide(metrics, GUIDE_DEFAULTS).columnCount, 12);
 });
 
-test('a project count outside 4 to 24 gives way, from either variable', () => {
-  const ownVariable = { ...GUIDE_DEFAULTS, columnVariable: '--cols' };
-  for (const count of [3, 25, 40]) {
-    const own = { ...LUMOS_WIDE, variableCounts: { '--cols': count } };
-    assert.equal(guideProjectCount(own, ownVariable), 12, `own ${count}`);
-    const detected = { ...NOTHING_DECLARED, columns: { count, variable: '--site-columns' } };
-    assert.equal(guideProjectCount(detected, GUIDE_DEFAULTS), undefined, `detected ${count}`);
-    assert.equal(resolveGuide(detected, GUIDE_DEFAULTS).columnCount, 12);
-    assert.equal(resolveGuide(detected, GUIDE_DEFAULTS).columnSource, 'stacki');
+test('a connected column variable follows the page and updates with its value', () => {
+  const settings = { ...GUIDE_DEFAULTS, columns: variable('--cols') };
+  for (const count of [4, 10, 13, 24]) {
+    const metrics = { ...LUMOS_WIDE, variableCounts: { '--cols': count } };
+    const guide = resolveGuide(metrics, settings);
+    assert.equal(guide.columnCount, count);
+    assert.equal(guide.columnSource, 'project');
+    assert.equal(guideColumns(guide).length, count);
   }
-  const edges = { ...NOTHING_DECLARED, variableCounts: { '--cols': 4 } };
-  assert.equal(guideProjectCount(edges, ownVariable), GUIDE_LIMITS.columnPickMin);
-  const top = { ...NOTHING_DECLARED, columns: { count: 24, variable: '--site-columns' } };
-  assert.equal(guideProjectCount(top, GUIDE_DEFAULTS), GUIDE_LIMITS.columnPickMax);
+  assert.equal(guideColumnText(settings.columns), 'var(--cols)');
 });
 
-test('a maximum width the page resolves to nothing caps nothing', () => {
+test('unusable column variables fall back to 12, never another project variable', () => {
+  const settings = { ...GUIDE_DEFAULTS, columns: variable('--cols') };
+  for (const count of [undefined, 0, 3, 25, 4.5, Number.NaN, Infinity]) {
+    const metrics = {
+      ...LUMOS_WIDE,
+      columns: { count: 8, variable: '--site-columns' },
+      variableCounts: { '--cols': count },
+    };
+    assert.equal(resolveGuide(metrics, settings).columnCount, 12);
+    assert.equal(resolveGuide(metrics, settings).columnSource, 'stacki');
+  }
+});
+
+test('the column field accepts only a bounded whole count or one variable', () => {
+  for (const text of ['4', '13', '24', ' 12 ']) {
+    assert.deepEqual(parseGuideColumnSetting(text), { kind: 'count', count: Number(text) });
+  }
+  assert.deepEqual(parseGuideColumnSetting('--cols'), variable('--cols'));
+  assert.deepEqual(parseGuideColumnSetting('var( --cols )'), variable('--cols'));
+  for (const text of [
+    '',
+    '3',
+    '25',
+    '4.5',
+    '12px',
+    '2rem',
+    '1e1',
+    'calc(6 + 6)',
+    'var(--cols, 12)',
+    '--a b',
+    `--${'a'.repeat(GUIDE_LIMITS.variableCharsMax)}`,
+  ]) {
+    assert.equal(parseGuideColumnSetting(text), undefined, text);
+  }
+});
+
+test('a maximum width the page resolves to nothing uses 90rem', () => {
   const guide = resolveGuide({ ...LUMOS_WIDE, widthMaxPx: 0 }, GUIDE_DEFAULTS);
-  assert.equal(guide.widthMax, undefined);
+  assert.deepEqual(guide.widthMax, { px: 1440, source: 'default' });
 });
 
 test('columns fill the content box between the margins, gutters between them', () => {
@@ -217,7 +230,12 @@ test('past the maximum width the content box stays centred', () => {
 
 test('gutters that leave no room draw no columns', () => {
   const crowded = { ...LUMOS_WIDE, viewportWidthPx: 400, gutterPx: 40 };
-  assert.deepEqual(guideColumns(resolveGuide(crowded, { ...GUIDE_DEFAULTS, columns: 24 })), []);
+  assert.deepEqual(
+    guideColumns(
+      resolveGuide(crowded, { ...GUIDE_DEFAULTS, columns: { kind: 'count', count: 24 } }),
+    ),
+    [],
+  );
   const marginsOnly = { ...LUMOS_WIDE, viewportWidthPx: 80 };
   assert.deepEqual(guideColumns(resolveGuide(marginsOnly, GUIDE_DEFAULTS)), []);
 });
@@ -252,10 +270,6 @@ test('lengths read back as they were typed', () => {
   assert.equal(guideLengthText({ amount: 32, unit: 'px' }), '32px');
 });
 
-test('the default list is 6, 8, 10, 12 and 16', () => {
-  assert.deepEqual(GUIDE_DEFAULTS.columnChoices, [6, 8, 10, 12, 16]);
-});
-
 test('a typed count is a whole number within 4 and 24, else refused', () => {
   assert.equal(parseGuideColumnCount('4'), GUIDE_LIMITS.columnPickMin);
   assert.equal(parseGuideColumnCount('10'), 10);
@@ -277,43 +291,6 @@ test('a typed count is a whole number within 4 and 24, else refused', () => {
   ]) {
     assert.equal(parseGuideColumnCount(text), undefined, text);
   }
-});
-
-test('the list names the count the guide defers to, once and in order', () => {
-  const list = [6, 8, 10, 12, 16];
-  const labels = (projectCount) =>
-    guideColumnOptions(list, projectCount).map(({ count, source }) => `${count} ${source}`);
-  assert.deepEqual(labels(undefined), ['6 list', '8 list', '10 list', '12 default', '16 list']);
-  assert.deepEqual(labels(12), ['6 list', '8 list', '10 list', '12 project', '16 list']);
-  assert.deepEqual(labels(10), ['6 list', '8 list', '10 project', '12 list', '16 list']);
-  assert.deepEqual(labels(14).slice(3, 6), ['12 list', '14 project', '16 list']);
-  assert.throws(() => guideColumnOptions([6, 8], undefined), /keeps the default/);
-});
-
-test('adding stops at eight entries, the project count included', () => {
-  const seven = [4, 6, 8, 10, 12, 16, 20];
-  assert.deepEqual(addGuideColumnChoice(seven, 24, undefined), [4, 6, 8, 10, 12, 16, 20, 24]);
-  assert.deepEqual(addGuideColumnChoice(seven, 24, 14), seven);
-  assert.deepEqual(addGuideColumnChoice(seven, 14, 14), [4, 6, 8, 10, 12, 14, 16, 20]);
-  assert.equal(addGuideColumnChoice(seven, 8, undefined), seven);
-  assert.throws(() => addGuideColumnChoice(seven, 3, undefined), /is a pick/);
-  // A project count added once the list is full leaves nine entries until one goes.
-  const eight = [4, 6, 8, 10, 12, 16, 20, 24];
-  assert.equal(guideColumnOptions(eight, 14).length, GUIDE_LIMITS.columnChoicesMax + 1);
-  assert.equal(addGuideColumnChoice(eight, 18, 14), eight);
-});
-
-test('removing a count or resetting the list drops a pick it no longer offers', () => {
-  const picked = { ...GUIDE_DEFAULTS, columns: 8 };
-  assert.deepEqual(removeGuideColumnChoice(picked, 6).columnChoices, [8, 10, 12, 16]);
-  assert.equal(removeGuideColumnChoice(picked, 6).columns, 8);
-  assert.equal(removeGuideColumnChoice(picked, 8).columns, 'project');
-  assert.throws(() => removeGuideColumnChoice(picked, 12), /stays in the list/);
-  assert.throws(() => removeGuideColumnChoice(picked, 20), /is in the list/);
-  const custom = { ...GUIDE_DEFAULTS, columns: 20, columnChoices: [12, 20] };
-  assert.deepEqual(resetGuideColumnChoices(custom).columnChoices, GUIDE_DEFAULTS.columnChoices);
-  assert.equal(resetGuideColumnChoices(custom).columns, 'project');
-  assert.equal(resetGuideColumnChoices({ ...custom, columns: 12 }).columns, 12);
 });
 
 test('opacity stays within 0.06 and 0.2, on 0.01 steps', () => {

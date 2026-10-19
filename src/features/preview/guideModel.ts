@@ -4,16 +4,14 @@
 // from the menu (a fixed length, or a variable of the project's own read from
 // the page), then from the project's Lumos variable, measured in the frame at
 // the current preview width (electron/preload/frameGuide.ts), then, for the
-// margin and gutter, from Lumos's fluid starting ranges. The project's value
+// margin, gutter and width, from the fixed rem defaults. The project's value
 // is a default: the guide only draws and never writes to the project, and
-// resetting a field brings that value back. The column count works the same
-// way, the menu's pick over the project's.
+// resetting a field brings that value back. Columns start at a literal 12
+// and follow a project variable only when the user connects one.
 
 import { assert } from '../../../shared/core/assert';
 
 export const GUIDE_LIMITS = {
-  /** The menu's column list, the count it defers to included. */
-  columnChoicesMax: 8,
   columnPickMax: 24,
   columnPickMin: 4,
   colorCharsMax: 64,
@@ -29,15 +27,12 @@ export const GUIDE_LIMITS = {
   variablesMax: 4,
 } as const satisfies Record<string, number>;
 
-/** The counts the menu offers until its list is edited. */
-export const GUIDE_COLUMN_CHOICES_DEFAULT: readonly number[] = [6, 8, 10, 12, 16];
-/** The project's count (or the default when it has none), or a count picked in the menu. */
-export type GuideColumnSetting = 'project' | number;
+/** A column count is either a literal or an explicit project-variable connection. */
+export type GuideColumnSetting =
+  | { readonly kind: 'count'; readonly count: number }
+  | { readonly kind: 'variable'; readonly name: string };
 
-/**
- * The count used when the project declares none and the setting defers to it.
- * The menu always offers it: its list can lose every other count, never this one.
- */
+/** The initial count and the fallback when a connected variable cannot supply one. */
 export const GUIDE_COLUMN_COUNT_DEFAULT = 12;
 /** The numbers are the column colour, this much more opaque than the column. */
 export const GUIDE_NUMBER_OPACITY = 0.5;
@@ -74,22 +69,12 @@ export const GUIDE_PROJECT_VARIABLES = {
 /** A custom property name the menu accepts: two dashes, then a CSS identifier. */
 export const GUIDE_VARIABLE_PATTERN = /^--[A-Za-z0-9_-]+$/;
 
-/** A Lumos fluid range: its size at the narrow and the wide end, in px at a 16px root. */
-export interface GuideFluidRange {
-  readonly pxMin: number;
-  readonly pxMax: number;
-}
-
-/** Lumos's starting ranges, used when neither the project nor the menu sets a value. */
-export const GUIDE_FLUID_DEFAULTS = {
-  margin: { pxMin: 16, pxMax: 48 },
-  gutter: { pxMin: 16, pxMax: 32 },
-} as const satisfies Record<string, GuideFluidRange>;
-// The viewport widths a Lumos fluid value runs between, and the root size its
-// rem values are written for.
-const LUMOS_VIEWPORT_PX_MIN = 320;
-const LUMOS_VIEWPORT_PX_MAX = 1440;
-const LUMOS_ROOT_FONT_PX = 16;
+/** Used only when neither a menu setting nor a project variable supplies a size. */
+export const GUIDE_LENGTH_DEFAULTS = {
+  margin: { amount: 3, unit: 'rem' },
+  gutter: { amount: 1, unit: 'rem' },
+  widthMax: { amount: 90, unit: 'rem' },
+} as const satisfies Record<string, GuideLength>;
 
 /** What the frame measured, in CSS pixels of the frame. Absent: not declared. */
 export interface GuideMetrics {
@@ -108,26 +93,20 @@ export interface GuideMetrics {
 export interface GuideSettings {
   readonly visible: boolean;
   readonly columns: GuideColumnSetting;
-  /** The menu's list: sorted, each count once, within the pick range and the list bound. */
-  readonly columnChoices: readonly number[];
-  /** The project's count is read from this variable; absent, from the ones the guide knows. */
-  readonly columnVariable: string | undefined;
   readonly color: string;
   readonly opacity: number;
   readonly numbers: boolean;
-  /** Absent: the fluid default. */
+  /** Absent: the project variable, otherwise the fixed rem default. */
   readonly margin: GuideSize | undefined;
-  /** Absent: the fluid default. */
+  /** Absent: the project variable, otherwise the fixed rem default. */
   readonly gutter: GuideSize | undefined;
-  /** Absent: the content box is never capped. */
+  /** Absent: the project variable, otherwise 90rem. */
   readonly widthMax: GuideSize | undefined;
 }
 
 export const GUIDE_DEFAULTS: GuideSettings = {
   visible: false,
-  columns: 'project',
-  columnChoices: GUIDE_COLUMN_CHOICES_DEFAULT,
-  columnVariable: undefined,
+  columns: { kind: 'count', count: GUIDE_COLUMN_COUNT_DEFAULT },
   // A neutral grey, barely there.
   color: 'rgb(146, 146, 146)',
   opacity: 0.06,
@@ -170,8 +149,8 @@ export function resolveGuide(metrics: GuideMetrics, settings: GuideSettings): Re
     viewportWidthPx: metrics.viewportWidthPx,
     rootFontPx: metrics.rootFontPx,
     ...columnCountOf(metrics, settings),
-    margin: spacingValue(metrics.marginPx, settings.margin, metrics, GUIDE_FLUID_DEFAULTS.margin),
-    gutter: spacingValue(metrics.gutterPx, settings.gutter, metrics, GUIDE_FLUID_DEFAULTS.gutter),
+    margin: spacingValue(metrics.marginPx, settings.margin, metrics, GUIDE_LENGTH_DEFAULTS.margin),
+    gutter: spacingValue(metrics.gutterPx, settings.gutter, metrics, GUIDE_LENGTH_DEFAULTS.gutter),
     widthMax: widthMaxValue(metrics, settings.widthMax),
   };
 }
@@ -279,32 +258,11 @@ export function guideVariableNames(settings: GuideSettings): readonly string[] {
       names.add(size.name);
     }
   }
-  if (settings.columnVariable !== undefined) {
-    names.add(settings.columnVariable);
+  if (settings.columns.kind === 'variable') {
+    names.add(settings.columns.name);
   }
   assert(names.size <= GUIDE_LIMITS.variablesMax, 'Guide: one variable per value at most');
   return [...names];
-}
-
-/**
- * A Lumos fluid value at this viewport width: Lumos's own `clamp()`, growing
- * linearly from its narrow-end size at 320px to its wide-end size at 1440px.
- * Its rem terms follow the root font size; its vw term follows the viewport.
- */
-export function fluidPx(range: GuideFluidRange, viewportWidthPx: number, rootFontPx: number) {
-  assert(range.pxMin <= range.pxMax, 'Guide: a fluid range grows');
-  assert(rootFontPx > 0, 'Guide: root font size is positive');
-  const viewportSpanPx = LUMOS_VIEWPORT_PX_MAX - LUMOS_VIEWPORT_PX_MIN;
-  const slope = (range.pxMax - range.pxMin) / viewportSpanPx;
-  const remScale = rootFontPx / LUMOS_ROOT_FONT_PX;
-  const preferredPx = (range.pxMin - slope * LUMOS_VIEWPORT_PX_MIN) * remScale;
-  const valuePx = preferredPx + slope * viewportWidthPx;
-  return Math.min(range.pxMax * remScale, Math.max(range.pxMin * remScale, valuePx));
-}
-
-/** A fluid range as the field's placeholder reads it. */
-export function fluidText(range: GuideFluidRange): string {
-  return `Fluid ${range.pxMin}–${range.pxMax}px`;
 }
 
 /** An opacity on the menu's own scale: clamped to its range, on its step. */
@@ -312,31 +270,6 @@ export function clampGuideOpacity(value: number): number {
   const stepped = Math.round(value / GUIDE_LIMITS.opacityStep) * GUIDE_LIMITS.opacityStep;
   const clamped = Math.min(GUIDE_LIMITS.opacityMax, Math.max(GUIDE_LIMITS.opacityMin, stepped));
   return roundTo(clamped, 100);
-}
-
-/**
- * The project's column count: from the menu's variable when the page declares
- * it as a count, else from the variables the guide knows. Either one counts
- * only within the menu's own range. Undefined for none.
- */
-export function guideProjectCount(
-  metrics: GuideMetrics,
-  settings: Pick<GuideSettings, 'columnVariable'>,
-): number | undefined {
-  if (settings.columnVariable !== undefined) {
-    const declared = metrics.variableCounts[settings.columnVariable];
-    if (isGuideColumnPick(declared)) {
-      return declared;
-    }
-  }
-  const detected = metrics.columns?.count;
-  return isGuideColumnPick(detected) ? detected : undefined;
-}
-
-/** One entry of the menu's column list; `project` and `default` are the count it defers to. */
-export interface GuideColumnOption {
-  readonly count: number;
-  readonly source: 'project' | 'default' | 'list';
 }
 
 /** A count the menu takes: a whole number within its range. */
@@ -366,124 +299,46 @@ export function parseGuideColumnCount(text: string): number | undefined {
   return isGuideColumnPick(count) ? count : undefined;
 }
 
-/**
- * A stored column list, or undefined when it is not one: each count a pick,
- * once, the default count among them, within the list bound. Sorted.
- */
-export function parseGuideColumnChoices(input: unknown): readonly number[] | undefined {
-  if (!Array.isArray(input)) {
-    return undefined;
+/** A count or variable typed into the same field, with the same bounded name parser. */
+export function parseGuideColumnSetting(text: string): GuideColumnSetting | undefined {
+  const count = parseGuideColumnCount(text.trim());
+  if (count !== undefined) {
+    return { kind: 'count', count };
   }
-  const entries: readonly unknown[] = input;
-  if (entries.length > GUIDE_LIMITS.columnChoicesMax) {
-    return undefined;
-  }
-  const counts = new Set<number>();
-  for (const entry of entries) {
-    if (!isGuideColumnPick(entry)) {
-      return undefined;
-    }
-    counts.add(entry);
-  }
-  if (counts.size < entries.length) {
-    return undefined;
-  }
-  return counts.has(GUIDE_COLUMN_COUNT_DEFAULT) ? sortedCounts(counts) : undefined;
+  const size = parseGuideSize(text);
+  return size?.kind === 'variable' ? size : undefined;
 }
 
-/**
- * The menu's entries in order: the list, with the count the setting defers to
- * (the project's, else the default) among them once. A project count outside
- * the list is still offered, so it can make the list one longer.
- */
-export function guideColumnOptions(
-  choices: readonly number[],
-  projectCount: number | undefined,
-): readonly GuideColumnOption[] {
-  assert(choices.includes(GUIDE_COLUMN_COUNT_DEFAULT), 'Guide: the list keeps the default');
-  assert(choices.length <= GUIDE_LIMITS.columnChoicesMax, 'Guide: the list within its bound');
-  const deferred = projectCount ?? GUIDE_COLUMN_COUNT_DEFAULT;
-  const counts = sortedCounts(new Set([...choices, deferred]));
-  return counts.map((count) => ({ count, source: columnOptionSource(count, projectCount) }));
+export function guideColumnText(setting: GuideColumnSetting): string {
+  return setting.kind === 'count' ? String(setting.count) : `var(${setting.name})`;
 }
 
-/** The list with `count` added, or unchanged when it is there already or the menu is full. */
-export function addGuideColumnChoice(
-  choices: readonly number[],
-  count: number,
-  projectCount: number | undefined,
-): readonly number[] {
-  assert(isGuideColumnPick(count), 'Guide: an added count is a pick');
-  if (choices.includes(count)) {
-    return choices;
-  }
-  const next = sortedCounts(new Set([...choices, count]));
-  if (next.length > GUIDE_LIMITS.columnChoicesMax) {
-    return choices;
-  }
-  const full = guideColumnOptions(next, projectCount).length > GUIDE_LIMITS.columnChoicesMax;
-  return full ? choices : next;
-}
-
-/** The settings without `count` in the list; a guide drawn with it goes back to the project's. */
-export function removeGuideColumnChoice(settings: GuideSettings, count: number): GuideSettings {
-  assert(count !== GUIDE_COLUMN_COUNT_DEFAULT, 'Guide: the default count stays in the list');
-  assert(settings.columnChoices.includes(count), 'Guide: a removed count is in the list');
-  const columnChoices = settings.columnChoices.filter((choice) => choice !== count);
-  const columns = settings.columns === count ? 'project' : settings.columns;
-  return { ...settings, columns, columnChoices };
-}
-
-/** The settings with the default list back; a pick it lacks goes back to the project's. */
-export function resetGuideColumnChoices(settings: GuideSettings): GuideSettings {
-  const columnChoices = GUIDE_COLUMN_CHOICES_DEFAULT;
-  assert(columnChoices.includes(GUIDE_COLUMN_COUNT_DEFAULT), 'Guide: the default list keeps it');
-  if (settings.columns === 'project') {
-    return { ...settings, columnChoices };
-  }
-  const columns = columnChoices.includes(settings.columns) ? settings.columns : 'project';
-  return { ...settings, columns, columnChoices };
-}
-
-function columnOptionSource(
-  count: number,
-  projectCount: number | undefined,
-): GuideColumnOption['source'] {
-  if (projectCount === undefined) {
-    return count === GUIDE_COLUMN_COUNT_DEFAULT ? 'default' : 'list';
-  }
-  return count === projectCount ? 'project' : 'list';
-}
-
-function sortedCounts(counts: ReadonlySet<number>): readonly number[] {
-  return [...counts].sort((left, right) => left - right);
-}
-
-// A count picked in Stacki; else the project's, from the menu's variable when
-// the page declares it as a count, then from the variables the guide knows;
-// else the default.
+// An explicit variable never falls through to an unrelated project variable:
+// the displayed binding must be the one that controls the overlay.
 function columnCountOf(
   metrics: GuideMetrics,
   settings: GuideSettings,
 ): Pick<ResolvedGuide, 'columnCount' | 'columnSource'> {
-  if (settings.columns !== 'project') {
-    return { columnCount: settings.columns, columnSource: 'stacki' };
+  const setting = settings.columns;
+  if (setting.kind === 'count') {
+    assert(isGuideColumnPick(setting.count), 'Guide: the literal count is within range');
+    return { columnCount: setting.count, columnSource: 'stacki' };
   }
-  const projectCount = guideProjectCount(metrics, settings);
-  if (projectCount === undefined) {
-    return { columnCount: GUIDE_COLUMN_COUNT_DEFAULT, columnSource: 'stacki' };
+  const declared = metrics.variableCounts[setting.name];
+  if (isGuideColumnPick(declared)) {
+    return { columnCount: declared, columnSource: 'project' };
   }
-  return { columnCount: projectCount, columnSource: 'project' };
+  return { columnCount: GUIDE_COLUMN_COUNT_DEFAULT, columnSource: 'stacki' };
 }
 
-// A margin or gutter: the menu's, else the project's own, else Lumos's fluid
-// starting range at this width. A menu variable the page does not declare
+// A margin or gutter: the menu's, else the project's own, else the
+// fixed rem default. A menu variable the page does not declare
 // falls through to the next source.
 function spacingValue(
   projectPx: number | undefined,
   setting: GuideSize | undefined,
   metrics: GuideMetrics,
-  fluid: GuideFluidRange,
+  fallback: GuideLength,
 ): GuideValue {
   const chosen = settingValue(setting, metrics);
   if (chosen !== undefined) {
@@ -492,13 +347,12 @@ function spacingValue(
   if (projectPx !== undefined) {
     return { px: projectPx, source: 'project' };
   }
-  const px = fluidPx(fluid, metrics.viewportWidthPx, metrics.rootFontPx);
+  const px = lengthPx(fallback, metrics.rootFontPx);
   return { px, source: 'default' };
 }
 
-// The maximum width in the same order as the margin, with no default: the
-// content box is then never capped. A width that resolves to nothing (`none`,
-// a percentage of an empty probe) caps nothing, so it is skipped too.
+// The maximum width follows the same priority as the margin. Unusable or
+// missing values fall back to the project width, then to 90rem.
 function widthMaxValue(
   metrics: GuideMetrics,
   setting: GuideSize | undefined,
@@ -514,7 +368,7 @@ function widthMaxValue(
       return { px: metrics.widthMaxPx, source: 'project' };
     }
   }
-  return undefined;
+  return { px: lengthPx(GUIDE_LENGTH_DEFAULTS.widthMax, metrics.rootFontPx), source: 'default' };
 }
 
 // What the menu sets, in pixels: a length as written, a variable as the page
