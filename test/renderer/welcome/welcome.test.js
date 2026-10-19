@@ -9,6 +9,7 @@
 // is announced, that only the cards that need one are re-rendered, that they go
 // one at a time, and that closing the screen stops the queue rather than
 // leaving it running against a project the user has just opened.
+// Split actions also verify folder selection, menu focus and dismissal.
 
 const fs = require('fs');
 const path = require('path');
@@ -53,6 +54,7 @@ const PIXEL =
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   global.window = dom.window;
   global.document = dom.window.document;
+  global.Node = dom.window.Node;
   global.navigator = dom.window.navigator;
   global.IS_REACT_ACT_ENVIRONMENT = true;
   dom.window.Element.prototype.scrollIntoView = function scrollIntoView() {};
@@ -146,8 +148,7 @@ const PIXEL =
   const actions = all('.actions button').map((button) => button.textContent.trim());
   check(
     'the actions read in that order',
-    actions.join(' | ') ===
-      'Open Project… | Start from Lumos… | Open from GitHub… | Empty Astro project…',
+    actions.join(' | ') === 'Open Project… |  | Start from Lumos… | ',
     actions.join(' | '),
   );
   check(
@@ -157,10 +158,56 @@ const PIXEL =
       .map((button) => button.className)
       .join(' | '),
   );
+  check('alternate project actions stay in their dropdowns', all('[role=menuitem]').length === 0);
+  let folderRequests = 0;
+  dom.window.avb.openProjectDialog = async () => {
+    folderRequests++;
+    return { canceled: true };
+  };
+  await act(async () => all('.actions button')[0].click());
+  check('the main Open Project button opens the folder picker', folderRequests === 1);
+  const arrows = all('.welcome-split-arrow');
+  await act(async () => arrows[0].click());
   check(
-    'and the blank one is the quiet fourth',
-    all('.actions button')[3].classList.contains('quiet'),
+    'the open menu reveals GitHub',
+    all('[role=menuitem]')[0]?.textContent === 'Open from GitHub…',
   );
+  check(
+    'opening the menu focuses its action',
+    document.activeElement === all('[role=menuitem]')[0],
+  );
+  await act(async () => {
+    document.activeElement.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      }),
+    );
+  });
+  check(
+    'Escape closes the menu and restores its trigger',
+    all('[role=menuitem]').length === 0 && document.activeElement === arrows[0],
+  );
+  await act(async () => arrows[1].click());
+  check(
+    'the starter menu reveals the empty project option',
+    all('[role=menuitem]')[0]?.textContent === 'Empty Astro project…',
+  );
+  let emptyRequests = 0;
+  dom.window.avb.newProjectDialog = async () => {
+    emptyRequests++;
+    return { canceled: true };
+  };
+  await act(async () => all('[role=menuitem]')[0].click());
+  check(
+    'the empty project option opens its folder picker and closes the menu',
+    emptyRequests === 1 && all('[role=menuitem]').length === 0,
+  );
+  await act(async () => arrows[0].click());
+  await act(async () => {
+    document.body.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+  });
+  check('an outside click closes the menu', all('[role=menuitem]').length === 0);
   check('nothing tells the user a picture is old', !/out of date/i.test(text()), text());
   check('and nothing offers to fix it', all('.recent-refresh').length === 0);
 
@@ -202,7 +249,7 @@ const PIXEL =
     };
     dom.window.avb.onCreateLog = () => () => {};
     await act(async () => {
-      all('.actions button')[1].click();
+      all('.actions button')[2].click();
       await settle(40);
     });
     check('choosing it asks where the site should go', asked);
@@ -231,7 +278,7 @@ const PIXEL =
     check('cancelling closes it', !dom.window.document.querySelector('.new-project-modal'));
     dom.window.avb.parentDialog = async () => ({ canceled: true });
     await act(async () => {
-      all('.actions button')[1].click();
+      all('.actions button')[2].click();
       await settle(30);
     });
     check(
@@ -264,7 +311,7 @@ const PIXEL =
     const buttons = all('.actions button');
     check(
       'with no projects, starting from Lumos leads',
-      buttons[1]?.classList.contains('primary'),
+      buttons[2]?.classList.contains('primary'),
       buttons.map((button) => button.className).join(' | '),
     );
     check('and opening one does not', !buttons[0]?.classList.contains('primary'));

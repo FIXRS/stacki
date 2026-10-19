@@ -1,4 +1,5 @@
 import CloneRepositoryModal from './CloneRepositoryModal';
+import WelcomeSplitButton from './WelcomeSplitButton';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   chooseExistingProject,
@@ -221,17 +222,23 @@ function WelcomeHero({
       <p className="welcome-tagline">Visual Builder for Astro</p>
       <div className="actions">
         <div className="actions-row">
-          <button className={hasRecents ? 'primary' : ''} onClick={openExisting}>
-            Open Project…
-          </button>
-          <button className={hasRecents ? '' : 'primary'} onClick={startFromLumos}>
-            Start from Lumos…
-          </button>
+          <WelcomeSplitButton
+            className={hasRecents ? 'primary' : ''}
+            label="Open Project…"
+            menuLabel="Open from GitHub…"
+            menuTitle="More ways to open a project"
+            onClick={openExisting}
+            onMenuSelect={cloneRepository}
+          />
+          <WelcomeSplitButton
+            className={hasRecents ? '' : 'primary'}
+            label="Start from Lumos…"
+            menuLabel="Empty Astro project…"
+            menuTitle="More ways to start a project"
+            onClick={startFromLumos}
+            onMenuSelect={createNew}
+          />
         </div>
-        <button onClick={cloneRepository}>Open from GitHub…</button>
-        <button className="quiet" onClick={createNew}>
-          Empty Astro project…
-        </button>
       </div>
       {error && <div className="error-text">{error}</div>}
     </div>

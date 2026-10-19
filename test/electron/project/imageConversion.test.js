@@ -44,7 +44,8 @@ test('both image formats update references before trashing the original', async 
       });
       assert.equal(result.ok, true, result.error);
       const output = path.join(projectPath, `public/img/photo.${format}`);
-      const metadata = await sharp(output).metadata();
+      // Read bytes so native codec caching cannot hold a Windows file handle.
+      const metadata = await sharp(fs.readFileSync(output)).metadata();
       assert.equal(metadata.width, 95);
       assert.equal(metadata.height, 76);
       assert.equal(metadata.format, format === 'avif' ? 'heif' : format);
