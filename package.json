@@ -1,7 +1,7 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "0.1.49",
+  "version": "0.1.50",
   "description": "Stacki — a visual builder for Astro projects, with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
