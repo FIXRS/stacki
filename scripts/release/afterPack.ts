@@ -7,6 +7,7 @@ import type { AfterPackContext } from 'app-builder-lib';
 import { Arch } from 'builder-util';
 import { fixNodePtyPermissions } from '../install/fixNodePtyPermissions';
 import { verifyLinuxNativeBinding } from './linuxNativeBinding';
+import { verifyMacNativeBindings } from './macNativeBindings';
 
 function windowsArchitecture(architecture: Arch): 'arm64' | 'x64' {
   if (architecture === Arch.arm64) {
@@ -50,14 +51,8 @@ export default function afterPack(context: AfterPackContext): void {
     return;
   }
 
-  if (!fs.existsSync(nodePtyDirectory)) {
-    console.warn(
-      '  • afterPack: node-pty not found in the packaged app; the terminal will not start.',
-    );
-    return;
-  }
-
   const fixed = fixNodePtyPermissions(nodePtyDirectory);
+  verifyMacNativeBindings(nodePtyDirectory);
   console.log(
     fixed.length > 0
       ? `  • afterPack: restored exec bit on ${fixed.length} node-pty spawn-helper(s)`

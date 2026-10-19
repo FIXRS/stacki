@@ -117,7 +117,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "electron": "44.9.0",
-    "electron-builder": "^25.1.8",
+    "electron-builder": "26.15.3",
     "esbuild": "0.25.12",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -125,10 +125,6 @@
     "prettier": "3.9.9",
     "vite": "^6.0.3",
     "wait-on": "^8.0.1"
-  },
-  "overrides": {
-    "builder-util-runtime": "^9.7.0",
-    "tar": "^7.5.22"
   },
   "build": {
     "appId": "com.stacki.editor",
@@ -182,7 +178,8 @@
       "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
       "forceCodeSigning": true,
       "notarize": true,
-      "minimumSystemVersion": "13.0.0"
+      "minimumSystemVersion": "13.0.0",
+      "x64ArchFiles": "**/node-pty/prebuilds/darwin-{x64,arm64}/{pty.node,spawn-helper}"
     },
     "win": {
       "icon": "resources/icon.ico",
@@ -228,5 +225,10 @@
   },
   "exports": {
     ".": "./dist/electron/main.js"
+  },
+  "overrides": {
+    "@electron/get": {
+      "global-agent": "4.1.3"
+    }
   }
 }

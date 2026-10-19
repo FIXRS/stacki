@@ -83,6 +83,7 @@ function loadSigning(source) {
     'fs/promises': {},
     'temp-file': {},
     '../util/flags': {},
+    '../util/dynamicImport': {},
     '@electron/osx-sign/dist/cjs/util-identities': {},
     '@electron/osx-sign': {},
   };
@@ -170,7 +171,7 @@ test('regression harness rejects the original wrong-password implementation', as
   );
 });
 
-function fixture(context, source = original, version = '25.1.8') {
+function fixture(context, source = original, version = '26.15.3') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-builder-signing-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'package.json'), '{}');
@@ -218,8 +219,8 @@ test('unknown or partly patched sources are refused without changing any bytes',
 });
 
 test('dependency upgrades fail explicitly before modifying their source', (context) => {
-  const { root, file } = fixture(context, original, '26.0.0');
-  assert.throws(() => fixElectronBuilderSigning(root), /Unsupported app-builder-lib 26.0.0/);
+  const { root, file } = fixture(context, original, '27.0.0');
+  assert.throws(() => fixElectronBuilderSigning(root), /Unsupported app-builder-lib 27.0.0/);
   assert.equal(fs.readFileSync(file, 'utf8'), original);
 });
 

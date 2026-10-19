@@ -1,4 +1,4 @@
-// Backport electron-builder PR 10172 to the locked app-builder-lib 25.1.8.
+// Backport electron-builder PR 10172 to the locked app-builder-lib 26.15.3.
 // Certificate and keychain passwords are separate credentials; this patch
 // refuses unknown upstream source so an upgrade cannot silently corrupt it.
 
@@ -8,9 +8,9 @@ import { createRequire } from 'node:module';
 import path = require('node:path');
 import { repositoryRoot } from '../lib/repoRoot';
 
-const BUILDER_VERSION = '25.1.8';
-const ORIGINAL_HASH = 'ab30cf9755231ef0c279fc4a13f31b405b0a88b2cab657a57604e85bbb7ebbfd';
-const PATCHED_HASH = '0fd7bf220d2c45a99b06a26632f1777e16873431a2dc798477da3f9e6d0cf36d';
+const BUILDER_VERSION = '26.15.3';
+const ORIGINAL_HASH = '9f7d789b326147b6da29e1218d6e3f76b0314c68cf5d0f1efa59338a3c86e71a';
+const PATCHED_HASH = '5b6551607c61c75cd1eadb2165b05513ff6d6b2965d129b5db9192b7e99e6fd1';
 
 export type SigningFixResult = 'already-patched' | 'not-installed' | 'patched';
 

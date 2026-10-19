@@ -140,6 +140,17 @@ download; version pins the Chromium and Node the app ships with.
 **Does:** packages, signs, and notarizes releases. **Why not the platform:** Electron ships no
 packager. **Cost:** large tree; release-time only.
 
+Pinned to 26.15.3 to fix the AppImage search-path vulnerability
+[GHSA-7g7r-gx96-252g](https://github.com/advisories/GHSA-7g7r-gx96-252g).
+The signing password backport still applies to this upstream version; exact source hashes and
+real signing-function regression tests protect it. Universal Mac builds preserve node-pty's
+architecture-specific prebuilds using a narrowly scoped `x64ArchFiles` rule. Both architectures
+and executable helpers are verified before signing; node-pty chooses them using `process.arch`.
+
+The build-time `@electron/get` dependency overrides `global-agent` to 4.1.3. Its compatible
+`bootstrap` API preserves proxy downloads while removing the obsolete logging dependency that
+pulls in vulnerable `sprintf-js`. This override adds no application runtime dependency.
+
 ### `esbuild`
 
 **Does:** bundles the two runtime scripts that cannot load modules — the sandboxed preload
