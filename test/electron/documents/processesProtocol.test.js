@@ -12,13 +12,16 @@
 // and the watcher ignores it.
 // Method: test/helpers/platformChild.js runs a real host in a child process; the crash
 // jobs kill themselves with SIGKILL at the rename. Real files in the OS temp
-// directory; nothing is faked.
+// directory. One regression injects a disappearing lock observation to prove
+// recovery never moves a replacement lock into a temporary ownership gap.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { reconcileUncertain } = require('#dist/shared/engine/documentActor.js');
+const { NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
+const { toFilePath } = require('#dist/shared/core/brand.js');
 const { isAtomicTemporary } = require('#dist/electron/documents/atomicWrite.js');
 const {
   protocolLeftovers,
@@ -66,6 +69,46 @@ test('cooperating writers in separate processes never lose an update', async (co
     assert.ok(refused.length > 0, 'the writers really contended');
     context.diagnostic(`applied ${applied}, refused ${refused.length} of ${events.length}`);
     assert.deepEqual(protocolLeftovers(root), [], 'no lock or temporary file is left');
+  });
+});
+
+test('a failed stale-lock observation never moves a fresh replacement lock', async (context) => {
+  await scratch(os.tmpdir(), async (root) => {
+    const file = toFilePath(path.join(root, 'page.astro'));
+    fs.writeFileSync(file, '');
+    const disk = new NodeDocumentDisk();
+    const first = disk.lock(file);
+    assert.equal(first.ok, true);
+    const lockFile = path.join(root, protocolLeftovers(root)[0]);
+    assert.equal(disk.unlock(first.value).ok, true);
+    fs.writeFileSync(lockFile, '');
+    const freshOwner = { pid: process.pid, host: os.hostname(), token: 'fresh-writer' };
+    const stat = fs.statSync;
+    let observations = 0;
+    const patched = context.mock.method(fs, 'statSync', (target, options) => {
+      if (target === lockFile) {
+        observations++;
+        if (observations === 2) {
+          // Another writer finishes and a new one acquires the pathname while
+          // this process's old observation reports that the prior lock is gone.
+          fs.writeFileSync(lockFile, JSON.stringify(freshOwner));
+          throw Object.assign(new Error('The observed lock disappeared'), { code: 'ENOENT' });
+        }
+      }
+      return stat(target, options);
+    });
+    const renamed = context.mock.method(fs, 'renameSync');
+    try {
+      const contender = new NodeDocumentDisk().lock(file);
+      assert.equal(contender.ok, false);
+      assert.equal(contender.error.code, 'held');
+      assert.equal(observations, 2);
+      assert.equal(renamed.mock.callCount(), 0, 'recovery must not expose a fresh lock gap');
+      assert.deepEqual(JSON.parse(fs.readFileSync(lockFile, 'utf8')), freshOwner);
+    } finally {
+      patched.mock.restore();
+      renamed.mock.restore();
+    }
   });
 });
 

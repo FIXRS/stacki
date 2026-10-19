@@ -261,7 +261,10 @@ export class NodeDocumentDisk implements DocumentDisk {
     try {
       return Date.now() - fs.statSync(lockFile).mtimeMs > LOCK_STALE_MS;
     } catch {
-      return true; // Gone already.
+      // A failed observation is not proof of abandonment. The previous lock
+      // can disappear and a fresh writer can acquire the same pathname before
+      // recovery renames it, opening a gap where a second writer could enter.
+      return false;
     }
   }
 
