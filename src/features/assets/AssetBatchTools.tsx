@@ -4,6 +4,8 @@ import { IMAGE_BATCH_MAX, type ImageFormat } from '../../../shared/ipc/assetConv
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { convertAsset, deleteAsset } from './assetPanelBridge';
 import type { AssetFile } from './assetPaths';
+import AssetCompressionDialog from './AssetCompressionDialog';
+import { AssetSelectionToolbar } from './AssetSelection';
 
 export function useAssetBatch(
   projectPath: string,
@@ -11,15 +13,8 @@ export function useAssetBatch(
 ) {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [progress, setProgress] = useState<string>();
-  const running = useRef(false);
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
+  const [compression, setCompression] = useState<readonly AssetFile[]>();
+  const execution = useBatchExecution(projectPath, { showToast, setSelected });
   const toggle = (rel: string) =>
     setSelected((previous) => {
       if (previous.has(rel)) {
@@ -30,6 +25,38 @@ export function useAssetBatch(
       }
       return new Set([...previous, rel]);
     });
+  return {
+    selecting,
+    setSelecting,
+    selected,
+    setSelected,
+    toggle,
+    compression,
+    setCompression,
+    ...execution,
+  };
+}
+
+function useBatchExecution(
+  projectPath: string,
+  {
+    showToast,
+    setSelected,
+  }: {
+    readonly showToast: (message: string, kind: 'error') => void;
+    readonly setSelected: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>;
+  },
+) {
+  const [progress, setProgress] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  const running = useRef(false);
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   const run = async (files: readonly AssetFile[], operation: ImageFormat | 'delete') => {
     if (running.current || files.length === 0) {
       return;
@@ -39,9 +66,20 @@ export function useAssetBatch(
       return;
     }
     running.current = true;
+    setNotice(undefined);
     try {
-      const confirmed = await confirmAssetBatch(files.length, operation);
-      if (!confirmed || !active.current) {
+      if (operation === 'delete') {
+        const confirmed = await confirmDialog({
+          title: `Delete ${files.length} assets?`,
+          body: 'Moves selected assets to the trash. Site references are kept.',
+          confirmLabel: 'Delete',
+          danger: true,
+        });
+        if (!confirmed) {
+          return;
+        }
+      }
+      if (!active.current) {
         return;
       }
       for (const [index, file] of files.entries()) {
@@ -55,20 +93,27 @@ export function useAssetBatch(
         }
         if (!result.ok) {
           showToast(`${file.name}: ${result.error}`, 'error');
-          break;
+          return;
         }
         setSelected((previous) => new Set([...previous].filter((item) => item !== file.rel)));
       }
+      setNotice(
+        `${files.length} ${operation === 'delete' ? 'assets deleted' : 'images compressed'}.`,
+      );
     } finally {
       setProgress(undefined);
       running.current = false;
     }
   };
-  return { selecting, setSelecting, selected, setSelected, progress, toggle, run };
+  return { progress, notice, run };
 }
+
 export type AssetBatch = ReturnType<typeof useAssetBatch>;
 export function convertible(file: AssetFile): boolean {
   return canConvertAssets && /\.(png|jpe?g|webp|avif|tiff?)$/i.test(file.name);
+}
+export function selectableAsset(file: AssetFile): boolean {
+  return canConvertAssets ? convertible(file) : true;
 }
 
 export function AssetBatchTools({
@@ -78,77 +123,29 @@ export function AssetBatchTools({
   readonly batch: AssetBatch;
   readonly files: readonly AssetFile[];
 }) {
-  const selected = files.filter((file) => batch.selected.has(file.rel));
-  const busy = batch.progress !== undefined;
   return (
-    <div className="asset-batch-tools">
-      <button
-        disabled={busy}
-        onClick={() => {
-          batch.setSelecting(!batch.selecting);
-          batch.setSelected(new Set());
-        }}
-      >
-        {batch.selecting ? 'Done selecting' : 'Select assets'}
-      </button>
-      {batch.selecting && (
-        <>
-          <button
-            disabled={busy || files.length > IMAGE_BATCH_MAX}
-            onClick={() => batch.setSelected(new Set(files.map((file) => file.rel)))}
-          >
-            Select all
-          </button>
-          <span>
-            {selected.length} selected · up to {IMAGE_BATCH_MAX}
-          </span>
-          {canConvertAssets &&
-            (['webp', 'avif'] as const).map((format) => (
-              <button
-                key={format}
-                disabled={
-                  busy ||
-                  selected.length === 0 ||
-                  selected.some((file) => !convertible(file)) ||
-                  selected.every((file) => file.name.toLowerCase().endsWith('.' + format))
-                }
-                onClick={() =>
-                  void batch.run(
-                    selected.filter((file) => !file.name.toLowerCase().endsWith('.' + format)),
-                    format,
-                  )
-                }
-              >
-                Convert to {format.toUpperCase()}
-              </button>
-            ))}
-          <button
-            disabled={busy || selected.length === 0}
-            onClick={() => void batch.run(selected, 'delete')}
-          >
-            Delete selected
-          </button>
-        </>
-      )}
+    <>
+      <AssetSelectionToolbar batch={batch} files={files} />
       {batch.progress && (
-        <div role="status">
+        <div className="asset-batch-progress" role="status">
           <span className="mini-spinner" /> {batch.progress}
         </div>
       )}
-    </div>
+      {batch.notice && (
+        <div className="asset-batch-notice" role="status">
+          {batch.notice}
+        </div>
+      )}
+      {batch.compression && (
+        <AssetCompressionDialog
+          files={batch.compression}
+          onClose={() => batch.setCompression(undefined)}
+          onCompress={(selected, format) => {
+            batch.setCompression(undefined);
+            void batch.run(selected, format);
+          }}
+        />
+      )}
+    </>
   );
-}
-
-function confirmAssetBatch(count: number, operation: ImageFormat | 'delete') {
-  return confirmDialog({
-    title: operation === 'delete' ? `Delete ${count} assets?` : `Convert ${count} images?`,
-    body:
-      operation === 'delete'
-        ? 'Moves selected assets to the trash. Site references are kept.'
-        : `Converts to ${operation.toUpperCase()} at 95% size and quality. ` +
-          'Updates site references and moves originals to the trash. ' +
-          'Existing output files are never overwritten.',
-    confirmLabel: operation === 'delete' ? 'Delete' : 'Convert',
-    danger: operation === 'delete',
-  });
 }

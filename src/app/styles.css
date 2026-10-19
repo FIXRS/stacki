@@ -8014,3 +8014,86 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   left: 8px;
   z-index: 2;
 }
+
+.asset-batch-tools.selecting {
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.asset-selection-count {
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.asset-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.asset-batch-actions button {
+  padding: 5px 7px;
+  font-size: 11px;
+}
+.asset-select-all {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  accent-color: var(--accent);
+}
+.asset-selectable {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.asset-selectable.selected {
+  border-color: var(--accent);
+  background: transparent;
+}
+.asset-selectable.is-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.asset-selectable .asset-thumb {
+  pointer-events: none;
+}
+.asset-batch-progress,
+.asset-batch-notice {
+  padding: 8px 12px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.asset-compression-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+.asset-compression-dialog .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.asset-compression-dialog h2 {
+  font-size: 16px;
+}
+.asset-compression-dialog p {
+  line-height: 1.5;
+}
+.asset-compression-dialog fieldset {
+  border: 0;
+  margin-top: 20px;
+}
+.asset-compression-dialog legend {
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+.asset-compression-dialog label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+}
+.asset-compression-dialog input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}

@@ -1,3 +1,4 @@
+import { SelectableAssetTile } from './AssetSelection';
 import { AssetBatchTools, useAssetBatch, convertible, type AssetBatch } from './AssetBatchTools';
 import { assetDropLimit, assetDeletionMessage } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -463,7 +464,7 @@ function AssetPanelBody({
   );
   return (
     <div className="panel-section grow">
-      <AssetHeader cwd={state.cwd} actions={actions} state={state} />
+      {!state.batch.selecting && <AssetHeader cwd={state.cwd} actions={actions} state={state} />}
       <PickBanner
         {...(props.pick === undefined ? {} : { pick: props.pick })}
         {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })}
@@ -688,6 +689,9 @@ function AssetTile({
   readonly state: AssetPanelState;
   readonly actions: AssetActions;
 }) {
+  if (!props.pick && state.batch.selecting) {
+    return <SelectableAssetTile file={file} batch={state.batch} />;
+  }
   const editable = TEXT_EXT.test(file.name);
   return (
     <div
@@ -699,16 +703,6 @@ function AssetTile({
       title={assetTitle(file, { editable, picking: Boolean(props.pick) })}
       onClick={props.pick ? () => props.pick?.onPick(file.rel, file) : undefined}
     >
-      {!props.pick && state.batch.selecting && (
-        <input
-          type="checkbox"
-          className="asset-select"
-          aria-label={`Select ${file.name}`}
-          checked={state.batch.selected.has(file.rel)}
-          disabled={state.batch.progress !== undefined}
-          onChange={() => state.batch.toggle(file.rel)}
-        />
-      )}
       <AssetThumb
         file={file}
         className={editable && !props.pick ? 'editable' : ''}
@@ -816,12 +810,5 @@ function clearInput(inputElement: HTMLInputElement): void {
 }
 
 function conversionMenu(file: AssetFile, batch: AssetBatch) {
-  return (['webp', 'avif'] as const)
-    .filter((format) => !file.name.toLowerCase().endsWith('.' + format))
-    .map((format) => ({
-      label: `Convert to ${format.toUpperCase()}`,
-      onSelect: () => {
-        void batch.run([file], format);
-      },
-    }));
+  return [{ label: 'Compress…', onSelect: () => batch.setCompression([file]) }];
 }

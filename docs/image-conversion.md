@@ -1,7 +1,11 @@
 # Desktop image conversion
 
 The Assets panel converts individual images or a selection of up to 100 images
-into WebP or AVIF. It processes one image at a time at 95% of its original width
+into WebP or AVIF. In select mode, the entire image tile toggles selection;
+unsupported file types are disabled and Select all includes only eligible images.
+The compression icon opens a format dialog, with AVIF selected initially and WebP
+as the alternative. Images already in that format are skipped. A per-image menu
+opens the same dialog. It processes one image at a time at 95% of its original width
 and height and quality 95. Original images move to the operating system trash
 only after the replacement and reference updates succeed. GIFs, SVGs, animated
 images, and multipage images are excluded rather than silently flattened.

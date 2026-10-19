@@ -90,6 +90,16 @@ const check = (what, condition, detail) => {
       size: 4,
     },
   ];
+  FILES.push(
+    ...['arrow.svg', 'type.woff2'].map((name) => ({
+      rel: 'public/' + name,
+      name,
+      parent: 'public',
+      abs: '/p/public/' + name,
+      isDir: false,
+      size: 12,
+    })),
+  );
   const deleted = [];
   const toasts = [];
   dom.window.avb = {
@@ -176,7 +186,7 @@ const check = (what, condition, detail) => {
   };
 
   // --- the tile has one, and only one thing in it ---------------------------------
-  check('the assets are on screen', tiles().length === 2, String(tiles().length));
+  check('the assets are on screen', tiles().length === 4, String(tiles().length));
   check(
     'every tile has a menu button',
     tiles().every((tile) => tile.querySelector('.asset-tile-menu')),
@@ -191,11 +201,7 @@ const check = (what, condition, detail) => {
   await press(menuButton(0), 'a menu button on the first tile');
   check('pressing it opens a menu', rows().length > 0, container.innerHTML.slice(0, 160));
   check('with Delete in it', rows().includes('Delete'), rows().join());
-  check(
-    'and both image formats',
-    rows().join('|') === 'Convert to WEBP|Convert to AVIF|Delete',
-    rows().join(),
-  );
+  check('and compression in one dialog', rows().join('|') === 'Compress…|Delete', rows().join());
 
   // --- it asks before it does it ---------------------------------------------------
   //
@@ -245,6 +251,48 @@ const check = (what, condition, detail) => {
     deleted.join() === 'public/photo.jpg',
     deleted.join(),
   );
+
+  // Selection uses the whole tile and excludes files the encoder cannot handle.
+  await answer('select assets');
+  check(
+    'text, SVG and font assets cannot be selected',
+    tiles()
+      .slice(1)
+      .every((tile) => tile.querySelector('input').disabled),
+  );
+  await press(tiles()[1]);
+  check('clicking a disabled tile leaves it unchecked', !tiles()[1].querySelector('input').checked);
+  await press(tiles()[0].querySelector('.asset-name'));
+  check(
+    'clicking the name selects the entire image tile',
+    tiles()[0].querySelector('input').checked,
+  );
+  await press(tiles()[0].querySelector('input'));
+  check('clicking the checkbox toggles only once', !tiles()[0].querySelector('input').checked);
+  await press(container.querySelector('.asset-select-all'));
+  check(
+    'select all includes only eligible images',
+    tiles()[0].querySelector('input').checked && !tiles()[1].querySelector('input').checked,
+  );
+  await press(container.querySelector('[aria-label="Compress selected assets"]'));
+  const compression = () => document.querySelector('.asset-compression-dialog');
+  check('compression opens one format dialog', !!compression());
+  check('AVIF is selected by default', compression().querySelector('[value=avif]').checked);
+  const converted = [];
+  dom.window.avb.convertAsset = async (payload) => {
+    converted.push(payload);
+    return { rel: 'public/photo.webp', references: 1, bytesBefore: 12, bytesAfter: 8 };
+  };
+  await press(compression().querySelector('[value=webp]'));
+  await press(compression().querySelector('button.primary'));
+  check(
+    'compress converts exactly the eligible selection in the chosen format',
+    converted.length === 1 &&
+      converted[0].rel === 'public/photo.jpg' &&
+      converted[0].format === 'webp',
+  );
+  check('compression closes its dialog without a second confirmation', !compression() && !dialog());
+  await answer('cancel');
 
   // --- and never while an asset is being picked -------------------------------------
   //

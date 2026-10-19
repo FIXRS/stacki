@@ -152,6 +152,8 @@
     "src/editor/treeSelection.ts",
     "src/editor/treeView.ts",
     "src/features/assets/AssetBatchTools.tsx",
+    "src/features/assets/AssetCompressionDialog.tsx",
+    "src/features/assets/AssetSelection.tsx",
     "src/features/assets/AssetsPanel.tsx",
     "src/features/assets/assetPanelBridge.ts",
     "src/features/assets/assetPaths.ts",
