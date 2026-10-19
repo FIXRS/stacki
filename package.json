@@ -126,6 +126,10 @@
     "vite": "^6.0.3",
     "wait-on": "^8.0.1"
   },
+  "overrides": {
+    "builder-util-runtime": "^9.7.0",
+    "tar": "^7.5.22"
+  },
   "build": {
     "appId": "com.stacki.editor",
     "productName": "Stacki",
