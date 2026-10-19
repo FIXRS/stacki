@@ -54,6 +54,17 @@ jobs:
           # builds have landed.
           EP_DRAFT: true
 
+      # Electron 44 requires macOS 13 (Darwin 22). The older updater already
+      # honors this field, so incompatible Macs keep their working installation.
+      - name: Set the macOS update requirement before publishing
+        run: |
+          node dist/scripts/release/macUpdateMetadata.js
+          gh release upload "$TAG" release/latest-mac.yml \
+            --repo flowtricks/stacki-releases --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+
   build-windows:
     if: github.event_name == 'push'
     runs-on: windows-latest

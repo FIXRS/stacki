@@ -99,8 +99,22 @@ async function main() {
     observer.disconnect();
     const after = Array.from(document.styleSheets).map(sheet =>
       Array.from(sheet.cssRules).map(rule => rule.cssText).join(''));
+    // Test real layout, not just syntax support: trimming must remove leading.
+    const trimSample = document.createElement('div');
+    trimSample.style.cssText = 'font: 64px/2 Arial; margin: 0';
+    trimSample.textContent = 'Text box';
+    document.body.append(trimSample);
+    const heightBefore = trimSample.getBoundingClientRect().height;
+    trimSample.style.setProperty('text-box', 'trim-both cap alphabetic');
+    const textBox = {
+      supported: CSS.supports('text-box', 'trim-both cap alphabetic'),
+      trim: getComputedStyle(trimSample).getPropertyValue('text-box-trim'),
+      edge: getComputedStyle(trimSample).getPropertyValue('text-box-edge'),
+      reduced: trimSample.getBoundingClientRect().height < heightBefore,
+    };
+    trimSample.remove();
     return { sources, inherited, nested, inline, reset, parentHints, allReset, allOverride,
-      oversized, inaccessible, before, after,
+      oversized, inaccessible, before, after, textBox,
       inlineBefore, inlineAfter, ignored, realChange,
       computed: getComputedStyle(child).fontSize };
   })()`;
@@ -130,6 +144,12 @@ async function main() {
   const line = run.stdout.split('\n').find((line) => line.startsWith('{'));
   assert.ok(line, run.stderr || run.stdout);
   const result = JSON.parse(line);
+  assert.deepEqual(result.textBox, {
+    supported: true,
+    trim: 'trim-both',
+    edge: 'cap alphabetic',
+    reduced: true,
+  });
   assert.deepEqual(result.sources.child['font-size'], { label: '.parent', path: '0' });
   assert.deepEqual(result.sources.text['font-size'], result.sources.child['font-size']);
   assert.deepEqual(result.sources.grandchild['font-size'], result.sources.child['font-size']);

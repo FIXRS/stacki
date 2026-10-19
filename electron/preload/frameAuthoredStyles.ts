@@ -16,11 +16,6 @@ type CollectedStyles = {
   readonly inline: readonly InlineStyle[];
 };
 type Declaration = { readonly value: string; readonly priority: string };
-type Patch = {
-  readonly style: CSSStyleDeclaration;
-  readonly name: string;
-  readonly previous: Declaration;
-};
 
 export type AuthoredInspection = {
   readonly values: Readonly<Record<string, string | undefined>>;
@@ -50,7 +45,7 @@ export function inspectAuthoredProperties(
     return empty;
   }
   const values: string[] = [];
-  const patches: Patch[] = [];
+  const patches = new Map<CSSStyleDeclaration, string>();
   const names = properties.map((property) => ({ property, probe: registeredProbe(property) }));
   try {
     for (const { property, probe } of names) {
@@ -60,8 +55,10 @@ export function inspectAuthoredProperties(
           if (declaration.value) {
             const token = probeToken(declaration.value, values.length);
             values.push(declaration.value);
+            if (!patches.has(style)) {
+              patches.set(style, style.cssText);
+            }
             for (const name of [probe.inherited, probe.local]) {
-              patches.push({ style, name, previous: authoredDeclaration(style, name) });
               const value = name === probe.local ? localToken(token, property) : token;
               style.setProperty(name, value, declaration.priority);
             }
@@ -69,7 +66,8 @@ export function inspectAuthoredProperties(
         }
       }
     }
-    assert(values.length * 2 === patches.length, 'Each authored declaration has two probes');
+    assert(patches.size <= styles.declarations.length, 'Each declaration has one saved original');
+    assert(values.length * 2 <= STYLE_LIMITS.workMax, 'Authored probe writes are bounded');
     return inspectProbeResults(element, names, values);
   } finally {
     restoreAuthoredStyles(patches, styles.inline);
@@ -125,12 +123,16 @@ function probeSource(element: Element, name: string, token: string): Element | u
   return undefined;
 }
 
-function restoreAuthoredStyles(patches: readonly Patch[], inline: readonly InlineStyle[]): void {
-  assert(patches.length <= STYLE_LIMITS.workMax, 'Authored probe cleanup is bounded');
-  for (const { style, name, previous } of patches) {
-    style.removeProperty(name);
-    if (previous.value) {
-      style.setProperty(name, previous.value, previous.priority);
+function restoreAuthoredStyles(
+  patches: ReadonlyMap<CSSStyleDeclaration, string>,
+  inline: readonly InlineStyle[],
+): void {
+  assert(patches.size <= STYLE_LIMITS.workMax, 'Authored probe cleanup is bounded');
+  // Chromium can expand `all` while editing registered custom properties. Restore
+  // each complete declaration so inspection preserves shorthand order and resets.
+  for (const [style, text] of patches) {
+    if (style.cssText !== text) {
+      style.cssText = text;
     }
   }
   for (const { element, text } of inline) {

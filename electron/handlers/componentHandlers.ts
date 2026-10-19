@@ -118,7 +118,8 @@ function registerSelectionCopyHandler({
     if (!trail) {
       return { ok: false as const };
     }
-    clipboard.writeText(trail.join('\n'));
+    // Electron's clipboard is asynchronous; acknowledge only after the copy finishes.
+    await clipboard.writeText(trail.join('\n'));
     return { ok: true as const, count: trail.length };
   });
 }
