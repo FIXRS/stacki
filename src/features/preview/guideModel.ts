@@ -6,8 +6,8 @@
 // the current preview width (electron/preload/frameGuide.ts), then, for the
 // margin, gutter and width, from the fixed rem defaults. The project's value
 // is a default: the guide only draws and never writes to the project, and
-// resetting a field brings that value back. Columns start at a literal 12
-// and follow a project variable only when the user connects one.
+// resetting a field brings that value back. Columns follow --site-columns
+// by default, falling back to 12 when the page cannot supply a usable count.
 
 import { assert } from '../../../shared/core/assert';
 
@@ -27,13 +27,15 @@ export const GUIDE_LIMITS = {
   variablesMax: 4,
 } as const satisfies Record<string, number>;
 
-/** A column count is either a literal or an explicit project-variable connection. */
+/** Automatic project defaults remain distinct from deliberate menu overrides. */
 export type GuideColumnSetting =
+  | { readonly kind: 'automatic' }
   | { readonly kind: 'count'; readonly count: number }
   | { readonly kind: 'variable'; readonly name: string };
 
 /** The initial count and the fallback when a connected variable cannot supply one. */
 export const GUIDE_COLUMN_COUNT_DEFAULT = 12;
+export const GUIDE_COLUMN_VARIABLE_DEFAULT = '--site-columns';
 /** The numbers are the column colour, this much more opaque than the column. */
 export const GUIDE_NUMBER_OPACITY = 0.5;
 
@@ -106,7 +108,7 @@ export interface GuideSettings {
 
 export const GUIDE_DEFAULTS: GuideSettings = {
   visible: false,
-  columns: { kind: 'count', count: GUIDE_COLUMN_COUNT_DEFAULT },
+  columns: { kind: 'automatic' },
   // A neutral grey, barely there.
   color: 'rgb(146, 146, 146)',
   opacity: 0.06,
@@ -260,6 +262,8 @@ export function guideVariableNames(settings: GuideSettings): readonly string[] {
   }
   if (settings.columns.kind === 'variable') {
     names.add(settings.columns.name);
+  } else if (settings.columns.kind === 'automatic') {
+    names.add(GUIDE_COLUMN_VARIABLE_DEFAULT);
   }
   assert(names.size <= GUIDE_LIMITS.variablesMax, 'Guide: one variable per value at most');
   return [...names];
@@ -309,8 +313,24 @@ export function parseGuideColumnSetting(text: string): GuideColumnSetting | unde
   return size?.kind === 'variable' ? size : undefined;
 }
 
-export function guideColumnText(setting: GuideColumnSetting): string {
-  return setting.kind === 'count' ? String(setting.count) : `var(${setting.name})`;
+export function guideColumnText(
+  setting: GuideColumnSetting,
+  metrics: GuideMetrics | undefined = undefined,
+): string {
+  switch (setting.kind) {
+    case 'automatic':
+      return isGuideColumnPick(metrics?.variableCounts[GUIDE_COLUMN_VARIABLE_DEFAULT])
+        ? `var(${GUIDE_COLUMN_VARIABLE_DEFAULT})`
+        : String(GUIDE_COLUMN_COUNT_DEFAULT);
+    case 'count':
+      return String(setting.count);
+    case 'variable':
+      return `var(${setting.name})`;
+    default: {
+      const exhaustive: never = setting;
+      return exhaustive;
+    }
+  }
 }
 
 // An explicit variable never falls through to an unrelated project variable:
@@ -324,7 +344,8 @@ function columnCountOf(
     assert(isGuideColumnPick(setting.count), 'Guide: the literal count is within range');
     return { columnCount: setting.count, columnSource: 'stacki' };
   }
-  const declared = metrics.variableCounts[setting.name];
+  const name = setting.kind === 'automatic' ? GUIDE_COLUMN_VARIABLE_DEFAULT : setting.name;
+  const declared = metrics.variableCounts[name];
   if (isGuideColumnPick(declared)) {
     return { columnCount: declared, columnSource: 'project' };
   }

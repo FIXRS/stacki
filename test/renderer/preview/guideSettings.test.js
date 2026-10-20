@@ -2,7 +2,8 @@
 // settings, and a bad field costs only that field. Methodology: parse a full record,
 // then records missing or garbling each field in turn, and check every other
 // field survives. Legacy column presets migrate to literals or explicit
-// variable connections, and new records round-trip without a preset list. Colours go
+// variable connections. Old defaults migrate to automatic; newly saved literal
+// overrides round-trip without becoming automatic. Colours go
 // through CSS.supports, which Node lacks, so a stand-in accepts the literal
 // colours a browser would.
 const test = require('node:test');
@@ -37,12 +38,12 @@ test('a stored record reads back whole', () => {
   assert.deepEqual(parseGuideSettings(bound), bound);
 });
 
-test('the guide is off by default, grey at 0.06, numbered, with a literal 12 columns', () => {
+test('the guide is off by default, grey at 0.06, numbered, with automatic columns', () => {
   assert.equal(GUIDE_DEFAULTS.visible, false);
   assert.equal(GUIDE_DEFAULTS.color, 'rgb(146, 146, 146)');
   assert.equal(GUIDE_DEFAULTS.opacity, 0.06);
   assert.equal(GUIDE_DEFAULTS.numbers, true);
-  assert.deepEqual(GUIDE_DEFAULTS.columns, { kind: 'count', count: 12 });
+  assert.deepEqual(GUIDE_DEFAULTS.columns, { kind: 'automatic' });
 });
 
 test('anything that is not a record is the defaults', () => {
@@ -95,7 +96,20 @@ test('legacy counts survive independently of the removed preset list', () => {
   });
 });
 
-test('malformed stored column settings reset to 12 without changing other fields', () => {
+test('old defaults become automatic while new literal overrides survive reopening', () => {
+  for (const columns of [12, { kind: 'count', count: 12 }, { kind: 'automatic' }]) {
+    assert.deepEqual(parseGuideSettings({ ...STORED, columns }).columns, GUIDE_DEFAULTS.columns);
+  }
+  const columns = { kind: 'count', count: 12 };
+  const saved = JSON.parse(JSON.stringify({ ...STORED, columns, columnDefaultsVersion: 1 }));
+  assert.deepEqual(parseGuideSettings(saved), { ...STORED, columns });
+  const automatic = { ...saved, columns: { kind: 'automatic' } };
+  assert.deepEqual(parseGuideSettings(automatic).columns, GUIDE_DEFAULTS.columns);
+  const custom = { ...STORED, columns: { kind: 'variable', name: '--site-columns' } };
+  assert.deepEqual(parseGuideSettings(custom), custom);
+});
+
+test('malformed stored column settings reset to automatic without changing other fields', () => {
   const badValues = [
     { kind: 'count' },
     { kind: 'count', count: 3 },

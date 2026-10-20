@@ -5,7 +5,7 @@
 // lengths and menu variables declared or missing, a capped wide screen — then
 // corrupt the inputs (zero columns, gutters wider than the box, lengths and
 // names out of bounds) and check the assertions and parsers say so. Column
-// counts default to 12, or follow only the explicitly connected variable.
+// counts follow --site-columns by default, fall back to 12, and respect overrides.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -143,23 +143,46 @@ test('the frame is asked about each menu variable once', () => {
     gutter: variable('--pad'),
     widthMax: length(1200, 'px'),
   };
-  assert.deepEqual(guideVariableNames(settings), ['--pad']);
-  assert.deepEqual(guideVariableNames(GUIDE_DEFAULTS), []);
+  assert.deepEqual(guideVariableNames(settings), ['--pad', '--site-columns']);
+  assert.deepEqual(guideVariableNames(GUIDE_DEFAULTS), ['--site-columns']);
   const counted = { ...settings, gutter: variable('--gap'), columns: variable('--cols') };
   assert.deepEqual(guideVariableNames(counted), ['--pad', '--gap', '--cols']);
 });
 
-test('columns default to literal 12 even when the project declares another count', () => {
-  const metrics = { ...LUMOS_WIDE, columns: { count: 8, variable: '--site-columns' } };
-  assert.deepEqual(GUIDE_DEFAULTS.columns, { kind: 'count', count: 12 });
+test('automatic columns follow site-columns as it changes and show the binding', () => {
+  assert.deepEqual(GUIDE_DEFAULTS.columns, { kind: 'automatic' });
+  for (const count of [4, 8, 13, 24]) {
+    const metrics = { ...LUMOS_WIDE, variableCounts: { '--site-columns': count } };
+    const guide = resolveGuide(metrics, GUIDE_DEFAULTS);
+    assert.equal(guide.columnCount, count);
+    assert.equal(guide.columnSource, 'project');
+    assert.equal(guideColumns(guide).length, count);
+    assert.equal(guideColumnText(GUIDE_DEFAULTS.columns, metrics), 'var(--site-columns)');
+    const override = { ...GUIDE_DEFAULTS, columns: { kind: 'count', count: 12 } };
+    assert.equal(resolveGuide(metrics, override).columnCount, 12);
+    assert.equal(guideColumnText(override.columns, metrics), '12');
+  }
+});
+
+test('automatic columns fall back to 12 for missing or unusable site-columns', () => {
   assert.equal(guideColumnText(GUIDE_DEFAULTS.columns), '12');
-  assert.equal(resolveGuide(metrics, GUIDE_DEFAULTS).columnCount, 12);
+  for (const count of [undefined, 0, 3, 25, 4.5, Number.NaN, Infinity]) {
+    const metrics = {
+      ...LUMOS_WIDE,
+      columns: { count: 8, variable: '--site-column-count' },
+      variableCounts: { '--site-columns': count },
+    };
+    const guide = resolveGuide(metrics, GUIDE_DEFAULTS);
+    assert.equal(guide.columnCount, 12);
+    assert.equal(guide.columnSource, 'stacki');
+    assert.equal(guideColumnText(GUIDE_DEFAULTS.columns, metrics), '12');
+  }
 });
 
 test('a connected column variable follows the page and updates with its value', () => {
   const settings = { ...GUIDE_DEFAULTS, columns: variable('--cols') };
   for (const count of [4, 10, 13, 24]) {
-    const metrics = { ...LUMOS_WIDE, variableCounts: { '--cols': count } };
+    const metrics = { ...LUMOS_WIDE, variableCounts: { '--cols': count, '--site-columns': 6 } };
     const guide = resolveGuide(metrics, settings);
     assert.equal(guide.columnCount, count);
     assert.equal(guide.columnSource, 'project');

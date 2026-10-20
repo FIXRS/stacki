@@ -11,6 +11,7 @@ import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import {
   GUIDE_DEFAULTS,
+  GUIDE_COLUMN_COUNT_DEFAULT,
   GUIDE_LIMITS,
   clampGuideOpacity,
   guideVariableNames,
@@ -29,6 +30,9 @@ import type { GuideMenuProps } from './GuideMenu';
 const GUIDE_STORAGE_PREFIX = 'stacki.columnGuide:';
 // A stored record is a handful of short fields; anything longer is not one.
 const GUIDE_STORED_CHARS_MAX = 2_048;
+// Earlier records saved the old default 12 as a literal even when never edited.
+// Mark new saves so an explicitly entered 12 remains an override after reopening.
+const GUIDE_COLUMN_DEFAULTS_VERSION = 1;
 
 export type GuideUpdate = (update: (settings: GuideSettings) => GuideSettings) => void;
 
@@ -114,7 +118,7 @@ export function parseGuideSettings(input: unknown): GuideSettings {
   const numbers = value.get('numbers');
   return {
     visible: typeof visible === 'boolean' ? visible : GUIDE_DEFAULTS.visible,
-    columns: columnsOr(value.get('columns'), value.get('columnVariable')),
+    columns: storedColumns(value),
     color: colorOr(value.get('color')),
     opacity: opacityOr(value.get('opacity')),
     numbers: typeof numbers === 'boolean' ? numbers : GUIDE_DEFAULTS.numbers,
@@ -201,7 +205,7 @@ function saveGuideSettings(projectKey: string | undefined, settings: GuideSettin
     return;
   }
   const key = storageKey(projectKey);
-  const raw = JSON.stringify(settings);
+  const raw = JSON.stringify({ ...settings, columnDefaultsVersion: GUIDE_COLUMN_DEFAULTS_VERSION });
   assert(raw.length <= GUIDE_STORED_CHARS_MAX, 'Guide settings: record within limit');
   try {
     localStorage.setItem(key, raw);
@@ -210,8 +214,20 @@ function saveGuideSettings(projectKey: string | undefined, settings: GuideSettin
   }
 }
 
+function storedColumns(value: ReadonlyMap<string, unknown>): GuideColumnSetting {
+  const columns = columnsOr(value.get('columns'), value.get('columnVariable'));
+  if (value.get('columnDefaultsVersion') !== GUIDE_COLUMN_DEFAULTS_VERSION) {
+    if (columns.kind === 'count') {
+      if (columns.count === GUIDE_COLUMN_COUNT_DEFAULT) {
+        return GUIDE_DEFAULTS.columns;
+      }
+    }
+  }
+  return columns;
+}
+
 // Old versions stored a preset number or "project" with a separate variable.
-// Keep deliberate choices while migrating the old automatic default to 12.
+// Keep deliberate choices while migrating the old automatic default.
 function columnsOr(input: unknown, legacyVariable: unknown): GuideColumnSetting {
   if (isGuideColumnPick(input)) {
     return { kind: 'count', count: input };
@@ -225,6 +241,8 @@ function columnsOr(input: unknown, legacyVariable: unknown): GuideColumnSetting 
   }
   const value = new Map<string, unknown>(Object.entries(input));
   switch (value.get('kind')) {
+    case 'automatic':
+      return GUIDE_DEFAULTS.columns;
     case 'count': {
       const count = value.get('count');
       return isGuideColumnPick(count) ? { kind: 'count', count } : GUIDE_DEFAULTS.columns;

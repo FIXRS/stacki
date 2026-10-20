@@ -9,7 +9,6 @@ import useScrub from '../style/components/useScrub';
 import { stepSizeKey, useFollowingDraft } from '../style/SizeKit';
 import VariableConnect from '../style/VariableConnect';
 import {
-  GUIDE_COLUMN_COUNT_DEFAULT,
   GUIDE_DEFAULTS,
   GUIDE_LENGTH_DEFAULTS,
   GUIDE_LIMITS,
@@ -102,7 +101,7 @@ function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
         value={settings.visible}
         onChange={(visible) => update((previous) => ({ ...previous, visible }))}
       />
-      <ColumnsRow settings={settings} update={update} />
+      <ColumnsRow settings={settings} update={update} metrics={metrics} />
       <ColorRow settings={settings} update={update} />
       <OpacityRow settings={settings} update={update} />
       <SwitchRow
@@ -140,9 +139,13 @@ function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
   );
 }
 
-// Columns use the panel's ordinary variable-capable field, with a literal
-// default so the visible value always describes what the overlay draws.
-function ColumnsRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'update'>) {
+// Show the automatic binding only when it supplies a usable count, so the
+// field describes the overlay even on projects without layout variables.
+function ColumnsRow({
+  settings,
+  update,
+  metrics,
+}: Pick<GuideMenuProps, 'settings' | 'update' | 'metrics'>) {
   const reset = (): void =>
     update((previous) => ({ ...previous, columns: GUIDE_DEFAULTS.columns }));
   const commit = (text: string): void => {
@@ -155,14 +158,13 @@ function ColumnsRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'upd
       update((previous) => ({ ...previous, columns }));
     }
   };
-  const changed =
-    settings.columns.kind === 'variable' || settings.columns.count !== GUIDE_COLUMN_COUNT_DEFAULT;
+  const changed = settings.columns.kind !== 'automatic';
   return (
     <div className="embed-editor_size-row">
       <ResetLabel label="Columns" changed={changed} onReset={reset} />
       <div className="embed-editor_field">
         <GuideField
-          value={guideColumnText(settings.columns)}
+          value={guideColumnText(settings.columns, metrics)}
           ariaLabel="Column count"
           title={`${COUNT_RANGE} Or connect a project variable.`}
           variables="Connect the column count to a variable"
@@ -357,7 +359,7 @@ function GuideMenuNotes({
 
 // Only an explicitly connected variable can affect the column count.
 function columnCountNotes(settings: GuideSettings, metrics: GuideMetrics): readonly string[] {
-  if (settings.columns.kind === 'count') {
+  if (settings.columns.kind !== 'variable') {
     return [];
   }
   const name = settings.columns.name;
