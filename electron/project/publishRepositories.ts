@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { git, run } from '../lib/nodeTools';
+import { sameFilesystemPath } from '../lib/platform';
 import { record, list } from '../../shared/core/boundary';
 import { parseGitHubRepository } from '../../shared/ipc/githubRepository';
 import {
@@ -57,7 +58,7 @@ export async function publishingRepositories(
 
 export async function repositoryState(root: string): Promise<PublishingRepositories> {
   const top = await repositoryRoot(root);
-  if (top && realpathSync(top) !== realpathSync(root)) {
+  if (top && !sameFilesystemPath(realpathSync.native(top), realpathSync.native(root))) {
     throw new Error('Open the repository root to change its connection.');
   }
   let remote = '';

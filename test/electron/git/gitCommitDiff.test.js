@@ -39,13 +39,15 @@ test('read-only patches cover file lifecycle and first-parent merges', async () 
     await run('config', 'user.email', 'diff@example.com');
     await run('config', 'diff.suppressBlankEmpty', 'true');
     await write('page.txt', 'before\nkeep\n\n');
-    await write('literal*.txt', 'literal\n');
-    await write('literal-other.txt', 'unrelated\n');
+    // Brackets exercise Git pathspec expansion and are valid Windows filenames.
+    await write('literal[ab].txt', 'literal\n');
+    await write('literala.txt', 'unrelated\n');
     await write('image.bin', Buffer.from([0, 1, 2, 3]));
     const root = await commit('Root');
     assert.match(await diff(root, 'page.txt'), /@@ -0,0 \+1,3 @@\n\+before\n\+keep/);
     assert.match(await diff(root, 'image.bin'), /Binary files/);
-    assert.doesNotMatch(await diff(root, 'literal*.txt'), /unrelated/);
+    assert.match(await diff(root, 'literal[ab].txt'), /\+literal/);
+    assert.doesNotMatch(await diff(root, 'literal[ab].txt'), /unrelated/);
     await write('page.txt', 'after\nkeep\n\n');
     const update = await commit('Update');
     assert.match(await diff(update, 'page.txt'), /-before\n\+after\n keep\n /);

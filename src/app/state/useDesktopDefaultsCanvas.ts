@@ -2,7 +2,10 @@ import { useDefaultsKeyboard } from '../../features/componentDefaults/useDefault
 import { canvasNodeAt } from '../../features/componentDefaults/defaultsCanvasModel';
 import { useMemo, useRef } from 'react';
 import { useDefaultsCanvas } from '../../features/componentDefaults/useDefaultsCanvas';
-import { desktopDefaultsHost } from '../../features/componentDefaults/defaultsHost';
+import {
+  desktopDefaultsHost,
+  relativeComponentPath,
+} from '../../features/componentDefaults/defaultsHost';
 import { defaultsCanvasRoute } from '../../../shared/properties/defaultsCanvas';
 import { readPage } from '../../ipc/bridge';
 import type { OpenFile } from '../../editor/pageState';
@@ -93,7 +96,7 @@ async function startForNode(
     throw new Error(page.reason);
   }
   await canvas.start({
-    file: file.slice(project.length + 1),
+    file: relativeComponentPath(project, file),
     source: page.source,
     model: page.model,
     path,

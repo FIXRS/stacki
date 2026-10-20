@@ -156,9 +156,10 @@ const check = (what, condition, detail) => {
            ".map((n) => n.textContent).join('|')"),
        };
 
+       // Measure layout height, independent of a popup's opening scale animation.
        const shape = (sel) => js("(() => { const el = document.querySelector('" + sel + "'); " +
          "const r = el.getBoundingClientRect(); const c = getComputedStyle(el); " +
-         "return { h: Math.round(r.height), font: c.fontSize, " +
+         "return { h: el.offsetHeight, font: c.fontSize, " +
          "family: c.fontFamily.split(',')[0].replace(/[\\"']/g, ''), padding: c.padding, " +
          "radius: c.borderRadius } })()");
        const out = { opening };
@@ -167,7 +168,7 @@ const check = (what, condition, detail) => {
        out.varFields = await js("(() => { const pop = " +
          "document.querySelector('.embed-editor_layer-popover'); if (!pop) return null; " +
          "const shape = (el) => { const c = getComputedStyle(el); " +
-         "const r = el.getBoundingClientRect(); return { h: Math.round(r.height), " +
+         "const r = el.getBoundingClientRect(); return { h: el.offsetHeight, " +
          "font: c.fontSize, w: Math.round(r.width) } }; const dur = " +
          "pop.querySelector('.embed-editor_trans-duration .embed-editor_field'); " +
          "const ease = pop.querySelector('.embed-editor_trans-easing .embed-editor_field'); " +
@@ -188,7 +189,7 @@ const check = (what, condition, detail) => {
        out.plainFields = await js("(() => { const pop = " +
          "document.querySelector('.embed-editor_layer-popover'); if (!pop) return null; " +
          "const shape = (el) => { const c = getComputedStyle(el); " +
-         "const r = el.getBoundingClientRect(); return { h: Math.round(r.height), " +
+         "const r = el.getBoundingClientRect(); return { h: el.offsetHeight, " +
          "font: c.fontSize, w: Math.round(r.width) } }; const dur = " +
          "pop.querySelector('.embed-editor_trans-duration .embed-editor_field'); " +
          "const ease = pop.querySelector('.embed-editor_trans-easing .embed-editor_field'); " +
