@@ -67,6 +67,8 @@ try {
     await first.getByText('Local development · no sign-in required', { exact: true }).waitFor();
   }
   await accountMenu.click();
+  // The shared popup consumes outside clicks until its closing animation finishes.
+  await first.locator('.account-popover').waitFor({ state: 'detached' });
 
   await first.getByRole('button', { name: 'Expand all', exact: true }).click();
   await second.getByRole('button', { name: 'Expand all', exact: true }).click();

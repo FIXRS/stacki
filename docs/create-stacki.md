@@ -1,5 +1,7 @@
 # Publishing create-stacki
 
+For the combined Desktop and Studio release, see [release checks and recovery notes](./releases.md).
+
 `npm create stacki@latest` resolves to the `create-stacki` package. Its CLI and the desktop wizard
 share the same release parser and transactional installer. The npm artifact bundles the Studio
 source release so a GitHub release does not have to exist first.
