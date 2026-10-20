@@ -24,7 +24,17 @@ export type CheckOutcome =
 export type FormatMode = 'write' | 'check';
 
 const LINTED_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
-const TYPED_EXTENSIONS = new Set(['.mts', '.ts', '.tsx']);
+// Each build target has its own module and library settings. The broad root
+// program alone cannot catch an import that fails the Electron build.
+const TYPE_PROJECTS = [
+  'tsconfig.json',
+  'scripts/tsconfig.json',
+  'scripts/tsconfig.build.json',
+  'shared/tsconfig.json',
+  'electron/tsconfig.json',
+  'electron/tsconfig.morph.json',
+  'electron/tsconfig.preload.json',
+] as const;
 
 export function repositoryRoot(): string {
   return path.resolve(import.meta.dirname, '..', '..');
@@ -77,11 +87,15 @@ export function checkChanged(root: string): CheckOutcome {
   const files = changedFiles(root);
   const fileOutcome = checkFiles(root, files, { format: 'check' });
   const sections = fileOutcome.kind === 'fail' ? [fileOutcome.report] : [];
-  if (files.some((file) => TYPED_EXTENSIONS.has(path.extname(file)))) {
-    const types = runTypeCheck(root);
-    if (types.status !== 0) {
-      sections.push(section('TypeScript', types.stdout + types.stderr));
-    }
+  // Config edits and deleted modules can break compilation without leaving a
+  // changed TypeScript file. Incremental checks make unconditional coverage cheap.
+  const types = runTypeCheck(root);
+  if (types.status !== 0) {
+    sections.push(section('TypeScript', types.stdout + types.stderr));
+  }
+  const paths = runSourcePathCheck(root);
+  if (paths.status !== 0) {
+    sections.push(section('Test source paths', paths.stdout + paths.stderr));
   }
   return outcome(sections);
 }
@@ -103,23 +117,30 @@ export function stagedFiles(root: string): readonly string[] {
 export function runTypeCheck(root: string): ChildResult {
   const compiler = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
   const cache = path.join(root, 'node_modules', '.cache', 'tsc');
-  const project = runChild(
-    process.execPath,
-    [
-      compiler,
-      '--noEmit',
-      '--incremental',
-      '--tsBuildInfoFile',
-      path.join(cache, 'root.tsbuildinfo'),
-    ],
-    { cwd: root },
-  );
-  if (project.status !== 0) {
-    return project;
+  for (const project of TYPE_PROJECTS) {
+    const cacheName = project.replaceAll('/', '-').replace('.json', '.tsbuildinfo');
+    const result = runChild(
+      process.execPath,
+      [
+        compiler,
+        '--project',
+        project,
+        '--noEmit',
+        '--incremental',
+        '--tsBuildInfoFile',
+        path.join(cache, cacheName),
+      ],
+      { cwd: root },
+    );
+    if (result.status !== 0) {
+      return result;
+    }
   }
-  return runChild(process.execPath, [compiler, '-p', path.join('scripts', 'tsconfig.json')], {
-    cwd: root,
-  });
+  return { status: 0, stdout: '', stderr: '' };
+}
+
+export function runSourcePathCheck(root: string): ChildResult {
+  return runChild(process.execPath, ['test/scripts/gate/sourcePaths.test.js'], { cwd: root });
 }
 
 export function runEslint(root: string, files: readonly string[]): ChildResult {
