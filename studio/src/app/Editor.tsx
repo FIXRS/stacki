@@ -20,6 +20,7 @@ import type { ComponentFocus, OpenFile } from '../features/project/editorNavigat
 import { VariablesWorkspace } from '../features/variables/VariablesWorkspace';
 import { CodePopup } from '../features/code/CodePopup';
 import { CodeAccess } from '../../vendor/stacki/src/ui/CodeAccess';
+import { getHost, setHost } from '../../vendor/stacki/src/features/style/model/host';
 import { PreviewWorkspace, useInteractivePreview } from '../features/preview/InteractivePreview';
 export interface EditorProps {
   readonly session: Session | undefined;
@@ -112,6 +113,14 @@ function useComponentPanel(componentOpen: boolean, setPanel: EditorProps['view']
     }
   }, [componentOpen, setPanel]);
 }
+// Variable pickers read the project from the style panel's shared host. Set it here,
+// with the project StyleSettings.tsx passes, so a picker opened before that panel
+// still lists the project's variables.
+function useStyleProject() {
+  useEffect(() => {
+    setHost({ ...getHost(), projectPath: 'studio' });
+  }, []);
+}
 function EditorContent({
   props,
   model,
@@ -124,6 +133,7 @@ function EditorContent({
   readonly setMobileSettings: (visible: boolean) => void;
 }) {
   const { device, setDevice, setPanel } = props.view;
+  useStyleProject();
   return (
     <div className="studio-editor-content">
       <PreviewCanvas
