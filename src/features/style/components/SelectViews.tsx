@@ -1,3 +1,4 @@
+import Popup from '../../../ui/Popup';
 // What a Select draws: the trigger, the list and its rows, each row's action
 // (Select.tsx).
 
@@ -100,13 +101,16 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
   const { props, displayed } = list;
   const { ariaLabel, labelId, searchable = false } = props;
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={list.onCancel}
       ref={list.listRef}
       className={['u-select-list', list.dropUp ? 'is-up' : ''].filter(Boolean).join(' ')}
       role="listbox"
       tabIndex={-1}
-      aria-label={ariaLabel}
-      aria-labelledby={labelId}
+      label={ariaLabel}
+      labelledBy={labelId}
       aria-activedescendant={optionId(list.baseId, list.activeIndex)}
       onKeyDown={searchable ? undefined : list.onListKeyDown}
       onMouseLeave={list.onLeave}
@@ -145,7 +149,7 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
           />
         ))
       )}
-    </div>
+    </Popup>
   );
 }
 

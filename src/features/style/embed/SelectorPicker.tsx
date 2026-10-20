@@ -1,3 +1,4 @@
+import Popup from '../../../ui/Popup';
 // The selector well: the chips a selection is styled by, picking and adding
 // one, and filtering global selectors (EmbedEditor.tsx).
 
@@ -421,7 +422,7 @@ export function SelectorAddField({
   onBlur: () => void;
   apply: (text: string) => void;
 }) {
-  const { draft, highlight, setHighlight, filtered, showList } = add;
+  const { draft, setHighlight, showList } = add;
   return (
     <div className="embed-editor_selector-field">
       <input
@@ -451,33 +452,7 @@ export function SelectorAddField({
         onKeyDown={(event) => selectorKeyDown(event, add, apply)}
         aria-label="Add a selector"
       />
-      {showList ? (
-        <div
-          className="embed-editor_selector-suggest"
-          ref={listRef}
-          role="listbox"
-          aria-label="Selector suggestions"
-        >
-          {filtered.map((suggestion, i) => (
-            <button
-              key={`${suggestion.kind}:${suggestion.selector}`}
-              type="button"
-              role="option"
-              aria-selected={i === highlight}
-              className={`embed-editor_suggest-item ${i === highlight ? 'is-active' : ''}`}
-              // Keep the input focused so its blur doesn't close the list before the click.
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseMove={() => setHighlight(i)}
-              onClick={() => apply(suggestion.selector)}
-            >
-              <span className="embed-editor_suggest-sel">{suggestion.selector}</span>
-              <span className="embed-editor_suggest-kind">
-                {SUGGESTION_KIND_LABEL[suggestion.kind]}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : undefined}
+      {showList ? <SelectorSuggestions add={add} listRef={listRef} apply={apply} /> : undefined}
     </div>
   );
 }
@@ -629,4 +604,46 @@ export interface QueryComboProps {
   /** Select the whole value on mount (editing) instead of parking the caret at
    *  the end of it (adding, where the value so far is just `@`). */
   selectOnFocus?: boolean;
+}
+
+function SelectorSuggestions({
+  add,
+  listRef,
+  apply,
+}: {
+  readonly add: AddSelectorState;
+  readonly listRef: React.RefObject<HTMLDivElement>;
+  readonly apply: (text: string) => void;
+}) {
+  const { filtered, highlight, setHighlight } = add;
+  return (
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={() => add.setOpen(false)}
+      className="embed-editor_selector-suggest"
+      ref={listRef}
+      role="listbox"
+      label="Selector suggestions"
+    >
+      {filtered.map((suggestion, i) => (
+        <button
+          key={`${suggestion.kind}:${suggestion.selector}`}
+          type="button"
+          role="option"
+          aria-selected={i === highlight}
+          className={`embed-editor_suggest-item ${i === highlight ? 'is-active' : ''}`}
+          // Keep the input focused so its blur doesn't close the list before the click.
+          onMouseDown={(event) => event.preventDefault()}
+          onMouseMove={() => setHighlight(i)}
+          onClick={() => apply(suggestion.selector)}
+        >
+          <span className="embed-editor_suggest-sel">{suggestion.selector}</span>
+          <span className="embed-editor_suggest-kind">
+            {SUGGESTION_KIND_LABEL[suggestion.kind]}
+          </span>
+        </button>
+      ))}
+    </Popup>
+  );
 }

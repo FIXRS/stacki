@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   createAstroProject,
@@ -56,16 +57,16 @@ export function StarterWizard({
       title="Start from Lumos"
       running={running}
       onClose={onClose}
-      footer={
+      footer={(close) => (
         <>
-          <button className="ghost" onClick={onClose} disabled={running}>
+          <button className="ghost" onClick={close} disabled={running}>
             Cancel
           </button>
           <button className="primary" onClick={() => void run()} disabled={running || invalid}>
             {running ? 'Creating…' : 'Create site'}
           </button>
         </>
-      }
+      )}
     >
       <label className="starter-field">
         <span>Site name</span>
@@ -123,16 +124,16 @@ export function NewProjectWizard({
       title="New Astro Project"
       running={running}
       onClose={onClose}
-      footer={
+      footer={(close) => (
         <>
-          <button onClick={onClose} disabled={running}>
+          <button onClick={close} disabled={running}>
             {state.kind === 'error' ? 'Close' : 'Cancel'}
           </button>
           <button className="primary" onClick={() => void run()} disabled={running}>
             {running ? 'Creating…' : state.kind === 'error' ? 'Try again' : 'Create Project'}
           </button>
         </>
-      }
+      )}
     >
       <div className="new-project-dir" title={directory}>
         {directory}
@@ -186,23 +187,18 @@ function WizardFrame({
   readonly running: boolean;
   readonly onClose: () => void;
   readonly children: React.ReactNode;
-  readonly footer: React.ReactNode;
+  readonly footer: (close: () => void) => React.ReactNode;
 }) {
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !running) {
-          onClose();
-        }
-      }}
-    >
-      <div className="modal new-project-modal">
-        <div className="modal-header">{title}</div>
-        <div className="modal-body">{children}</div>
-        <div className="modal-footer">{footer}</div>
-      </div>
-    </div>
+    <Popup className="modal new-project-modal" onClose={onClose} dismissible={!running}>
+      {({ close }) => (
+        <>
+          <div className="modal-header">{title}</div>
+          <div className="modal-body">{children}</div>
+          <div className="modal-footer">{footer(close)}</div>
+        </>
+      )}
+    </Popup>
   );
 }
 

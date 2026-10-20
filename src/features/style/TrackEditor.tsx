@@ -2,7 +2,7 @@
 // or a minmax), auto-fit, and the popover it opens in (GridSettings.tsx).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../ui/Popup';
 import type { ReactNode } from 'react';
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
 import useScrub from './components/useScrub';
@@ -340,9 +340,11 @@ export function TrackPopover({
     }
     setPosition(popoverPosition(anchorElement, popover.offsetHeight, span));
   }, [anchorElement, span]);
-  usePopoverDismiss({ ref, anchorElement, onClose });
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      onClose={onClose}
+      anchor={anchorElement}
       ref={ref}
       className={`embed-editor_grid-popover ${position && !position.below ? 'is-above' : ''}`}
       role="dialog"
@@ -360,8 +362,7 @@ export function TrackPopover({
         aria-hidden="true"
       />
       {children}
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 
@@ -383,43 +384,4 @@ export function popoverPosition(
     span.width - 16,
   );
   return { top, caretLeft, below };
-}
-
-// Closes the popover on an outside click, Escape, or any scroll.
-export function usePopoverDismiss({
-  ref,
-  anchorElement,
-  onClose,
-}: {
-  ref: React.RefObject<HTMLDivElement>;
-  anchorElement: HTMLElement;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    // Ignore clicks on the trigger row — its own onClick toggles the popover closed;
-    // if this handler closed it first, that same click would immediately re-open it.
-    const onDown = (event: MouseEvent) => {
-      const target = event.target;
-      if (
-        !(target instanceof Node) ||
-        (!ref.current?.contains(target) && !anchorElement.contains(target))
-      ) {
-        onClose();
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    const onScroll = () => onClose();
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-    };
-  }, [onClose, anchorElement, ref]);
 }

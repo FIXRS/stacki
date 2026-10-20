@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useState } from 'react';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { assert } from '../../../shared/core/assert';
@@ -16,6 +17,7 @@ export interface SwitchBranchProps {
 // both reasonable, and picking one silently is how the edits ended up on the
 // wrong branch in the first place.
 export default function SwitchBranchModal(props: SwitchBranchProps) {
+  assert(props.files.length <= BOUNDARY_LIMITS.itemsMax, 'Branch switch: file limit exceeded');
   const [message, setMessage] = useState('');
   return <SwitchBranchBody {...props} message={message} setMessage={setMessage} />;
 }
@@ -36,55 +38,54 @@ function SwitchBranchBody({
   const working = !!busy;
 
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => event.target === event.currentTarget && !working && onCancel()}
-    >
-      <div className="modal">
-        <div className="modal-header">These changes can’t come with you</div>
-        <div className="modal-body">
-          <div className="hint-text">
-            {from} and {to} have different versions of{' '}
-            {files.length === 1 ? 'this file' : 'these files'}, so your unsaved work can’t follow
-            you across. It can wait here until you come back — no commit needed.
-          </div>
-
-          <SwitchBranchFiles files={files} />
-
-          <div>
-            <label>Or commit them first</label>
-            <input
-              autoFocus
-              maxLength={BOUNDARY_LIMITS.textLengthMax}
-              placeholder={`Update ${from}`}
-              value={message}
-              disabled={working}
-              onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !working) {
-                  onCommitFirst(message.trim() || `Update ${from}`);
-                }
-              }}
-            />
-          </div>
-
-          {working && (
-            <div className="publish-progress">
-              <span className="mini-spinner" />
-              <span>{busy}</span>
+    <Popup className="modal" onClose={onCancel} dismissible={!working}>
+      {({ close }) => (
+        <>
+          <div className="modal-header">These changes can’t come with you</div>
+          <div className="modal-body">
+            <div className="hint-text">
+              {from} and {to} have different versions of{' '}
+              {files.length === 1 ? 'this file' : 'these files'}, so your unsaved work can’t follow
+              you across. It can wait here until you come back — no commit needed.
             </div>
-          )}
-        </div>
-        <SwitchBranchFooter
-          from={from}
-          busy={busy}
-          onCancel={onCancel}
-          onLeaveHere={onLeaveHere}
-          onCommitFirst={onCommitFirst}
-          message={message}
-        />
-      </div>
-    </div>
+
+            <SwitchBranchFiles files={files} />
+
+            <div>
+              <label>Or commit them first</label>
+              <input
+                autoFocus
+                maxLength={BOUNDARY_LIMITS.textLengthMax}
+                placeholder={`Update ${from}`}
+                value={message}
+                disabled={working}
+                onChange={(event) => setMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !working) {
+                    onCommitFirst(message.trim() || `Update ${from}`);
+                  }
+                }}
+              />
+            </div>
+
+            {working && (
+              <div className="publish-progress">
+                <span className="mini-spinner" />
+                <span>{busy}</span>
+              </div>
+            )}
+          </div>
+          <SwitchBranchFooter
+            from={from}
+            busy={busy}
+            onCancel={close}
+            onLeaveHere={onLeaveHere}
+            onCommitFirst={onCommitFirst}
+            message={message}
+          />
+        </>
+      )}
+    </Popup>
   );
 }
 

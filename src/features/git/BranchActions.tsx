@@ -73,6 +73,7 @@ export default function BranchActions({
       <button
         className="row-action branch-action"
         title={deleteWhy}
+        aria-label={deleteWhy}
         disabled={disabled || isCurrent || isTrunk}
         onClick={(event) => {
           event.stopPropagation();

@@ -7,25 +7,12 @@
 // margin, gutter and width, from the fixed rem defaults. The project's value
 // is a default: the guide only draws and never writes to the project, and
 // resetting a field brings that value back. Columns follow --site-columns
-// by default, falling back to 12 when the page cannot supply a usable count.
+// by default and when a connected variable is unusable, then fall back to 12.
 
 import { assert } from '../../../shared/core/assert';
 
-export const GUIDE_LIMITS = {
-  columnPickMax: 24,
-  columnPickMin: 4,
-  colorCharsMax: 64,
-  lengthPxMax: 100_000,
-  lengthRemMax: 6_000,
-  opacityMax: 0.2,
-  opacityMin: 0.06,
-  opacityStep: 0.01,
-  rootFontPxMax: 1_000,
-  /** A variable name typed into the menu, with its leading dashes. */
-  variableCharsMax: 64,
-  /** Margin, gutter, maximum width and column count: one variable each at most. */
-  variablesMax: 4,
-} as const satisfies Record<string, number>;
+export { GUIDE_LIMITS } from '../../../shared/properties/guideLimits';
+import { GUIDE_LIMITS } from '../../../shared/properties/guideLimits';
 
 /** Automatic project defaults remain distinct from deliberate menu overrides. */
 export type GuideColumnSetting =
@@ -253,10 +240,11 @@ export function guideVariableNames(settings: GuideSettings): readonly string[] {
   }
   if (settings.columns.kind === 'variable') {
     names.add(settings.columns.name);
-  } else if (settings.columns.kind === 'automatic') {
+  }
+  if (settings.columns.kind !== 'count') {
     names.add(GUIDE_COLUMN_VARIABLE_DEFAULT);
   }
-  assert(names.size <= GUIDE_LIMITS.variablesMax, 'Guide: one variable per value at most');
+  assert(names.size <= GUIDE_LIMITS.variablesMax, 'Guide: four menu variables plus the fallback');
   return [...names];
 }
 
@@ -324,8 +312,8 @@ export function guideColumnText(
   }
 }
 
-// An explicit variable never falls through to an unrelated project variable:
-// the displayed binding must be the one that controls the overlay.
+// A missing or unusable connection follows the project's default before using
+// 12, matching the spacing fields' fallback to their project variables.
 function columnCountOf(
   metrics: GuideMetrics,
   settings: GuideSettings,
@@ -339,6 +327,10 @@ function columnCountOf(
   const declared = metrics.variableCounts[name];
   if (isGuideColumnPick(declared)) {
     return { columnCount: declared, columnSource: 'project' };
+  }
+  const fallback = metrics.variableCounts[GUIDE_COLUMN_VARIABLE_DEFAULT];
+  if (isGuideColumnPick(fallback)) {
+    return { columnCount: fallback, columnSource: 'project' };
   }
   return { columnCount: GUIDE_COLUMN_COUNT_DEFAULT, columnSource: 'stacki' };
 }

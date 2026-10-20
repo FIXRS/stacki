@@ -1,3 +1,4 @@
+import type { useStudioDefaultsCanvas } from '../features/settings/useStudioDefaultsCanvas';
 import { CmsNavigation } from '../features/cms/CmsWorkspace';
 import { CodePanel } from '../features/code/CodePanel';
 import { ComponentProperties } from '../features/componentProperties/ComponentProperties';
@@ -13,6 +14,7 @@ import type { SharedDocument } from '../features/collaboration/useDocument';
 import type { Panel } from './EditorRail';
 interface SidebarProps {
   readonly panel: Panel;
+  readonly defaultsCanvas: ReturnType<typeof useStudioDefaultsCanvas>;
   readonly close: () => void;
   readonly openCode: () => void;
   readonly showNavigator: () => void;
@@ -26,9 +28,10 @@ export function EditorSidebar({
   model,
   openCode,
   showNavigator,
+  defaultsCanvas,
 }: SidebarProps) {
   const { project, file, open, refresh, report } = props;
-  const { selected, select, action, insert, document, openComponent } = model;
+  const { selected, document, openComponent } = model;
   return (
     <aside
       className={`studio-left ${panel === 'code' ? 'code-panel-shell' : ''}`}
@@ -41,18 +44,11 @@ export function EditorSidebar({
         ×
       </button>
       {panel === 'navigator' && (
-        <Navigator
-          components={project.components}
-          document={document}
-          selected={selected}
-          select={select}
-          hover={model.hover}
-          action={action}
-          insert={insert}
+        <DefaultsNavigator
+          props={props}
+          model={model}
+          defaultsCanvas={defaultsCanvas}
           openCode={openCode}
-          openCodeWindow={model.codeWindow.open}
-          openComponent={openComponent}
-          report={report}
         />
       )}
       {panel === 'collections' && <CmsNavigation props={props} />}
@@ -133,5 +129,38 @@ function HistoryPanel({
         <button onClick={() => void document?.history.step('redo').catch(report)}>Redo</button>
       </div>
     </>
+  );
+}
+
+function DefaultsNavigator({
+  props,
+  model,
+  defaultsCanvas,
+  openCode,
+}: Pick<SidebarProps, 'props' | 'model' | 'defaultsCanvas' | 'openCode'>) {
+  const { project, report } = props;
+  const { selected, select, action, insert, document, openComponent } = model;
+  return (
+    <Navigator
+      editRootId={defaultsCanvas.rootId}
+      {...(defaultsCanvas.state.kind === 'idle'
+        ? {
+            setDefaults: (name: string, id: string) => {
+              void defaultsCanvas.startForNode(name, id).catch(report);
+            },
+          }
+        : {})}
+      components={project.components}
+      document={document}
+      selected={selected}
+      select={select}
+      hover={model.hover}
+      action={action}
+      insert={insert}
+      openCode={openCode}
+      openCodeWindow={model.codeWindow.open}
+      openComponent={openComponent}
+      report={report}
+    />
   );
 }

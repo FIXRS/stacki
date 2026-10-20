@@ -42,6 +42,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
   global.document = dom.window.document;
   global.navigator = dom.window.navigator;
@@ -373,6 +374,9 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     check('hover temporarily shows the preview', find('.dd-label')?.textContent === 'play');
     check('the original option stays committed', !!find('.dd-option.selected .dd-check svg'));
     await act(async () => {
+      const canvas = document.createElement('iframe');
+      document.body.append(canvas);
+      canvas.focus();
       dom.window.dispatchEvent(new dom.window.Event('blur'));
       await settle(20);
     });

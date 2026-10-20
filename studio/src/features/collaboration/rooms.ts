@@ -1,3 +1,4 @@
+import { loadInsertionDefaults } from '../settings/loadDefaults';
 import { maintainConnection } from './connectionLease';
 import { selectionRequest } from './selectionIntent';
 import { actionSelection } from '../navigator/actionSelection';
@@ -180,7 +181,7 @@ export class Room {
         return;
       }
     } else if (message['type'] === 'action') {
-      this.applyAction(socket, message);
+      await this.applyAction(socket, message);
     } else {
       throw new Error('Unknown collaboration message');
     }
@@ -209,7 +210,7 @@ export class Room {
         }),
     );
   }
-  private applyAction(socket: WebSocket, message: Record<string, unknown>) {
+  private async applyAction(socket: WebSocket, message: Record<string, unknown>) {
     if (message['checksum'] !== checksum(this.text.toString())) {
       throw new Error('Another edit arrived. Please repeat the drag or action.');
     }
@@ -224,10 +225,14 @@ export class Room {
     if (owner) {
       throw new Error(selectionLockedMessage(owner));
     }
+    const settings = action.kind === 'insert' ? await loadInsertionDefaults(this.root) : undefined;
+    if (message['checksum'] !== checksum(this.text.toString())) {
+      throw new Error('The page changed while loading defaults. Repeat the insertion.');
+    }
     const edits =
       action.kind === 'paste'
         ? pasteEdits(this.text.toString(), this.file, action)
-        : structuralEdits(this.text.toString(), action, this.file);
+        : structuralEdits(this.text.toString(), action, this.file, settings);
     const source = this.text.toString();
     const select = actionSelection(source, applyEdits(source, edits), edits, action);
     this.document.transact(() => {

@@ -1,3 +1,7 @@
+import {
+  isCanvasPage,
+  isDefaultsCanvas,
+} from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { getEditorRole } from '../roles/roleStore';
 import { flatten, type parsePage } from '../source/source';
@@ -32,6 +36,9 @@ interface Context {
 }
 export function componentEntry(context: Context) {
   return (name: string, id: string, occurrence = 0) => {
+    if (isDefaultsCanvas(context.file)) {
+      return;
+    }
     if (getEditorRole() === 'client') {
       return;
     }
@@ -44,7 +51,7 @@ export function componentEntry(context: Context) {
       (id === 'layout'
         ? undefined
         : {
-            path: (context.file.startsWith('src/pages/') ? '' : context.file + '|') + pathFor(id),
+            path: (isCanvasPage(context.file) ? '' : context.file + '|') + pathFor(id),
             occurrence,
           });
     // Finish the source save before closing its collaboration connection.

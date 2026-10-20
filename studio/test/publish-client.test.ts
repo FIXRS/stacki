@@ -68,7 +68,7 @@ test('publish progress follows validated server stages and finishes only after t
           };
     return Response.json(options?.method === 'POST' ? state : { publishing: state });
   });
-  await publishProject(new AbortController().signal, (state) => seen.push(state));
+  await publishProject(new AbortController().signal, 'all', (state) => seen.push(state));
   assert.deepEqual(
     seen.map(parsePublishState).map((state) => state.kind),
     ['building', 'committed'],

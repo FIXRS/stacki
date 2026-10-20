@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import Popup from '../../ui/Popup';
+import React, { useRef, useState } from 'react';
 import type { Result } from '../../../shared/core/result';
 import type { FieldType } from './cmsSchema';
 import type { PickedAsset } from '../../ui/AssetField';
@@ -419,72 +420,46 @@ function RepeaterEditor(props: RepeaterProps) {
     </div>
   );
 }
-export function useCmsDialog(onClose: () => void) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-      const open = document.querySelectorAll('.cms-modal-overlay');
-      if (open[open.length - 1] !== overlayRef.current) {
-        return;
-      }
-      event.preventDefault();
-      onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return overlayRef;
-}
 function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...context }: DialogProps) {
-  const overlayRef = useCmsDialog(onClose);
   const value = toRecord(entry) ?? {};
   const fields = contentFieldsOf([entry]);
   return (
-    <div
-      ref={overlayRef}
-      className="modal-overlay cms-modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-    >
-      <div className="modal cms-modal">
-        <div className="modal-header cms-modal-header">
-          <span>{title}</span>
-          <button className="ghost" title="Close" onClick={onClose}>
-            <CloseIcon size={12} />
-          </button>
-        </div>
-        <div className="modal-body cms-modal-body">
-          {fields.map((field) => (
-            <CmsField
-              key={field.key}
-              {...context}
-              label={field.label}
-              type={field.type}
-              value={value[field.key]}
-              onChange={(next) => onChange({ ...value, [field.key]: next })}
-            />
-          ))}
-          {fields.length === 0 && (
-            <div className="cms-empty-inline">
-              These items have no fields yet — add them in the collection's settings.
-            </div>
-          )}
-        </div>
-        <div className="modal-footer cms-modal-footer">
-          <button className="ghost danger cms-delete-action" onClick={onDelete}>
-            <TrashIcon size={12} /> Delete
-          </button>
-          <button className="primary" onClick={onClose}>
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+    <Popup className="modal cms-modal" onClose={onClose} dismissible={true}>
+      {({ close }) => (
+        <>
+          <div className="modal-header cms-modal-header">
+            <span>{title}</span>
+            <button className="ghost" title="Close" onClick={close}>
+              <CloseIcon size={12} />
+            </button>
+          </div>
+          <div className="modal-body cms-modal-body">
+            {fields.map((field) => (
+              <CmsField
+                key={field.key}
+                {...context}
+                label={field.label}
+                type={field.type}
+                value={value[field.key]}
+                onChange={(next) => onChange({ ...value, [field.key]: next })}
+              />
+            ))}
+            {fields.length === 0 && (
+              <div className="cms-empty-inline">
+                These items have no fields yet — add them in the collection's settings.
+              </div>
+            )}
+          </div>
+          <div className="modal-footer cms-modal-footer">
+            <button className="ghost danger cms-delete-action" onClick={onDelete}>
+              <TrashIcon size={12} /> Delete
+            </button>
+            <button className="primary" onClick={close}>
+              Done
+            </button>
+          </div>
+        </>
+      )}
+    </Popup>
   );
 }

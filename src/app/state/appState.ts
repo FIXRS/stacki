@@ -25,7 +25,6 @@ import {
   type ProjectIdentity,
   type RightTab,
   type RightTabIndicator,
-  type ToastMessage,
 } from '../appTypes';
 import {
   findEditorNodeById as findNodeById,
@@ -174,7 +173,6 @@ export function useDevState() {
   const setDevLog = devLog.set;
   const [devDiag, setDevDiag] = useState<DevDiagnosis | undefined>(undefined);
   const [busy, setBusy] = useState<string | undefined>(undefined);
-  const [toast, setToast] = useState<ToastMessage | undefined>(undefined);
   const [refreshKey, setRefreshKey] = useState(0);
   return {
     busy,
@@ -189,9 +187,7 @@ export function useDevState() {
     setDevStatus,
     setDevUrl,
     setRefreshKey,
-    setToast,
     setTrailingSlash,
-    toast,
     trailingSlash,
   };
 }

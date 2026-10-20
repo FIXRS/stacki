@@ -1,3 +1,6 @@
+import { createAstroNotifications } from '../features/notifications/astroNotificationServer';
+import { METADATA_FILES } from '../../vendor/stacki/shared/properties/projectMetadata';
+import { isDefaultsCanvas } from '../../vendor/stacki/shared/properties/defaultsCanvas';
 import { pushWrittenSource } from '../features/preview/pushWrittenSource';
 import { instrumentVariant } from '../features/preview/variantRuntime';
 import { mutateAsset } from '../features/assets/assetOperations';
@@ -231,17 +234,8 @@ function configureStudioServer(
   const stop = rooms.onWrite((file) => pushWrittenSource(server, options.root, file, render));
   server.httpServer?.once('close', stop);
   interceptReloads(server, render);
-  server.middlewares.use((request, response, next) => {
-    if (!request.url?.startsWith('/studio')) {
-      next();
-      return;
-    }
-    void handleRequest(request, response, options, features, rooms).catch((error) =>
-      json(response, 400, {
-        error: error instanceof Error ? error.message : 'Request failed',
-      }),
-    );
-  });
+  const subscribe = createAstroNotifications(server, options.root);
+  configureStudioRequests(server, options, features, rooms, subscribe);
   server.httpServer?.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(request.url ?? '/', 'http://studio');
     if (url.pathname !== '/studio/sync') {
@@ -270,6 +264,14 @@ function configureStudioServer(
       })
       .catch(() => socket.destroy());
   });
+  configureProjectWatching(server, options.root, rooms);
+}
+
+function configureProjectWatching(
+  server: ViteDevServer,
+  root: string,
+  rooms: ReturnType<typeof createRooms>,
+) {
   server.watcher.on('all', (event, file) => {
     if (
       ['change', 'add', 'unlink'].includes(event) &&
@@ -279,8 +281,9 @@ function configureStudioServer(
     }
   });
   server.watcher.on('change', (file) => {
-    const relative = path.relative(options.root, file).split(path.sep).join('/');
-    if (relative.startsWith('src/')) {
+    const relative = path.relative(root, file).split(path.sep).join('/');
+    const metadata = Object.values(METADATA_FILES).some((name) => name === relative);
+    if (relative.startsWith('src/') || metadata || isDefaultsCanvas(relative)) {
       void rooms.changed(relative);
     }
     if (/^(src|public)\/.+\.css$/.test(relative)) {
@@ -393,4 +396,32 @@ async function sendAsset(response: ServerResponse, root: string, url: URL) {
     "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
   );
   response.end(bytes);
+}
+
+function configureStudioRequests(
+  server: ViteDevServer,
+  options: Options,
+  features: ReturnType<typeof featureRoutes>,
+  rooms: ReturnType<typeof createRooms>,
+  subscribe: ReturnType<typeof createAstroNotifications>,
+) {
+  server.middlewares.use((request, response, next) => {
+    if (!request.url?.startsWith('/studio')) {
+      next();
+      return;
+    }
+    if (
+      request.url === '/studio/api/astro-events' &&
+      request.method === 'GET' &&
+      authorized(request, options)
+    ) {
+      subscribe(response, reauthorizeConnection(request));
+      return;
+    }
+    void handleRequest(request, response, options, features, rooms).catch((error) =>
+      json(response, 400, {
+        error: error instanceof Error ? error.message : 'Request failed',
+      }),
+    );
+  });
 }

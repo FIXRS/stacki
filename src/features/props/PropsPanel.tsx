@@ -1,3 +1,4 @@
+import { PropValuePolicyContext } from './propValuePolicy';
 import type { PropValues } from './propRules';
 import { isFragmentNode } from '../../editor/liveClasses';
 import React, { useRef } from 'react';
@@ -36,7 +37,11 @@ export { BindField } from './propBindings';
 export default function PropsPanel(props: PropsPanelProps) {
   // Held union values survive selections of text, loops, and other special nodes.
   const stashRef = useRef(new Map<string, PropValues>());
-  return renderPropsPanel(props, stashRef);
+  return (
+    <PropValuePolicyContext.Provider value={props.valuePolicy ?? 'instance'}>
+      {renderPropsPanel(props, stashRef)}
+    </PropValuePolicyContext.Provider>
+  );
 }
 function renderPropsPanel(
   props: PropsPanelProps,

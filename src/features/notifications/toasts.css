@@ -1,0 +1,177 @@
+/* Cards share a bottom edge so a new notice covers, rather than moves, the older ones. */
+.toast-stack {
+  position: fixed;
+  z-index: 300;
+  bottom: 20px;
+  left: 50%;
+  width: min(390px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.toast-viewport {
+  position: relative;
+  max-height: calc(100dvh - 40px);
+  transition: height 220ms ease;
+}
+.toast-list {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+}
+.toast-stack[data-expanded='true'] {
+  /* The gaps belong to the stack so crossing them does not collapse the cards. */
+  pointer-events: auto;
+}
+.toast-stack[data-scrollable='true'] .toast-list {
+  position: relative;
+}
+.toast-stack[data-scrollable='true'] .toast-viewport {
+  transition: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+.toast-slot {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  bottom: 0;
+  width: 100%;
+  transform: translateY(calc(var(--toast-index) * -10px))
+    scale(calc(1 - var(--toast-index) * 0.045));
+  transform-origin: center top;
+  transition: transform 220ms ease;
+}
+.toast-stack[data-expanded='false'] .toast-slot {
+  height: var(--toast-front-height);
+}
+.toast-stack[data-expanded='false'] .toast-slot ~ .toast-slot {
+  /* Tall older messages stay tucked behind the newest card until the list expands. */
+  overflow: clip;
+  border-radius: 12px;
+}
+.toast-stack[data-expanded='true'] .toast-slot {
+  transform: translateY(calc(var(--toast-stack-offset) * -1));
+}
+.toast-slot[data-hidden='true'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.toast-more {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 30px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+  background: var(--bg-panel, #232323);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.toast-more:hover {
+  background: var(--bg-hover);
+}
+.toast-stack .toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  box-sizing: border-box;
+  padding: 16px 12px 16px 16px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 12px;
+  background: var(--bg-panel, #232323);
+  color: var(--text);
+  box-shadow:
+    0 12px 36px #0004,
+    0 2px 6px #0002;
+  font-size: 12px;
+  line-height: 1.6;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  transform: translate(var(--toast-drag-x), var(--toast-drag-y));
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+  animation: toast-enter 180ms ease-out;
+}
+.toast-stack .toast[data-dragging='true'] {
+  cursor: grabbing;
+  transition: none;
+}
+.toast-stack .toast[data-leaving='true'] {
+  opacity: 0;
+  pointer-events: none;
+  /* Preserve the locked axis while fading out after a drag. */
+  transform: translate(var(--toast-drag-x), var(--toast-drag-y));
+}
+.toast-content {
+  min-width: 0;
+  flex: 1;
+}
+.toast-message {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  max-height: min(160px, 30vh);
+  overflow: auto;
+}
+.toast-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  height: 20px;
+  color: var(--text-dim);
+}
+.toast.success .toast-icon {
+  color: var(--green, #8cd4ab);
+}
+.toast.error .toast-icon {
+  color: var(--red, #f28b82);
+}
+.toast-stack .toast-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  height: 24px;
+  padding: 0;
+  margin-top: -2px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-dim);
+  background: transparent;
+  cursor: pointer;
+}
+.toast-stack .toast-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.toast-stack button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-slot,
+  .toast-viewport,
+  .toast-stack .toast {
+    animation: none;
+    transition: none;
+  }
+}

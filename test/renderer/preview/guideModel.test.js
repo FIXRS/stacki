@@ -144,12 +144,12 @@ test('the frame is asked about each menu variable once', () => {
   assert.deepEqual(guideVariableNames(settings), ['--pad', '--site-columns']);
   assert.deepEqual(guideVariableNames(GUIDE_DEFAULTS), ['--site-columns']);
   const counted = { ...settings, gutter: variable('--gap'), columns: variable('--cols') };
-  assert.deepEqual(guideVariableNames(counted), ['--pad', '--gap', '--cols']);
+  assert.deepEqual(guideVariableNames(counted), ['--pad', '--gap', '--cols', '--site-columns']);
 });
 
 test('automatic columns follow site-columns as it changes and show the binding', () => {
   assert.deepEqual(GUIDE_DEFAULTS.columns, { kind: 'automatic' });
-  for (const count of [4, 8, 13, 24]) {
+  for (const count of [2, 3, 4, 8, 13, 24, 32]) {
     const metrics = { ...LUMOS_WIDE, variableCounts: { '--site-columns': count } };
     const guide = resolveGuide(metrics, GUIDE_DEFAULTS);
     assert.equal(guide.columnCount, count);
@@ -164,7 +164,7 @@ test('automatic columns follow site-columns as it changes and show the binding',
 
 test('automatic columns fall back to 12 for missing or unusable site-columns', () => {
   assert.equal(guideColumnText(GUIDE_DEFAULTS.columns), '12');
-  for (const count of [undefined, 0, 3, 25, 4.5, Number.NaN, Infinity]) {
+  for (const count of [undefined, 0, 1, 33, 4.5, Number.NaN, Infinity]) {
     const metrics = { ...LUMOS_WIDE, variableCounts: { '--site-columns': count } };
     const guide = resolveGuide(metrics, GUIDE_DEFAULTS);
     assert.equal(guide.columnCount, 12);
@@ -175,7 +175,7 @@ test('automatic columns fall back to 12 for missing or unusable site-columns', (
 
 test('a connected column variable follows the page and updates with its value', () => {
   const settings = { ...GUIDE_DEFAULTS, columns: variable('--cols') };
-  for (const count of [4, 10, 13, 24]) {
+  for (const count of [2, 3, 4, 10, 13, 24, 32]) {
     const metrics = { ...LUMOS_WIDE, variableCounts: { '--cols': count, '--site-columns': 6 } };
     const guide = resolveGuide(metrics, settings);
     assert.equal(guide.columnCount, count);
@@ -185,25 +185,60 @@ test('a connected column variable follows the page and updates with its value', 
   assert.equal(guideColumnText(settings.columns), 'var(--cols)');
 });
 
-test('unusable column variables fall back to 12, never another project variable', () => {
+test('unusable column variables follow site-columns before the fixed fallback', () => {
   const settings = { ...GUIDE_DEFAULTS, columns: variable('--cols') };
-  for (const count of [undefined, 0, 3, 25, 4.5, Number.NaN, Infinity]) {
+  for (const count of [undefined, 0, 1, 33, 4.5, Number.NaN, Infinity]) {
     const metrics = { ...LUMOS_WIDE, variableCounts: { '--cols': count, '--site-columns': 8 } };
+    const guide = resolveGuide(metrics, settings);
+    assert.equal(guide.columnCount, 8);
+    assert.equal(guide.columnSource, 'project');
+    assert.equal(guideColumns(guide).length, 8);
+    assert.equal(guideColumnText(settings.columns, metrics), 'var(--cols)');
+  }
+});
+
+test('unusable connections use 12 when the project fallback is also unusable', () => {
+  const settings = { ...GUIDE_DEFAULTS, columns: variable('--cols') };
+  for (const count of [undefined, 0, 1, 33, 4.5, Number.NaN, Infinity]) {
+    const metrics = { ...LUMOS_WIDE, variableCounts: { '--cols': 0, '--site-columns': count } };
     assert.equal(resolveGuide(metrics, settings).columnCount, 12);
     assert.equal(resolveGuide(metrics, settings).columnSource, 'stacki');
   }
 });
 
+test('four distinct menu connections also measure the project column fallback', () => {
+  const settings = {
+    ...GUIDE_DEFAULTS,
+    margin: variable('--pad'),
+    gutter: variable('--gap'),
+    widthMax: variable('--max'),
+    columns: variable('--cols'),
+  };
+  assert.deepEqual(guideVariableNames(settings), [
+    '--pad',
+    '--gap',
+    '--max',
+    '--cols',
+    '--site-columns',
+  ]);
+  assert.equal(guideVariableNames(settings).length, GUIDE_LIMITS.variablesMax);
+  const duplicate = { ...settings, columns: variable('--site-columns') };
+  assert.deepEqual(guideVariableNames(duplicate), ['--pad', '--gap', '--max', '--site-columns']);
+  const fixed = { ...settings, columns: { kind: 'count', count: 8 } };
+  assert.deepEqual(guideVariableNames(fixed), ['--pad', '--gap', '--max']);
+});
+
 test('the column field accepts only a bounded whole count or one variable', () => {
-  for (const text of ['4', '13', '24', ' 12 ']) {
+  for (const text of ['2', '3', '4', '13', '24', '32', ' 12 ']) {
     assert.deepEqual(parseGuideColumnSetting(text), { kind: 'count', count: Number(text) });
   }
   assert.deepEqual(parseGuideColumnSetting('--cols'), variable('--cols'));
   assert.deepEqual(parseGuideColumnSetting('var( --cols )'), variable('--cols'));
   for (const text of [
     '',
-    '3',
-    '25',
+    '0',
+    '1',
+    '33',
     '4.5',
     '12px',
     '2rem',
@@ -256,7 +291,7 @@ test('gutters that leave no room draw no columns', () => {
 test('column counts the guide cannot draw are assertion failures', () => {
   const guide = resolveGuide(LUMOS_WIDE, GUIDE_DEFAULTS);
   assert.throws(() => guideColumns({ ...guide, columnCount: 2.5 }), /column count is an integer/);
-  for (const columnCount of [0, 3, 25]) {
+  for (const columnCount of [0, 1, 33]) {
     assert.throws(() => guideColumns({ ...guide, columnCount }), /column count within range/);
   }
   assert.throws(() => resolveGuide({ ...LUMOS_WIDE, rootFontPx: 0 }, GUIDE_DEFAULTS), /root font/);
@@ -283,15 +318,15 @@ test('lengths read back as they were typed', () => {
   assert.equal(guideLengthText({ amount: 32, unit: 'px' }), '32px');
 });
 
-test('a typed count is a whole number within 4 and 24, else refused', () => {
-  assert.equal(parseGuideColumnCount('4'), GUIDE_LIMITS.columnPickMin);
-  assert.equal(parseGuideColumnCount('10'), 10);
-  assert.equal(parseGuideColumnCount('24'), GUIDE_LIMITS.columnPickMax);
+test('a typed count accepts whole numbers from 2 through 32', () => {
+  for (const count of [2, 3, 4, 10, 24, 25, 32]) {
+    assert.equal(parseGuideColumnCount(String(count)), count);
+  }
   for (const text of [
     '0',
+    '-1',
     '1',
-    '3',
-    '25',
+    '33',
     '99',
     '100',
     '04x',

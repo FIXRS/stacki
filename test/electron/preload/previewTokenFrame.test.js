@@ -218,6 +218,27 @@ test('the frame announces the token shared computes; events carry it', async () 
   const click = sent.find((message) => message.type === 'avb:click-node');
   assert.ok(click, 'the click is reported');
   assert.equal(click.token, announced.token, 'the click names the rendering it landed on');
+  window.document.elementFromPoint = () => window.document.querySelector('p');
+  const context = new window.MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 10,
+    clientY: 12,
+  });
+  window.document.querySelector('p').dispatchEvent(context);
+  assert.equal(context.defaultPrevented, true, 'the designer replaces the browser menu');
+  assert.deepEqual(
+    sent.find((message) => message.type === 'avb:context-node'),
+    {
+      type: 'avb:context-node',
+      path: click.path,
+      occurrence: click.occurrence,
+      outside: false,
+      left: 10,
+      top: 12,
+      token: announced.token,
+    },
+  );
 });
 
 test('late editor registration recovers the current render', async () => {

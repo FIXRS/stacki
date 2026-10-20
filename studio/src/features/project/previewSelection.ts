@@ -1,3 +1,4 @@
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { flatten, type ParserNode } from '../source/source';
 import type { usePreview } from '../preview/usePreview';
 import type { ComponentFocus } from './editorNavigation';
@@ -22,7 +23,7 @@ export function previewSelection(
     select(id: string, occurrence = 0) {
       preview.send({
         type: 'studio:scope',
-        scope: file.startsWith('src/pages/') ? '' : file + '|',
+        scope: isCanvasPage(file) ? '' : file + '|',
         focus: focus?.path ?? '',
         occurrence: focus?.occurrence ?? 0,
       });

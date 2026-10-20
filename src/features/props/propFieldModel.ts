@@ -2,7 +2,8 @@
 // a number in bounds), the state the field holds, the actions it takes and its
 // placeholder (PropField.tsx).
 
-import React, { useEffect, useRef, useState } from 'react';
+import { PropValuePolicyContext } from './propValuePolicy';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { FieldDefinition, PropValues } from './propRules';
@@ -215,8 +216,12 @@ export function usePropField(props: PropFieldProps) {
   return { ...state, ...propFieldActions(state) };
 }
 export function usePropFieldModel(props: PropFieldProps) {
+  const policy = useContext(PropValuePolicyContext);
+  const field =
+    policy === 'defaults' && props.field.type !== 'boolean'
+      ? { ...props.field, default: undefined, hint: '' }
+      : props.field;
   const {
-    field,
     branchDefault,
     value,
     nodeKey,
@@ -226,7 +231,7 @@ export function usePropFieldModel(props: PropFieldProps) {
     dataContext,
   } = props;
   const placeholderFor = (target: FieldDefinition) =>
-    propFieldPlaceholder(target, assetContext, branchDefault);
+    policy === 'defaults' ? '' : propFieldPlaceholder(target, assetContext, branchDefault);
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
@@ -257,6 +262,7 @@ export function usePropFieldModel(props: PropFieldProps) {
   const isMediaAttr = isMediaName(name);
   return {
     ...props,
+    field,
     name,
     type,
     isSet,

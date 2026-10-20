@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
 import { readHistoryLog } from './historyBridge';
-import { commitAuthor, dayGroup, relativeTime, summarize } from './historyModel';
-import { ChevronRightIcon, PreviewIcon } from '../../ui/Icons';
-import FileStatus from '../git/FileStatus';
-
-const HISTORY_COMMITS_MAX = 10_000;
+import { commitAuthor, relativeTime } from './historyModel';
+import { BranchIcon, PreviewIcon, RefreshIcon } from '../../ui/Icons';
+import HistoryCommitFiles from './HistoryCommitFiles';
+import MoreMenu from '../../ui/MoreMenu';
+import Tooltip from '../../ui/Tooltip';
+import HistoryGraphLane, { HISTORY_ROW_HEIGHT, historyGraphWidth } from './HistoryGraphLane';
+import { buildHistoryGraph, HISTORY_COMMITS_MAX } from './historyGraph';
+import type { HistoryGraphRow } from './historyGraph';
 
 type TimelineState =
   | {
@@ -35,7 +38,11 @@ interface HistoryTimelineProps {
 }
 
 export default function HistoryTimeline(props: HistoryTimelineProps) {
-  const timeline = useTimeline(props.projectPath, props.branch, props.head);
+  const [scope, setScope] = useState<'all' | 'current'>('all');
+  const [revision, setRevision] = useState(0);
+  const reference = scope === 'current' ? 'HEAD' : undefined;
+  const timeline = useTimeline(props, reference, revision);
+  const graph = useMemo(() => buildHistoryGraph(timeline.state.commits), [timeline.state.commits]);
   const [expanded, setExpanded] = useState<string | undefined>(undefined);
   useEffect(() => {
     setExpanded((hash) =>
@@ -44,6 +51,28 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
   }, [timeline.state.commits]);
   return (
     <>
+      <div className="history-graph-toolbar">
+        <label className="history-graph-filter">
+          <span>Filter commits</span>
+          <select
+            aria-label="Filter commits by branch"
+            value={scope}
+            onChange={(event) => setScope(parseHistoryScope(event.target.value))}
+          >
+            <option value="all">All branches</option>
+            <option value="current">Current branch ({props.branch ?? 'HEAD'})</option>
+          </select>
+        </label>
+        <button
+          className="history-graph-refresh"
+          onClick={() => setRevision((value) => value + 1)}
+          disabled={timeline.state.kind === 'loading'}
+          title="Refresh commit graph"
+          aria-label="Refresh commit graph"
+        >
+          <RefreshIcon size={14} />
+        </button>
+      </div>
       {timeline.state.kind === 'loading' && <p className="history-empty">Reading history…</p>}
       {timeline.state.kind === 'error' && <p className="history-error">{timeline.state.message}</p>}
       {timeline.state.kind === 'ready' && timeline.state.commits.length === 0 && (
@@ -52,14 +81,15 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
           back to it whenever you like.
         </p>
       )}
-      {timeline.state.commits.map((commit, index) => (
+      {graph.rows.map((row) => (
         <CommitRow
-          key={commit.hash}
-          commit={commit}
-          newDay={startsDay(timeline.state.commits, index)}
-          expanded={expanded === commit.hash}
-          previewing={props.previewRef === commit.hash}
-          toggle={() => setExpanded(expanded === commit.hash ? undefined : commit.hash)}
+          key={row.commit.hash}
+          commit={row.commit}
+          row={row}
+          width={graph.width}
+          expanded={expanded === row.commit.hash}
+          previewing={props.previewRef === row.commit.hash}
+          toggle={() => setExpanded(expanded === row.commit.hash ? undefined : row.commit.hash)}
           {...props}
         />
       ))}
@@ -72,13 +102,25 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
   );
 }
 
-function useTimeline(projectPath: string, branch: string | undefined, head: string | undefined) {
+function parseHistoryScope(value: string): 'all' | 'current' {
+  if (value === 'all') {
+    return value;
+  }
+  assert(value === 'current', 'History graph: unknown branch scope');
+  return value;
+}
+
+function useTimeline(
+  { projectPath, branch, head }: HistoryTimelineProps,
+  reference: string | undefined,
+  revision: number,
+) {
   const [state, setState] = useState<TimelineState>({ kind: 'loading', commits: [], atEnd: false });
   const requestRef = useRef(0);
   useEffect(() => {
     const request = ++requestRef.current;
     setState({ kind: 'loading', commits: [], atEnd: false });
-    void readHistoryLog(projectPath, 0).then((result) => {
+    void readHistoryLog(projectPath, 0, reference).then((result) => {
       if (requestRef.current !== request) {
         return;
       }
@@ -91,25 +133,29 @@ function useTimeline(projectPath: string, branch: string | undefined, head: stri
     return () => {
       requestRef.current += 1;
     };
-  }, [branch, head, projectPath]);
+  }, [branch, head, projectPath, reference, revision]);
   const loadOlder = useCallback(() => {
     if (state.kind === 'loading' || state.commits.length >= HISTORY_COMMITS_MAX) {
       return;
     }
-    void appendHistory(projectPath, state, requestRef, setState);
-  }, [projectPath, state]);
+    void appendHistory({ projectPath, reference }, state, requestRef, setState);
+  }, [projectPath, reference, state]);
   return { state, loadOlder };
 }
 
 async function appendHistory(
-  projectPath: string,
+  location: { readonly projectPath: string; readonly reference: string | undefined },
   previous: TimelineState,
   requestRef: React.MutableRefObject<number>,
   setState: React.Dispatch<React.SetStateAction<TimelineState>>,
 ): Promise<void> {
   const request = ++requestRef.current;
   setState({ kind: 'loading', commits: previous.commits, atEnd: previous.atEnd });
-  const result = await readHistoryLog(projectPath, previous.commits.length);
+  const result = await readHistoryLog(
+    location.projectPath,
+    previous.commits.length,
+    location.reference,
+  );
   if (requestRef.current !== request) {
     return;
   }
@@ -140,16 +186,10 @@ function mergeCommits(
   return [...commits.values()];
 }
 
-function startsDay(commits: readonly HistoryCommit[], index: number): boolean {
-  const commit = commits.at(index);
-  assert(commit !== undefined, 'History timeline: current commit exists');
-  const previous = commits.at(index - 1);
-  return previous === undefined || dayGroup(commit.when) !== dayGroup(previous.when);
-}
-
 interface CommitRowProps extends HistoryTimelineProps {
   readonly commit: HistoryCommit;
-  readonly newDay: boolean;
+  readonly row: HistoryGraphRow;
+  readonly width: number;
   readonly expanded: boolean;
   readonly previewing: boolean;
   readonly toggle: () => void;
@@ -158,26 +198,61 @@ interface CommitRowProps extends HistoryTimelineProps {
 function CommitRow(props: CommitRowProps) {
   const { commit } = props;
   return (
-    <>
-      {props.newDay && <div className="history-day">{dayGroup(commit.when)}</div>}
-      <div
-        className={`history-commit ${props.expanded ? 'open' : ''} ${
-          props.previewing ? 'previewing' : ''
-        }`}
+    <div
+      className={`history-commit ${props.expanded ? 'open' : ''} ${
+        props.previewing ? 'previewing' : ''
+      }`}
+      style={{ gridTemplateColumns: `${historyGraphWidth(props.width)}px minmax(140px, 1fr)` }}
+    >
+      <HistoryGraphLane row={props.row} width={props.width} current={commit.hash === props.head} />
+      <button
+        className="history-commit-head"
+        style={{ height: HISTORY_ROW_HEIGHT }}
+        onClick={props.toggle}
+        aria-expanded={props.expanded}
       >
-        <button className="history-commit-head" onClick={props.toggle}>
-          <span className="history-dot" />
-          <span className="history-commit-main">
-            <span className="history-subject">{commit.subject}</span>
-            <span className="history-meta">
-              {commitAuthor(commit, props.userEmail)} · {summarize(commit.files)} ·{' '}
-              {relativeTime(commit.when)}
+        <span className="history-commit-main">
+          <span className="history-subject-line">
+            <CommitRefs commit={commit} current={commit.hash === props.head} />
+            <Tooltip className="history-subject" text={commit.subject} />
+          </span>
+          <span className="history-meta">
+            {commitAuthor(commit, props.userEmail)} · {relativeTime(commit.when)} ·{' '}
+            <span className="history-row-hash" title={commit.hash}>
+              {commit.shortHash}
             </span>
           </span>
-        </button>
-        {props.expanded && <CommitBody {...props} />}
-      </div>
-    </>
+        </span>
+      </button>
+      {props.expanded && <CommitBody {...props} />}
+    </div>
+  );
+}
+
+function CommitRefs({
+  commit,
+  current,
+}: {
+  readonly commit: HistoryCommit;
+  readonly current: boolean;
+}) {
+  if (commit.refs.length === 0) {
+    if (!current) {
+      return undefined;
+    }
+  }
+  return (
+    <span className="history-refs">
+      {current && <span className="history-ref current">HEAD</span>}
+      {commit.refs
+        .filter((reference) => reference !== 'HEAD')
+        .map((reference) => (
+          <span className="history-ref" key={reference} title={reference}>
+            {reference.startsWith('tag: ') ? undefined : <BranchIcon size={10} />}
+            {reference.replace(/^HEAD -> /, '')}
+          </span>
+        ))}
+    </span>
   );
 }
 
@@ -185,39 +260,30 @@ function CommitBody(props: CommitRowProps) {
   const { commit } = props;
   return (
     <div className="history-commit-body">
-      <div className="history-files">
-        {commit.files?.map((file) => (
-          <div className="history-file" key={file.path + (file.from ?? '')}>
-            <FileStatus status={file.status} inCommit />
-            <span className="history-file-label" title={file.path}>
-              {file.label}
-            </span>
-            <button
-              className="row-action"
-              title={`Put ${file.label} back to how it was here`}
-              onClick={() => props.onRestoreFile(commit, file)}
-            >
-              <ChevronRightIcon size={12} />
-            </button>
-          </div>
-        ))}
-        {!commit.files?.length && (
-          <div className="history-file muted">Nothing changed in this one</div>
-        )}
-      </div>
+      <HistoryCommitFiles
+        commit={commit}
+        projectPath={props.projectPath}
+        onRestoreFile={props.onRestoreFile}
+      />
       <div className="history-commit-actions">
         <button
-          className={props.previewing ? 'primary' : ''}
+          className={`history-preview-action ${props.previewing ? 'primary' : 'ghost'}`}
           onClick={() => (props.previewing ? props.onExitPreview() : props.onPreviewCommit(commit))}
         >
           <PreviewIcon size={12} />
-          {props.previewing ? 'Back to now' : 'Preview this version'}
+          {props.previewing ? 'Back to now' : 'Preview'}
         </button>
-        <button onClick={() => props.onRestoreProject(commit)}>Take everything back to here</button>
-      </div>
-      <div className="history-hash" title="What git calls this version">
-        {commit.shortHash}
-        {commit.isMerge ? ' · brought a branch in' : ''}
+        <span className="history-hash">{commit.isMerge ? 'Merge commit' : commit.shortHash}</span>
+        <MoreMenu
+          title="Commit actions"
+          width={230}
+          items={[
+            {
+              label: 'Restore project to this commit…',
+              onSelect: () => props.onRestoreProject(commit),
+            },
+          ]}
+        />
       </div>
     </div>
   );

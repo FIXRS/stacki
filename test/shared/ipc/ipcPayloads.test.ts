@@ -31,6 +31,7 @@ const noPayload = new Set([
   'dev:stop',
 ]);
 const pathPayload = new Set([
+  'publish:state',
   'studio:status',
   'project:close',
   'recents:add',
@@ -120,8 +121,11 @@ const fields = {
   keys: ['src/pages/index.astro#0'],
   branch: 'feature',
   ref: 'HEAD',
+  commit: 'a'.repeat(40),
   path: 'src/pages/index.astro',
   message: 'Update',
+  target: 'all',
+  request: { provider: 'cloudflare', account: '' },
   repoName: 'site',
   repository: 'owner/site',
   format: 'webp',
@@ -136,10 +140,31 @@ const fields = {
   enabled: true,
 };
 
+const metadataSamples: Readonly<Record<string, unknown>> = {
+  'publish:repository': {
+    projectPath: '/site',
+    request: { action: 'list', account: 'owner' },
+  },
+  'project:metadata': { projectPath: '/site', kind: 'publish' },
+  'project:writeMetadata': { projectPath: '/site', write: { kind: 'publish', source: '{}' } },
+  'project:createDefaultsCanvas': {
+    projectPath: '/site',
+    canvas: {
+      file: '.stacki/canvas/00000000-0000-4000-8000-000000000000.astro',
+      source: '<h1>Hello</h1>',
+    },
+  },
+  'project:removeDefaultsCanvas': {
+    projectPath: '/site',
+    file: '.stacki/canvas/00000000-0000-4000-8000-000000000000.astro',
+  },
+};
+
 for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
   test(`IPC payload: ${channel}`, () => {
     const sample =
-      channel === 'assets:convert'
+      metadataSamples[channel] ??
+      (channel === 'assets:convert'
         ? { projectPath: '/site', rel: 'public/hero.png', format: 'webp' }
         : channel === 'studio:install'
           ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
@@ -147,7 +172,7 @@ for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
             ? undefined
             : pathPayload.has(channel)
               ? '/site'
-              : fields;
+              : fields);
     assert.doesNotThrow(() => parse(sample));
     assert.throws(() => parse(Symbol('invalid')), /Expected/);
     if (!noPayload.has(channel)) {

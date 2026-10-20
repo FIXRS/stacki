@@ -11,11 +11,19 @@ export function receiveRenderPush(hot: PreviewHot) {
     return;
   }
   const variants = createVariantPreview(hot);
-  const path = location.pathname + location.search;
+  let path = location.pathname + location.search;
   let ready = false;
   let renderRevision = 0;
   const announce = () =>
     document.dispatchEvent(new CustomEvent('studio:render-push', { detail: ready }));
+  document.addEventListener('avb:preview-route', () => {
+    renderRevision++;
+    ready = false;
+    path = location.pathname + location.search;
+    variants.receive({ action: 'reset' });
+    announce();
+    hot.send('studio:render-subscribe', { path, encoding: 'gzip' });
+  });
   hot.on('studio:render-ready', (data) => {
     if (matchesPage(data, path)) {
       ready = true;

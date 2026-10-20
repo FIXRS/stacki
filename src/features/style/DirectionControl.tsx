@@ -1,8 +1,9 @@
+import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
-import { ChevronIcon, tooltipArrowStyle, useMenuDismiss } from './components/MenuParts';
+import { ChevronIcon, tooltipArrowStyle } from './components/MenuParts';
 import { parseImportant } from './model/styleDisplay';
 
 // The flex Direction / flow control — shown only when `display` is flex. Two fixed
@@ -362,7 +363,6 @@ export default function DirectionControl({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  useMenuDismiss({ open, rootRef, setOpen });
   const requestFocus = useFocusOnceReady({ customMode, busy, inputRef });
 
   const pick = (next: Flow) => {
@@ -400,6 +400,7 @@ export default function DirectionControl({
 
       {open ? (
         <DirectionMenu
+          onClose={() => setOpen(false)}
           customMode={customMode}
           current={current}
           pick={pick}
@@ -556,7 +557,21 @@ function FlowSegments({
 
 // The grouped menu. It mounts only while open, so the hovered option (the footer's
 // subject) starts empty each time it opens.
-function DirectionMenu({
+function DirectionMenu(props: Parameters<typeof DirectionMenuContent>[0]) {
+  return (
+    <Popup
+      mode="popover"
+      portal={false}
+      role="menu"
+      className="embed-editor_direction-menu"
+      onClose={props.onClose}
+    >
+      <DirectionMenuContent {...props} />
+    </Popup>
+  );
+}
+
+function DirectionMenuContent({
   customMode,
   current,
   pick,
@@ -566,10 +581,11 @@ function DirectionMenu({
   current: string;
   pick: (next: Flow) => void;
   enterCustom: () => void;
+  readonly onClose: () => void;
 }) {
   const [hovered, setHovered] = useState<Flow | undefined>(undefined);
   return (
-    <div className="embed-editor_direction-menu" role="menu">
+    <>
       {GROUPS.map((group) => {
         // Primaries (single row / single column) live on the segments; only surface
         // them in the menu while in custom mode, so there's a way back to them.
@@ -623,6 +639,6 @@ function DirectionMenu({
           'Hover an option to see direction and wrap values.'
         )}
       </div>
-    </div>
+    </>
   );
 }

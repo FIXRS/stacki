@@ -82,7 +82,8 @@ function reportEditFailure(error: unknown): void {
   console.error('[stacki] variable edit failed:', error);
 }
 const LABEL_TRACKS = 'calc(var(--vars-inset) + 18px) var(--vars-name-col)';
-const valueTracks = (count: number) => `repeat(${count}, var(--vars-col))`;
+const valueTracks = (count: number) =>
+  `repeat(${count}, minmax(var(--vars-col-min), var(--vars-col)))`;
 function sheetOffset(offsets: readonly SlotOffset[], index: number): SlotOffset {
   const offset = offsets[index];
   assert(offset !== undefined, 'Variable table: missing block offset');
@@ -432,14 +433,11 @@ function useVariableTable(props: TableProps) {
   // scroll past either end unsticks them, so the labels rode the bounce.
   // Outside the scroller there is nothing to come unstuck from.
   //
-  // Fixed tracks, not fractions, on both sides. The templates are only equal
-  // WITHIN a block: a matrix brings its own columns, so a three-column block
-  // and a five-column one divided the same width into different tracks and the
-  // blocks stopped lining up with each other down the sheet. A constant width
-  // per column (and for the names beside them) means every table starts its
-  // columns at the same x, however many it has. The label side's first track is
-  // the drag handle plus the sheet's own left inset, so the row reaches the
-  // panel's edge and its rule runs edge to edge.
+  // Labels stay fixed while value tracks can shrink to their readable minimum
+  // before scrolling. The same template sizes headings and rows together, so
+  // tables with the same column count stay aligned. The label side's first
+  // track is the drag handle plus the sheet's own left inset, so the row reaches
+  // the panel's edge and its rule runs edge to edge.
   const labelTemplate = LABEL_TRACKS;
   const valueTemplate = valueTracks(columns.length);
   // This table's slice of the sheet-wide drag (see Sheet).

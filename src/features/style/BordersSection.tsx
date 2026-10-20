@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { SegmentedOption } from './components/SegmentedControl';
 import ColorSwatch from './components/ColorSwatch';
@@ -6,7 +7,7 @@ import VariableConnect from './VariableConnect';
 import { useHighlight } from './model/computedStyle';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
-import { ChevronIcon, MenuItem, useMenuDismiss } from './components/MenuParts';
+import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { displayOf, parseImportant, type Display } from './model/styleDisplay';
 import { type Read, type Props, stripImportant, PropLabel, LiveInput } from './BordersKit';
 import { RadiusControl } from './RadiusControl';
@@ -185,7 +186,6 @@ function StyleControl({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  useMenuDismiss({ open, rootRef, setOpen });
   const requestFocus = useFocusOnceReady({ customMode, busy, inputRef });
 
   const pick = (next: string) => {
@@ -386,7 +386,13 @@ function StyleMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <div className="embed-editor_display-menu" role="menu">
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={onToggle}
+          className="embed-editor_display-menu"
+          role="menu"
+        >
           {customMode ? (
             STYLE_OPTIONS.map((seg) => (
               <MenuItem
@@ -399,7 +405,7 @@ function StyleMenu({
           ) : (
             <MenuItem label="Custom" selected={false} onClick={enterCustom} />
           )}
-        </div>
+        </Popup>
       ) : undefined}
     </>
   );

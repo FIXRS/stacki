@@ -21,7 +21,7 @@ const TABS = [
   { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
   { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
   { id: 'code', title: 'Code', shortcut: 'C', Icon: CodeIcon },
-  { id: 'history', title: 'History', shortcut: '⌥H', Icon: HistoryIcon },
+  { id: 'history', title: 'Git', shortcut: '⌥H', Icon: HistoryIcon },
 ] as const;
 export type RailTab = (typeof TABS)[number]['id'];
 

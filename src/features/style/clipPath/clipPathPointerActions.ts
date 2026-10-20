@@ -344,71 +344,10 @@ export type EditorAfterWindowPointerListeners = EditorAfterPointerEndActions &
 
 // The shortcut-help target, and closing the menus and popovers on an outside press.
 export function useDismissListeners(editor: EditorAfterWindowPointerListeners) {
-  const { setShortcutHelpPortalTarget, isPresetOpen, presetDropdownRef, setIsPresetOpen } = editor;
-  const { isClipPathLabelMenuOpen, clipPathLabelRef } = editor;
-  const { setIsClipPathLabelMenuOpen, isShortcutHelpOpen, shortcutHelpRef } = editor;
-  const { setIsShortcutHelpOpen } = editor;
+  const { setShortcutHelpPortalTarget } = editor;
   useEffect(() => {
     setShortcutHelpPortalTarget(document.getElementById('clip-path_header-shortcuts') ?? undefined);
   }, [setShortcutHelpPortalTarget]);
-
-  useEffect(() => {
-    if (!isPresetOpen) {
-      return;
-    }
-
-    const onPointerDown = (event: MouseEvent) => {
-      if (event.target instanceof Node && presetDropdownRef.current?.contains(event.target)) {
-        return;
-      }
-      // What closePresetDropdown does, with the setter React keeps stable.
-      setIsPresetOpen(false);
-    };
-
-    document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
-  }, [isPresetOpen, presetDropdownRef, setIsPresetOpen]);
-
-  useEffect(() => {
-    if (!isClipPathLabelMenuOpen) {
-      return;
-    }
-
-    const onPointerDown = (event: MouseEvent) => {
-      if (event.target instanceof Node && clipPathLabelRef.current?.contains(event.target)) {
-        return;
-      }
-      setIsClipPathLabelMenuOpen(false);
-    };
-
-    document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
-  }, [isClipPathLabelMenuOpen, clipPathLabelRef, setIsClipPathLabelMenuOpen]);
-
-  useEffect(() => {
-    if (!isShortcutHelpOpen) {
-      return;
-    }
-
-    const onPointerDown = (event: MouseEvent) => {
-      if (event.target instanceof Node && shortcutHelpRef.current?.contains(event.target)) {
-        return;
-      }
-      setIsShortcutHelpOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsShortcutHelpOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [isShortcutHelpOpen, shortcutHelpRef, setIsShortcutHelpOpen]);
 }
 
 // Clearing the selection on an outside press.

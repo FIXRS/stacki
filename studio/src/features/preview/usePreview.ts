@@ -1,3 +1,6 @@
+import { usePreviewContextMenu } from './usePreviewContextMenu';
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
+import { usePreviewSource } from '../../../vendor/stacki/src/features/preview/usePreviewSource';
 import { emptyOutlines, parseOutlines, type OutlineState } from './outlineState';
 import { receivePreviewKey } from './previewKeys';
 import { receiveStyleModifiers } from './styleModifiers';
@@ -32,21 +35,34 @@ export function usePreview(
     };
   }, []);
   const reveal = useRef<{ type: string; id: string; occurrence: number }>();
-  const callbacks = useRef({ onSelect, onOpen, report });
-  callbacks.current = { onSelect, onOpen, report };
+  const outside = useRef<(() => void) | undefined>(undefined);
+  const subscribeOutside = useCallback((listener: () => void) => {
+    outside.current = listener;
+    return () => {
+      outside.current = undefined;
+    };
+  }, []);
+  const callbacks = useRef({ onSelect, onOpen, report, onOutside: () => outside.current?.() });
+  callbacks.current = { onSelect, onOpen, report, onOutside: () => outside.current?.() };
   const target = usePreviewTarget(file, enabled, callbacks);
+  const send = (message: unknown) => postToFrame(frame.current, target?.origin, message);
+  const source = usePreviewSource(target?.url, send);
   usePreviewMessages(frame, target, callbacks, { setOutlines, setGuide });
+  const contextMenu = usePreviewContextMenu(frame, target?.origin, file, onSelect);
 
   return {
+    contextMenu,
     frame,
     outlines,
     guide,
     subscribeLoad,
+    subscribeOutside,
     reveal: (id: string, occurrence = 0) => {
       reveal.current = { type: 'studio:reveal', id, occurrence };
       postToFrame(frame.current, target?.origin, reveal.current);
     },
     loaded: () => {
+      source.loaded();
       setCanvasFrame({
         postMessage: (message: unknown) => postToFrame(frame.current, target?.origin, message),
       });
@@ -59,8 +75,9 @@ export function usePreview(
         postToFrame(frame.current, target?.origin, reveal.current);
       }
     },
-    url: target?.url,
-    send: (message: unknown) => postToFrame(frame.current, target?.origin, message),
+    url: source.url,
+    renderURL: target?.url,
+    send,
   };
 }
 function usePreviewMessages(
@@ -68,6 +85,7 @@ function usePreviewMessages(
   target: { url: string; origin: string } | undefined,
   callbacks: React.MutableRefObject<{
     onSelect: (id: string, occurrence?: number) => void;
+    onOutside: () => void;
     onOpen: ((id: string, occurrence: number) => void) | undefined;
     report: (error: unknown) => void;
   }>,
@@ -104,11 +122,10 @@ function usePreviewMessages(
         const data = record(event.data);
         callbacks.current.onOpen?.(string(data['id'], 500), messageOccurrence(data));
       }
-      const id = selectionID(event.data);
-      if (id !== undefined) {
-        const data = record(event.data);
-        callbacks.current.onSelect(id, messageOccurrence(data));
+      if (isMessage(event.data, 'studio:outside-focus')) {
+        callbacks.current.onOutside();
       }
+      receiveSelection(event.data, callbacks.current.onSelect);
     };
     const variant = (event: Event) => {
       if (event instanceof CustomEvent) {
@@ -179,7 +196,7 @@ function usePreviewTarget(
   const [target, setTarget] = useState<{ url: string; origin: string }>();
   useEffect(() => {
     let active = true;
-    if (!enabled || !file.startsWith('src/pages/')) {
+    if (!enabled || !isCanvasPage(file)) {
       setTarget(undefined);
       return;
     }
@@ -216,7 +233,7 @@ export function parsePreviewTarget(value: unknown) {
   if (parsed.origin !== origin || !['https:', 'http:'].includes(parsed.protocol)) {
     throw new Error('Invalid preview address');
   }
-  return { url, origin };
+  return { url: parsed.href, origin };
 }
 
 function selectionID(data: unknown): string | undefined {
@@ -235,4 +252,11 @@ function selectionID(data: unknown): string | undefined {
 
 function isMessage(value: unknown, type: string): boolean {
   return !!value && typeof value === 'object' && 'type' in value && value.type === type;
+}
+
+function receiveSelection(value: unknown, select: (id: string, occurrence: number) => void): void {
+  const id = selectionID(value);
+  if (id !== undefined) {
+    select(id, messageOccurrence(record(value)));
+  }
 }

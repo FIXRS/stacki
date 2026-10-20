@@ -1,4 +1,5 @@
 import React from 'react';
+import { usePreviewSource } from './usePreviewSource';
 import { usePreviewDimensions, usePreviewSizing } from './usePreviewSizing';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
@@ -7,7 +8,11 @@ import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar } from './PreviewToolbar';
-import { usePreviewRuntime, type JudgeCanvasEvent } from './previewRuntime';
+import {
+  usePreviewRuntime,
+  type JudgeCanvasEvent,
+  type PreviewRuntimeProps,
+} from './previewRuntime';
 import type { PreviewVerdict } from '../../../shared/page/previewToken';
 import type { PreviewReloadReason } from './previewMessages';
 import './previewViewport.css';
@@ -36,6 +41,7 @@ interface PreviewPaneProps {
   readonly navHoverPath?: string | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
   readonly onSelectPath?: (path: string | undefined, info: { readonly outside: boolean }) => void;
+  readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly judgeEvent: JudgeCanvasEvent;
   readonly onStaleEvent: (verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>) => void;
@@ -59,6 +65,7 @@ interface PreviewPaneProps {
 export default function PreviewPane(props: PreviewPaneProps) {
   const url = props.devUrl && props.route ? props.devUrl + props.route : undefined;
   const runtime = usePreviewRuntime({ ...props, selPath: props.selPath }, url);
+  const source = usePreviewSource(url, runtime.post);
   const dimensions = usePreviewDimensions();
   const sizing = usePreviewSizing(props.device, dimensions, props.onDevice);
   const columnGuide = useColumnGuide({
@@ -89,8 +96,14 @@ export default function PreviewPane(props: PreviewPaneProps) {
       <div className="preview-frame-wrap" ref={sizing.wrapRef}>
         <PreviewContent
           props={props}
-          url={url}
-          runtime={runtime}
+          url={props.device === 'canvas' ? url : source.url}
+          runtime={{
+            ...runtime,
+            registerFrame: () => {
+              runtime.registerFrame();
+              source.loaded();
+            },
+          }}
           sizing={sizing}
           shownGuide={columnGuide.shown}
         />

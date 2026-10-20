@@ -4,7 +4,7 @@
 // (BackgroundSection.tsx).
 
 import { useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../ui/Popup';
 import type { ReactNode } from 'react';
 import { useFieldDraft } from './model/fieldDraft';
 import FieldLabel from './components/FieldLabel';
@@ -368,34 +368,14 @@ export function LayerEditorModal({
   onClose: () => void;
   children: ReactNode;
 }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  return (
+    <Popup
+      className="embed-editor_bg-modal u-surface-surface"
 
-  return createPortal(
-    <div
-      className="embed-editor_bg-modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
+      label="Background layer"
+      onClose={onClose}
     >
-      <div
-        className="embed-editor_bg-modal u-surface-surface"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Background layer"
-      >
-        {children}
-      </div>
-    </div>,
-    document.body,
+      {children}
+    </Popup>
   );
 }

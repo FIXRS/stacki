@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode, RefObject } from 'react';
-import { createPortal } from 'react-dom';
-import { registerPopupLayer } from './model/popupLayer';
+import Popup from '../../ui/Popup';
 import { popupBox } from '../../ui/Dropdown';
 
 // The whole value, in a box big enough to read it.
@@ -72,8 +71,18 @@ interface CustomValueProps {
 function CustomValue(props: CustomValueProps) {
   const state = useCustomValue(props);
   const { label } = props;
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      anchor={props.anchorEl}
+      onClose={() => props.onSave(state.commit())}
+      onEscape={props.onCancel}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          props.onSave(state.commit());
+        }
+      }}
       ref={state.boxRef}
       className="var-custom"
       style={{
@@ -104,28 +113,17 @@ function CustomValue(props: CustomValueProps) {
       <div className="var-custom-foot">
         <span>Enter to save · Escape to cancel</span>
       </div>
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 
-function useCustomValue({
-  value,
-  anchor,
-  anchorEl: anchorElement,
-  onCancel,
-  onSave,
-}: CustomValueProps) {
+function useCustomValue({ value, anchor, onSave }: CustomValueProps) {
   const [draft, setDraft] = useState(value);
   const boxRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const position = useCustomPosition(boxRef, anchor);
-  useLayoutEffect(
-    () => registerPopupLayer(boxRef.current ?? undefined, anchorElement ?? undefined),
-    [anchorElement],
-  );
   const commit = useCallback((): string => {
     const rich = boxRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor');
     // Blur commits synchronously; reading the draft first would discard the last keystroke.
@@ -134,9 +132,9 @@ function useCustomValue({
     }
     return draftRef.current;
   }, []);
-  useCustomClose(boxRef, commit, onCancel, onSave);
+  useCustomClose(boxRef, commit, onSave);
   useCustomFocus(boxRef, fieldRef);
-  return { draft, setDraft, boxRef, fieldRef, position };
+  return { draft, setDraft, boxRef, fieldRef, position, commit };
 }
 
 function useCustomPosition(boxRef: RefObject<HTMLDivElement>, anchor: DOMRect | undefined) {
@@ -160,7 +158,6 @@ function useCustomPosition(boxRef: RefObject<HTMLDivElement>, anchor: DOMRect | 
 function useCustomClose(
   boxRef: RefObject<HTMLDivElement>,
   commit: () => string,
-  onCancel: () => void,
   onSave: (value: string) => void,
 ): void {
   const saveRef = useRef(onSave);
@@ -177,43 +174,6 @@ function useCustomClose(
     };
   }, [commit]);
   useCustomScrollLock(boxRef);
-  useEffect(() => {
-    const onDown = (event: MouseEvent): void => {
-      const box = boxRef.current;
-      if (!box || customContains(box, event.target)) {
-        return;
-      }
-      const ElementType = box.ownerDocument.defaultView?.Element;
-      // The variable picker is portaled to body, but still belongs to this editor.
-      if (ElementType && event.target instanceof ElementType) {
-        if (event.target.closest('.embed-editor_varpicker')) {
-          return;
-        }
-      }
-      onSave(commit());
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onCancel();
-        return;
-      }
-      if (
-        event.key === 'Enter' &&
-        !event.shiftKey &&
-        customContains(boxRef.current ?? undefined, event.target)
-      ) {
-        event.preventDefault();
-        onSave(commit());
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [boxRef, commit, onCancel, onSave]);
 }
 
 function customContains(box: HTMLElement | undefined, target: unknown): boolean {

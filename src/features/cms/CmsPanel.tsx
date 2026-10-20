@@ -51,6 +51,11 @@ const EMPTY_CONTENT: CmsPanelContent = {
 };
 
 export default function CmsPanel(props: CmsPanelProps) {
+  // A different project must not inherit the previous project's open folder.
+  return <ProjectCmsPanel key={props.project.path} {...props} />;
+}
+
+function ProjectCmsPanel(props: CmsPanelProps) {
   const { files, content, refresh } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
   const [openKey, setOpenKey] = useState<string | undefined>(
@@ -62,6 +67,7 @@ export default function CmsPanel(props: CmsPanelProps) {
     [collections, props.currentFile],
   );
   useSelectedGroup(props.selectedRel, openKey, collections, setOpenKey);
+  useDefaultCmsGroup(groups, content, openKey, setOpenKey);
   const open = openKey === undefined ? undefined : groups.find((group) => group.key === openKey);
   const create = useCreateCollection(props, setCreating, setOpenKey, refresh);
   return (
@@ -92,12 +98,39 @@ export default function CmsPanel(props: CmsPanelProps) {
             onOpenSettings={props.onOpenSettings}
           />
         )}
-        {collections.length === 0 && content.collections.length === 0 && !creating && (
+        {/* Collections in other Astro files are hidden, so count only visible groups. */}
+        {groups.length === 0 && content.collections.length === 0 && !creating && (
           <EmptyPanel onCreate={() => setCreating(true)} />
         )}
       </div>
     </div>
   );
+}
+
+function useDefaultCmsGroup(
+  groups: readonly CollectionGroup[],
+  content: CmsPanelContent,
+  openKey: string | undefined,
+  setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
+): void {
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (initialized.current) {
+      return;
+    }
+    const groupCount = groups.length + (content.collections.length > 0 ? 1 : 0);
+    if (groupCount === 0) {
+      return;
+    }
+    // Default once on entry so returning to the folder list remains possible.
+    initialized.current = true;
+    if (openKey !== undefined) {
+      return;
+    }
+    if (groupCount === 1) {
+      setOpenKey(groups[0]?.key ?? CONTENT_KEY);
+    }
+  }, [groups, content, openKey, setOpenKey]);
 }
 
 function useCmsPanelData(projectPath: string, refreshKey: string | number): CmsPanelData {
@@ -457,7 +490,8 @@ function JsonCollectionList({
 function EmptyPanel({ onCreate }: { readonly onCreate: () => void }) {
   return (
     <div className="props-empty">
-      No content found in <code>src/</code>.
+      <div>No collections to show.</div>
+      <div>Create a collection to manage reusable content.</div>
       <div style={{ marginTop: 10 }}>
         <button className="primary" onClick={onCreate}>
           New collection

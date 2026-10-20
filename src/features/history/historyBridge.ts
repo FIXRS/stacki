@@ -57,12 +57,13 @@ export function parseHistoryWorktrees(input: unknown): readonly WireWorktreeInfo
   return worktrees;
 }
 
-export function readHistoryLog(projectPath: string, skip: number) {
+export function readHistoryLog(projectPath: string, skip: number, ref?: string) {
   const payload = parseIpcPayload('git:log', {
     projectPath,
     limit: 30,
     skip,
     withFiles: true,
+    ...(ref === undefined ? {} : { ref }),
   });
   return historyRequest(parseHistoryLog, () => window.avb.gitLog(payload));
 }

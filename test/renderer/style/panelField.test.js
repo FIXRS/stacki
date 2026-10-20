@@ -135,7 +135,7 @@ const check = (what, condition, detail) => {
        const clickAt = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-         await new Promise((r) => setTimeout(r, 150));
+         await new Promise((r) => setTimeout(r, 220));
        };
        // The effects section is long; the row has to be on screen before a press
        // at its coordinates means anything.
@@ -182,7 +182,7 @@ const check = (what, condition, detail) => {
        // another row would land on the popover instead.
        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-       await new Promise((r) => setTimeout(r, 150));
+       await new Promise((r) => setTimeout(r, 220));
        const plainRow = await rowAt(0);
        if (plainRow) await clickAt(plainRow.x, plainRow.y);
        out.plainFields = await js("(() => { const pop = " +

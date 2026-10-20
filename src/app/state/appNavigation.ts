@@ -39,7 +39,7 @@ import {
 // Notices, the dev server and the project’s lifecycle.
 export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
   const assetPickScope = useAssetPick(coreState);
-  const toasts = useToasts(coreState);
+  const toasts = useToasts();
   const devEvents = useDevEvents(coreState, assetPickScope);
   const scans = useScans(coreState);
   const previewStart = usePreviewStart(coreState, toasts, assetPickScope);
@@ -362,6 +362,10 @@ export function useOpenComponent(
       // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
       // page's own import first, and fall back to matching by filename.
       const { currentPage: host, pageState: state } = pageStateRef.current;
+      if (host?.path?.includes('/.stacki/canvas/')) {
+        showToast('Edit this instance’s props and children, then save its defaults.', 'info');
+        return;
+      }
       const request = pageLoadRef.current;
       const spec = (state?.editable ? state.model.imports : []).find(
         (item) => item.name === name,

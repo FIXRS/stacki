@@ -37,3 +37,15 @@ test('empty, foreign and oversized drag data is no drop', () => {
     assert.equal(parseNavigatorDrop(transfer(data)), undefined);
   }
 });
+
+test('component paths distinguish identical names and remain bounded', () => {
+  const input = { 'avb/component': 'Card', 'avb/component-path': '/site/src/other/Card.astro' };
+  assert.deepEqual(parseNavigatorDrop(transfer(input)), {
+    kind: 'component',
+    name: 'Card',
+    path: input['avb/component-path'],
+  });
+  for (const path of ['x'.repeat(LIMITS.ipcPathCharsMax + 1), 'src/\0Card.astro']) {
+    assert.equal(parseNavigatorDrop(transfer({ ...input, 'avb/component-path': path })), undefined);
+  }
+});

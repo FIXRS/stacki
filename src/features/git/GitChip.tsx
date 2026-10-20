@@ -9,12 +9,10 @@ import {
   commitGitChanges,
   initializeGit,
   pushGitBranch,
-  readGitInfo,
   readGitStatus,
   resolveGitMerge,
 } from './gitChipBridge';
 import { BranchIcon } from '../../ui/Icons';
-import useDismiss from '../../ui/useDismiss';
 import type { Conflict, ConflictChoices } from './gitConflictModel';
 import GitChipView, { openGitRemote } from './GitChipView';
 import MergeConflictModal from './MergeConflictModal';
@@ -38,6 +36,9 @@ interface GitProject {
 }
 
 interface GitChipProps {
+  readonly info: IpcResults['git:info'] | undefined;
+  readonly refresh: () => Promise<unknown>;
+  readonly busy: string | undefined;
   readonly project: GitProject;
   readonly showToast: ShowToast;
   readonly flushSave: () => Promise<unknown>;
@@ -46,7 +47,6 @@ interface GitChipProps {
 
 interface RepositoryProps extends GitChipProps {
   readonly info: WireGitInfo;
-  readonly refresh: () => Promise<void>;
   readonly runAction: RunAction;
   readonly busy: string | undefined;
   readonly error: string | undefined;
@@ -68,46 +68,29 @@ async function gitValue<Value>(pending: Promise<Result<Value, string>>): Promise
   return result.value;
 }
 
-function useGitInfo(projectPath: string, onError: (message: string | undefined) => void) {
-  const [info, setInfo] = useState<IpcResults['git:info'] | undefined>(undefined);
-  const projectPathCurrent = useRef(projectPath);
-  projectPathCurrent.current = projectPath;
-  const refresh = useCallback(async (): Promise<void> => {
-    const requestedPath = projectPath;
-    const result = await readGitInfo(requestedPath);
-    if (!result.ok) {
-      onError(result.error);
-      return;
-    }
-    if (projectPathCurrent.current === requestedPath) {
-      onError(undefined);
-      setInfo(result.value);
-    }
-  }, [onError, projectPath]);
-  useEffect(() => {
-    setInfo(undefined);
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 15_000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
-  return { info, refresh } as const;
-}
-
 function useActionRunner({
   flushSave,
   refresh,
   onWorktreeChanged,
   showToast,
+  externalBusy,
 }: {
   readonly flushSave: () => Promise<unknown>;
-  readonly refresh: () => Promise<void>;
+  readonly refresh: () => Promise<unknown>;
   readonly onWorktreeChanged: (() => Promise<unknown>) | undefined;
   readonly showToast: ShowToast;
+  readonly externalBusy: string | undefined;
 }) {
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  const pending = useRef(false);
   const runAction = useCallback<RunAction>(
     async (work, successMessage, label = 'Working…') => {
+      if (pending.current || externalBusy) {
+        return false;
+      }
+      // A synchronous lock also covers repeated clicks before React rerenders.
+      pending.current = true;
       setBusy(label);
       setError(undefined);
       try {
@@ -118,39 +101,43 @@ function useActionRunner({
         if (successMessage) {
           showToast(successMessage, 'success');
         }
-        setBusy(undefined);
         return true;
       } catch (caught: unknown) {
         const message = cleanError(caught);
         setError(message);
         showToast(message, 'error');
-        setBusy(undefined);
         return false;
+      } finally {
+        pending.current = false;
+        setBusy(undefined);
       }
     },
-    [flushSave, onWorktreeChanged, refresh, showToast],
+    [externalBusy, flushSave, onWorktreeChanged, refresh, showToast],
   );
   return { busy, error, setBusy, setError, runAction } as const;
 }
 
 export default function GitChip(props: GitChipProps) {
-  const [loadError, setLoadError] = useState<string | undefined>(undefined);
-  const showLoadError = useCallback((message: string | undefined) => setLoadError(message), []);
-  const { info, refresh } = useGitInfo(props.project.path, showLoadError);
+  const { info, refresh } = props;
   const action = useActionRunner({
     flushSave: props.flushSave,
     refresh,
     onWorktreeChanged: props.onWorktreeChanged,
     showToast: props.showToast,
+    externalBusy: props.busy,
   });
   if (!info) {
-    return undefined;
+    return (
+      <p className="history-note" role="status">
+        Reading repository…
+      </p>
+    );
   }
   if (!info.isRepo) {
     return (
       <InitializeGitChip
         projectPath={props.project.path}
-        busy={action.busy}
+        busy={action.busy ?? props.busy}
         runAction={action.runAction}
       />
     );
@@ -161,8 +148,8 @@ export default function GitChip(props: GitChipProps) {
       info={info}
       refresh={refresh}
       runAction={action.runAction}
-      busy={action.busy}
-      error={action.error ?? loadError}
+      busy={action.busy ?? props.busy}
+      error={action.error}
       setBusy={action.setBusy}
       setError={action.setError}
     />
@@ -188,7 +175,7 @@ function InitializeGitChip({
     );
   };
   return (
-    <button className="git-chip" disabled={busy !== undefined} onClick={initialize}>
+    <button className="primary git-initialize" disabled={busy !== undefined} onClick={initialize}>
       {busy ? <span className="mini-spinner" /> : <BranchIcon size={12} />}
       {busy ?? 'Initialize Git'}
     </button>
@@ -197,14 +184,6 @@ function InitializeGitChip({
 
 function RepositoryGitChip(props: RepositoryProps) {
   const state = useRepositoryState();
-  const { setOpen } = state;
-  const dismiss = useCallback(() => setOpen(false), [setOpen]);
-  useDismiss(state.wrapRef, { active: state.open }, dismiss);
-  useEffect(() => {
-    if (props.error) {
-      setOpen(true);
-    }
-  }, [props.error, setOpen]);
   useChangedFiles(props, state);
   const actions = useRepositoryActions(props, state);
   const commit = useCommitAction(props, state);
@@ -214,14 +193,11 @@ function RepositoryGitChip(props: RepositoryProps) {
         info={props.info}
         busy={props.busy}
         error={props.error}
-        open={state.open}
         commitMessage={state.commitMessage}
         newBranch={state.newBranch}
         picking={state.picking}
         picked={state.picked}
         changed={state.changed}
-        wrapRef={state.wrapRef}
-        onToggle={() => toggleRepository(props, state)}
         onDismissError={() => props.setError(undefined)}
         onSwitch={actions.requestSwitch}
         onMerge={actions.mergeBranch}
@@ -230,12 +206,12 @@ function RepositoryGitChip(props: RepositoryProps) {
         onCreateBranch={actions.createBranch}
         onCommitMessage={state.setCommitMessage}
         onTogglePicking={() => state.setPicking((value) => !value)}
+        onRefreshFiles={() => state.setSelectionRevision((value) => value + 1)}
         onPick={state.setPicked}
         onCommit={commit}
         onOpenRemote={openGitRemote}
         onPush={actions.push}
         onPublish={() => {
-          state.setOpen(false);
           state.setShowPublish(true);
         }}
       />
@@ -255,7 +231,6 @@ function RepositoryGitChip(props: RepositoryProps) {
 }
 
 function useRepositoryState() {
-  const [open, setOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [newBranch, setNewBranch] = useState('');
   const [showPublish, setShowPublish] = useState(false);
@@ -265,9 +240,8 @@ function useRepositoryState() {
   const [picked, setPicked] = useState<readonly string[] | undefined>(undefined);
   const [changed, setChanged] = useState<IpcResults['git:status']>([]);
   const [picking, setPicking] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const [selectionRevision, setSelectionRevision] = useState(0);
   return {
-    open,
     commitMessage,
     newBranch,
     showPublish,
@@ -276,8 +250,8 @@ function useRepositoryState() {
     changed,
     picked,
     picking,
-    wrapRef,
-    setOpen,
+    selectionRevision,
+    setSelectionRevision,
     setCommitMessage,
     setNewBranch,
     setShowPublish,
@@ -289,37 +263,44 @@ function useRepositoryState() {
   } as const;
 }
 
-function toggleRepository(props: RepositoryProps, state: ReturnType<typeof useRepositoryState>) {
-  state.setOpen((value) => !value);
-  void props.refresh();
-}
-
 interface ChangedState {
-  readonly open: boolean;
+  readonly selectionRevision: number;
   readonly picking: boolean;
   readonly setChanged: React.Dispatch<React.SetStateAction<IpcResults['git:status']>>;
   readonly setPicked: React.Dispatch<React.SetStateAction<readonly string[] | undefined>>;
 }
 
 function useChangedFiles(props: RepositoryProps, state: ChangedState): void {
-  const { open, picking, setChanged, setPicked } = state;
+  const { picking, selectionRevision, setChanged, setPicked } = state;
+  const { info, project, setError } = props;
   useEffect(() => {
-    if (!picking || !open) {
+    if (!picking) {
       return;
     }
-    void readGitStatus(props.project.path).then((result) => {
+    let active = true;
+    setError(undefined);
+    void readGitStatus(project.path).then((result) => {
+      if (!active) {
+        return;
+      }
       if (!result.ok) {
+        setError(result.error);
         setChanged([]);
+        setPicked([]);
         return;
       }
       setChanged(result.value);
-      setPicked((current) => current ?? result.value.map((file) => file.path));
+      const paths = result.value.map((file) => file.path);
+      const available = new Set(paths);
+      setPicked((current) => current?.filter((path) => available.has(path)) ?? paths);
     });
-  }, [props.info.dirty, props.info.head, props.project.path, open, picking, setChanged, setPicked]);
+    return () => {
+      active = false;
+    };
+  }, [info, setError, selectionRevision, project.path, picking, setChanged, setPicked]);
 }
 
 interface ActionState {
-  readonly setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   readonly setSwitchTo: React.Dispatch<React.SetStateAction<SwitchTarget | undefined>>;
   readonly setConflict: React.Dispatch<React.SetStateAction<PendingConflict | undefined>>;
   readonly setNewBranch: React.Dispatch<React.SetStateAction<string>>;
@@ -330,7 +311,6 @@ function useRepositoryActions(props: RepositoryProps, state: ActionState) {
     if (branch === props.info.branch) {
       return;
     }
-    state.setOpen(false);
     void props.runAction(() => switchBranch(props, state, branch), undefined, 'Switching…');
   };
   const mergeBranch = (branch: string): void => {
@@ -343,7 +323,6 @@ function useRepositoryActions(props: RepositoryProps, state: ActionState) {
       showToast: props.showToast,
       onConflict: (next) => {
         state.setConflict(next);
-        state.setOpen(false);
       },
     });
   };
@@ -375,7 +354,6 @@ async function switchBranch(
   const result = await gitValue(checkoutGitBranch(props.project.path, branch, { kind: 'switch' }));
   if (!result.ok) {
     state.setSwitchTo({ branch, files: result.files });
-    state.setOpen(true);
     return;
   }
   if (result.error) {
@@ -464,10 +442,12 @@ interface CommitState {
 function useCommitAction(props: RepositoryProps, state: CommitState): () => void {
   return () => {
     const message = state.commitMessage.trim() || 'Update from Stacki';
-    const allPicked =
-      !state.picking || state.picked === undefined || state.picked.length === state.changed.length;
-    const paths = allPicked ? undefined : state.picked;
-    state.setCommitMessage('');
+    // Explicit selections stay explicit even when they include every visible file;
+    // files arriving after selection must not be silently added to the commit.
+    const paths = state.picking ? state.picked : undefined;
+    if (props.busy || (state.picking && !state.picked?.length)) {
+      return;
+    }
     void props
       .runAction(
         async () => {
@@ -476,9 +456,12 @@ function useCommitAction(props: RepositoryProps, state: CommitState): () => void
         paths ? `Saved ${paths.length} file${paths.length === 1 ? '' : 's'}` : 'Changes committed',
         'Committing…',
       )
-      .then(() => {
-        state.setPicked(undefined);
-        state.setPicking(false);
+      .then((done) => {
+        if (done) {
+          state.setCommitMessage('');
+          state.setPicked(undefined);
+          state.setPicking(false);
+        }
       });
   };
 }

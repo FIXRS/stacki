@@ -25,10 +25,9 @@ const GUIDE_VARIABLES = {
   widthMax: '--max-width-main',
 } as const;
 const COLUMN_COUNT_PATTERN = /^\d{1,3}$/;
-// The names the app may ask about: one per menu value (margin, gutter, maximum
-// width and column count), each a custom property name within the app's own
-// bound (guideModel.ts).
-const MENU_VARIABLES_MAX = 4;
+// One name per menu value plus the column fallback, each a custom property
+// name within the app's own bound (guideModel.ts).
+const MENU_VARIABLES_MAX = 5;
 const MENU_VARIABLE_CHARS_MAX = 64;
 const MENU_VARIABLE_PATTERN = /^--[A-Za-z0-9_-]+$/;
 

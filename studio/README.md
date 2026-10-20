@@ -31,6 +31,22 @@ toggle **Sound effects** to mute them. This browser remembers the preference and
 shares it between Studio tabs. The role menu uses Phosphor's regular paint-brush
 and user-circle icons (MIT; see `vendor/phosphor/LICENSE`).
 
+Open the logo menu → **Project settings** to configure each component's initial
+props, literal text, and ordered children. Desktop exposes the same editor in
+**File → Settings**. These insertion presets live in `.stacki/components.json`
+at the website root and apply when adding new instances.
+
+Column guide controls save automatically to `.stacki/guide.json`, including their
+CSS variable connections. Existing browser preferences migrate when that file
+is absent. Commit both files to share settings between Desktop and hosted Studio;
+hosted drafts include them when publishing. `.stacki/preview/` remains local.
+
+After moving or renaming an Astro component, update its owner key and child
+references in `components.json`, or use **Relink a moved or renamed component**
+in Project settings. Run `node studio/dist/cli.mjs check-project .` from the
+website root to check references and guide settings. No Stacki markup is needed
+in component files.
+
 The titlebar play icon opens Stacki's interactive preview across the full workspace.
 Click it again or press Escape to return to editing. Links work normally, and the
 editor follows the page you browsed to when you exit; the design canvas keeps its
@@ -98,3 +114,13 @@ layout. Screenshots go into `test-results/`.
 Installed source releases include build and type checks; the full development test
 suite stays in the canonical repository. Cloudflare deployment, GitHub authorization,
 and release publishing still require verification in the destination account.
+
+### Project insertion defaults
+
+Project settings lists components with insertion defaults. Choose Add or Edit to open one
+component inside the selected layout, then use the normal canvas, navigator, and inspector
+to set its props, text, and children. Save defaults updates `.stacki/components.json` for
+Desktop and Studio; existing page instances stay as they are. Defaults support literal
+values, native HTML children, and nested components. Grid guide settings are stored in
+`.stacki/guide.json`. Both files travel with the project. Temporary editing pages under
+`.stacki/canvas/` are excluded from publication.

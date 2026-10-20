@@ -142,7 +142,6 @@ test('GitChip routes every direct Git operation through the parsed bridge', () =
     /window\.avb\.git(?:Info|Status|Checkout|Commit|Init|Push|ResolveMerge)/,
   );
   for (const operation of [
-    'readGitInfo',
     'readGitStatus',
     'checkoutGitBranch',
     'commitGitChanges',

@@ -1,3 +1,4 @@
+import { isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { VariantPreview } from './VariantPreview';
 import { LockedSettings } from './LockedSettings';
 import { slotOptions } from './slotOptions';
@@ -31,12 +32,7 @@ export function Settings(props: Props) {
   const client = useEditorRole() === 'client';
   const { document, node, selected, component, project, nodes } = props;
   const source = document.text.toString();
-  const current =
-    selected === 'frontmatter'
-      ? { kind: 'frontmatter' as const, id: selected }
-      : node
-        ? parsePageNode(node)
-        : undefined;
+  const current = settingsNode(selected, node);
   const change = (edit: (source: string) => string) => {
     try {
       document.replaceSource(edit(document.text.toString()));
@@ -57,6 +53,7 @@ export function Settings(props: Props) {
       source={source}
     >
       <PropsPanel
+        valuePolicy={isDefaultsCanvas(document.file) ? 'defaults' : 'instance'}
         node={
           client && !['element', 'component', 'text'].includes(current?.kind ?? '')
             ? undefined
@@ -132,4 +129,11 @@ function settingsHandlers(
       change((source) => applyEdits(source, [inlineContentEdit(source, id, nodes)])),
     onChangeTag: (name) => change((source) => renameTag(source, id, name)),
   };
+}
+
+function settingsNode(selected: string, node: ParserNode | undefined) {
+  if (selected === 'frontmatter') {
+    return { kind: 'frontmatter' as const, id: selected };
+  }
+  return node ? parsePageNode(node) : undefined;
 }

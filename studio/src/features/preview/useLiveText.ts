@@ -1,3 +1,4 @@
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { useLayoutEffect, useRef } from 'react';
 import { flatten, type ParserNode } from '../source/source';
 import { pathFor } from '../project/previewSelection';
@@ -32,7 +33,7 @@ export function useLiveText(
         node.kind === 'text' && node.id && before[index]?.value !== node.value
           ? [
               {
-                path: (file.startsWith('src/pages/') ? '' : file + '|') + pathFor(node.id),
+                path: (isCanvasPage(file) ? '' : file + '|') + pathFor(node.id),
                 text: node.value,
                 before: before[index]?.value ?? '',
                 parent: soleTextParent(after, node.id, file),
@@ -51,5 +52,5 @@ function soleTextParent(nodes: readonly ParserNode[], id: string, file: string) 
   const parent = nodes.find(
     (parent) => parent.children?.length === 1 && parent.children[0]?.id === id,
   );
-  return parent?.id ? (file.startsWith('src/pages/') ? '' : file + '|') + pathFor(parent.id) : '';
+  return parent?.id ? (isCanvasPage(file) ? '' : file + '|') + pathFor(parent.id) : '';
 }

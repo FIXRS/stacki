@@ -28,10 +28,11 @@ import {
 } from '../../ui/Icons';
 import { defaultCollapsed, navigatorChildren, navigatorHost } from './structureModel';
 import { isFragmentNode } from '../../editor/liveClasses';
-import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 
 export interface StructureTreeContext {
   readonly clientMode?: boolean;
+  readonly editRootId?: string | undefined;
+  readonly canEdit: (id: string) => boolean;
   readonly selectedId: string | undefined;
   readonly emptyNodeIds?: ReadonlySet<string>;
   readonly hiddenNodeIds?: ReadonlySet<string>;
@@ -113,6 +114,9 @@ function Gap(props: GapProps) {
     dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
   const accepted = acceptsDrag(parentId === undefined ? undefined : props.nodeById(parentId));
   const location = { parentId, index };
+  if (props.editRootId && (!parentId || !props.canEdit(parentId))) {
+    return undefined;
+  }
   if (props.clientMode && parentId === undefined) {
     return undefined;
   }
@@ -185,6 +189,8 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
   return {
     clientMode: props.clientMode === true,
     selectedId: props.selectedId,
+    editRootId: props.editRootId,
+    canEdit: props.canEdit,
     ...(props.emptyNodeIds === undefined ? {} : { emptyNodeIds: props.emptyNodeIds }),
     ...(props.hiddenNodeIds === undefined ? {} : { hiddenNodeIds: props.hiddenNodeIds }),
     ...(props.inertNodeIds === undefined ? {} : { inertNodeIds: props.inertNodeIds }),
@@ -266,10 +272,13 @@ function TreeRow(props: TreeRowProps) {
     <div
       ref={props.rowRef}
       data-node-id={node.id}
+      aria-disabled={!props.canEdit(node.id)}
       title={props.fragment ? fragmentTitle : undefined}
       className={rowClassName(props)}
       style={rowStyle(props.depth, props.dropInto ? 'drop-into' : 'plain')}
       draggable={
+        props.canEdit(node.id) &&
+        node.id !== props.editRootId &&
         !(props.clientMode && node.id === 'layout') &&
         node.kind !== 'chunk-group' &&
         node.kind !== 'branch'
@@ -302,7 +311,11 @@ function treeRowHandlers(props: TreeRowProps) {
   const { node } = props;
   return {
     onDragStart: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (props.clientMode && node.id === 'layout') {
+      if (
+        !props.canEdit(node.id) ||
+        node.id === props.editRootId ||
+        (props.clientMode && node.id === 'layout')
+      ) {
         event.preventDefault();
         return;
       }
@@ -322,14 +335,19 @@ function treeRowHandlers(props: TreeRowProps) {
       props.setDropTarget(undefined);
     },
     onDragOver: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (props.canHostChildren && acceptsDrag(node) && props.isDndPayload(event)) {
+      if (
+        props.canEdit(node.id) &&
+        props.canHostChildren &&
+        acceptsDrag(node) &&
+        props.isDndPayload(event)
+      ) {
         event.preventDefault();
         event.stopPropagation();
         props.setDropTarget({ kind: 'into', intoId: node.id });
       }
     },
     onDrop: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (props.canHostChildren && acceptsDrag(node)) {
+      if (props.canEdit(node.id) && props.canHostChildren && acceptsDrag(node)) {
         props.performDrop(event, { parentId: props.host.id, index: props.children.length });
       }
     },
@@ -338,6 +356,9 @@ function treeRowHandlers(props: TreeRowProps) {
       props.onSelect(node.id);
     },
     onDoubleClick: (event: React.MouseEvent<HTMLDivElement>): void => {
+      if (!props.canEdit(node.id) || props.editRootId) {
+        return;
+      }
       // A <script> or <style> is code, not markup: it opens in the code editor.
       if (node.kind === 'raw') {
         openCode(event, props);
@@ -571,136 +592,6 @@ function nodeIsDataBound(node: NavigatorNode): boolean {
 
 function truncate(value: string, lengthMax: number): string {
   return value.length > lengthMax ? `${value.slice(0, lengthMax - 1)}…` : value;
-}
-
-function ContextMenuItem({
-  action,
-  label,
-  shortcut,
-  disabled = false,
-  onAction,
-}: {
-  readonly action: ContextAction;
-  readonly label: string;
-  readonly shortcut: string;
-  readonly disabled?: boolean;
-  readonly onAction: (action: ContextAction) => void;
-}) {
-  return (
-    <div
-      className={`ctx-menu-item ${disabled ? 'disabled' : ''}`}
-      role="menuitem"
-      aria-disabled={disabled}
-      tabIndex={disabled ? -1 : 0}
-      onKeyDown={(event) => {
-        if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
-          event.preventDefault();
-          onAction(action);
-        }
-      }}
-      onClick={() => {
-        if (!disabled) {
-          onAction(action);
-        }
-      }}
-    >
-      <span>{label}</span>
-      <span className="ctx-shortcut">{shortcut}</span>
-    </div>
-  );
-}
-
-export type ContextAction = 'copy' | 'paste' | 'duplicate' | 'delete';
-export interface ContextPosition {
-  readonly left: number;
-  readonly top: number;
-  readonly nodeId: string;
-}
-
-export function ContextMenu({
-  position,
-  canPaste,
-  onClose,
-  onAction,
-  protectedNode = false,
-}: {
-  readonly protectedNode?: boolean;
-  readonly position: ContextPosition;
-  readonly canPaste: boolean;
-  readonly onClose: () => void;
-  readonly onAction: (action: ContextAction) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useContextDismiss(ref, onClose);
-  const left = Math.min(position.left, window.innerWidth - 208);
-  const top = Math.min(position.top, window.innerHeight - 130);
-  const shortcut = (key: string): string => shortcutLabel(key, 'primary', currentDesktopPlatform());
-  return (
-    <div ref={ref} role="menu" className="ctx-menu" style={{ left, top, width: 200 }}>
-      <ContextMenuItem
-        action="copy"
-        label="Copy"
-        shortcut={shortcut('C')}
-        disabled={protectedNode}
-        onAction={onAction}
-      />
-      <ContextMenuItem
-        action="paste"
-        label="Paste"
-        shortcut={shortcut('V')}
-        disabled={!canPaste}
-        onAction={onAction}
-      />
-      <ContextMenuItem
-        action="duplicate"
-        label="Duplicate"
-        disabled={protectedNode}
-        shortcut={shortcut('D')}
-        onAction={onAction}
-      />
-      <div className="ctx-divider" />
-      <ContextMenuItem
-        action="delete"
-        label="Delete"
-        shortcut="⌫"
-        disabled={protectedNode}
-        onAction={onAction}
-      />
-    </div>
-  );
-}
-
-function useContextDismiss(ref: React.RefObject<HTMLDivElement>, onClose: () => void): void {
-  useEffect(() => {
-    // Event targets are null when the event has none; that is never inside.
-    const outside = (target: EventTarget | undefined): boolean =>
-      target instanceof Node && ref.current !== null && !ref.current.contains(target);
-    const onDown = (event: MouseEvent): void => {
-      if (outside(event.target ?? undefined)) {
-        onClose();
-      }
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    const onScroll = (event: Event): void => {
-      if (outside(event.target ?? undefined)) {
-        onClose();
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onClose);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onClose);
-    };
-  }, [onClose, ref]);
 }
 
 const fragmentTitle =

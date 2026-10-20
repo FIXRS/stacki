@@ -1,3 +1,8 @@
+import { useEffect, useState } from 'react';
+import { ElementContextMenu } from '../../features/structure/ElementContextMenu';
+import type { ContextPosition } from '../../features/structure/StructureContextMenu';
+import type { ContextPoint } from '../../features/preview/contextPosition';
+import { desktopElementActions } from './desktopElementActions';
 // The canvas and the right panel: the canvas pane and its covers, selecting
 // or opening a canvas path, the right tabs with the style tab and the
 // settings handlers, the code window's host, the conflict notice, and the
@@ -14,7 +19,6 @@ import type { PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
 import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
-import { type ToastMessage } from '../appTypes';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
@@ -31,45 +35,113 @@ import type { ShellView } from '../App';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);
+  const context = useCanvasContextMenu(app);
   return (
-    <PreviewPane
-      spacingHover={app.spacingHover}
-      devUrl={app.devUrl}
-      devStatus={app.devStatus}
-      devLog={app.devLog}
-      devDiag={app.devDiag}
-      route={app.pageUrlPath}
-      refreshKey={app.refreshKey}
-      crumbs={app.crumbs}
-      onCrumb={(id) => app.setSelectedId(id)}
-      onRefresh={() => app.setRefreshKey((count) => count + 1)}
-      onPreviewLoaded={app.previewLoaded}
-      onRestart={() => {
-        // Starting the dev server reports its own failure in the preview area.
-        void app.startPreview(app.project.path);
-      }}
-      pathScope={app.editedRel ? `${app.editedRel}|` : ''}
-      selPath={app.pathFor(app.selectedId)}
-      navigatorSelectionTick={app.navigatorSelectionTick}
-      navHoverPath={app.pathFor(hoverNodeId)}
-      overlayInfo={app.overlayInfo}
-      focusPath={app.focusPath}
-      focusOcc={app.focusOcc}
-      focusWhole={app.focusWhole}
-      device={app.device}
-      onDevice={app.setDevice}
-      projectPath={app.project.path}
-      judgeEvent={app.judgeEvent}
-      onStaleEvent={app.onStaleEvent}
-      onPreviewReload={app.onPreviewReload}
-      onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
-      onSelectedClasses={app.receiveClasses}
-      onRenderedPaths={app.setRenderedPaths}
-      onNodeStates={app.setNodeStates}
-      onNodeClasses={app.setNodeClasses}
-      onOpenPath={(path, occurrence) => openCanvasPath(app, path ?? undefined, occurrence)}
-    />
+    <>
+      <PreviewPane
+        spacingHover={app.spacingHover}
+        devUrl={app.devUrl}
+        devStatus={app.devStatus}
+        devLog={app.devLog}
+        devDiag={app.devDiag}
+        route={app.pageUrlPath}
+        refreshKey={app.refreshKey}
+        crumbs={app.crumbs}
+        onCrumb={(id) => app.setSelectedId(id)}
+        onRefresh={() => app.setRefreshKey((count) => count + 1)}
+        onPreviewLoaded={app.previewLoaded}
+        onRestart={() => {
+          // Starting the dev server reports its own failure in the preview area.
+          void app.startPreview(app.project.path);
+        }}
+        pathScope={app.editedRel ? `${app.editedRel}|` : ''}
+        selPath={app.pathFor(app.selectedId)}
+        navigatorSelectionTick={app.navigatorSelectionTick}
+        navHoverPath={app.pathFor(hoverNodeId)}
+        overlayInfo={app.overlayInfo}
+        focusPath={app.focusPath}
+        focusOcc={app.focusOcc}
+        focusWhole={app.focusWhole}
+        device={app.device}
+        onDevice={app.setDevice}
+        projectPath={app.project.path}
+        judgeEvent={app.judgeEvent}
+        onStaleEvent={app.onStaleEvent}
+        onPreviewReload={app.onPreviewReload}
+        onContextPath={context.open}
+        onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
+        onSelectedClasses={app.receiveClasses}
+        onRenderedPaths={app.setRenderedPaths}
+        onNodeStates={app.setNodeStates}
+        onNodeClasses={app.setNodeClasses}
+        onOpenPath={(path, occurrence) => openCanvasPath(app, path ?? undefined, occurrence)}
+      />
+      {context.menu}
+    </>
   );
+}
+
+function useCanvasContextMenu(app: ShellView) {
+  const [position, setPosition] = useState<ContextPosition & { readonly generation: number }>();
+  const file = app.openEditableFile?.path;
+  const source = app.pageState?.source;
+  useEffect(() => setPosition(undefined), [file, source, app.device, app.refreshKey]);
+  useEffect(() => {
+    if (position?.nodeId !== app.selectedId) {
+      setPosition(undefined);
+    }
+  }, [position, app.selectedId]);
+  return {
+    open: (path: string | undefined, point: ContextPoint & { readonly outside: boolean }) => {
+      const next = canvasContextPosition(app, path, point);
+      // Each request remounts the popup so an earlier dismissal cannot close its replacement.
+      setPosition(
+        (previous) =>
+          next && {
+            ...next,
+            generation: previous ? 1 - previous.generation : 0,
+          },
+      );
+    },
+    menu:
+      position && app.pageState?.editable && position.nodeId === app.selectedId ? (
+        <ElementContextMenu
+          key={position.generation}
+          {...desktopElementActions(app)}
+          nodes={app.pageState.model.nodes}
+          position={position}
+          onClose={() => setPosition(undefined)}
+        />
+      ) : undefined,
+  };
+}
+
+function canvasContextPosition(
+  app: ShellView,
+  path: string | undefined,
+  point: ContextPoint & { readonly outside: boolean },
+): ContextPosition | undefined {
+  const action = canvasClickAction({
+    path,
+    outside: point.outside,
+    focusPath: app.focusPath,
+    scope: app.editedRel ? `${app.editedRel}|` : '',
+  });
+  if (action.kind === 'close' || action.kind === 'nothing' || !app.pageState?.editable) {
+    return undefined;
+  }
+  const nodes = app.pageState.model.nodes;
+  const node =
+    action.kind === 'layout'
+      ? findNodeById(nodes, 'layout')
+      : path
+        ? nodeAtPath(nodes, trailOf(path))
+        : undefined;
+  if (!node) {
+    return undefined;
+  }
+  selectCanvasPath(app, path, point);
+  return { ...point, nodeId: node.id };
 }
 
 // What a click on the canvas MEANT — see canvasClick.js. The canvas answers with a
@@ -102,8 +174,12 @@ export function selectCanvasPath(
     return;
   }
   if (kind === 'close') {
-    // Opening the parent file reports its own failures.
-    void app.closeComponent();
+    if (app.defaultsCanvas.state.kind !== 'idle') {
+      void app.defaultsCanvas.run('done');
+    } else {
+      // Opening the parent file reports its own failures.
+      void app.closeComponent();
+    }
     return;
   }
   const { model } = app;
@@ -302,11 +378,9 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
 // What the Settings tab shows about the selection.
 export function settingsValues(app: ShellView) {
   const { selectedNode, selectedId } = app;
-  const component =
-    selectedNode?.kind === 'component'
-      ? app.insertables.find((entry) => entry.name === selectedNode.name)
-      : undefined;
+  const component = app.selectedComponent;
   return {
+    valuePolicy: app.defaultsCanvas.isOpen ? ('defaults' as const) : ('instance' as const),
     node: selectedNode,
     focusClass: app.classFocus,
     focusContent: app.contentFocus,
@@ -467,8 +541,4 @@ export function BusyOverlay({ message }: { readonly message: string }) {
       <div>{message}</div>
     </div>
   );
-}
-
-export function Toast({ toast }: { readonly toast: ToastMessage }) {
-  return <div className={`toast ${toast.kind}`}>{toast.msg}</div>;
 }

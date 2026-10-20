@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronDownIcon } from '../../ui/Icons';
-import useDismiss from '../../ui/useDismiss';
+import Popup from '../../ui/Popup';
 
 interface WelcomeSplitButtonProps {
   readonly className: string;
@@ -15,21 +15,7 @@ export default function WelcomeSplitButton(props: WelcomeSplitButtonProps) {
   const { open, setOpen, groupRef, triggerRef, itemRef } = useSplitMenu();
   const menuId = useId();
   return (
-    <div
-      className="welcome-split-button"
-      ref={groupRef}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          setOpen(false);
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          setOpen(false);
-          triggerRef.current?.focus();
-        }
-      }}
-    >
+    <div className="welcome-split-button" ref={groupRef}>
       <button className={props.className} onClick={props.onClick}>
         {props.label}
       </button>
@@ -50,18 +36,25 @@ export default function WelcomeSplitButton(props: WelcomeSplitButtonProps) {
       >
         <ChevronDownIcon size={13} />
       </button>
-      {open && (
-        <div className="welcome-split-menu" role="menu" id={menuId}>
-          <SplitMenuItem
-            itemRef={itemRef}
-            label={props.menuLabel}
-            onSelect={() => {
-              setOpen(false);
-              props.onMenuSelect();
-            }}
-          />
-        </div>
-      )}
+      <Popup
+        mode="popover"
+        portal={false}
+        open={open}
+        anchor={triggerRef.current ?? undefined}
+        onClose={() => setOpen(false)}
+        className="welcome-split-menu"
+        role="menu"
+        id={menuId}
+      >
+        <SplitMenuItem
+          itemRef={itemRef}
+          label={props.menuLabel}
+          onSelect={() => {
+            setOpen(false);
+            props.onMenuSelect();
+          }}
+        />
+      </Popup>
     </div>
   );
 }
@@ -76,7 +69,7 @@ function SplitMenuItem({
   readonly onSelect: () => void;
 }) {
   return (
-    <button ref={itemRef} role="menuitem" onClick={onSelect}>
+    <button autoFocus ref={itemRef} role="menuitem" onClick={onSelect}>
       {label}
     </button>
   );
@@ -87,11 +80,5 @@ function useSplitMenu() {
   const groupRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const itemRef = useRef<HTMLButtonElement>(null);
-  useDismiss(groupRef, { active: open }, () => setOpen(false));
-  useEffect(() => {
-    if (open) {
-      itemRef.current?.focus();
-    }
-  }, [open]);
   return { open, setOpen, groupRef, triggerRef, itemRef };
 }

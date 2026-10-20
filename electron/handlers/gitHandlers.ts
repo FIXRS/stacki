@@ -2,9 +2,12 @@
 // history, commits, restores, and publishing to GitHub.
 
 import { definedFields } from '../../shared/core/boundary';
+import { readPublishConfig } from '../project/publishConfig';
+import { publishingGitEnvironment } from '../project/publishGitHub';
 import type { GitInfo } from '../lib/mainTypes';
 import { mergeBranch, deleteBranch, switchBranch, resolveMerge } from '../git/gitBranches';
 import * as gitHistory from '../git/gitHistory';
+import { readCommitDiff } from '../git/gitCommitDiff';
 import * as gitSnapshot from '../git/gitSnapshot';
 import { capture } from '../lib/mainHelpers';
 import { run, git } from '../lib/nodeTools';
@@ -121,13 +124,15 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
     }
     try {
       // Writes its report to stderr and exits non-zero when logged out.
-      const result = await run('gh', ['auth', 'status'], projectPath);
+      const config = readPublishConfig(projectPath);
+      const environment = await publishingGitEnvironment(projectPath, config);
+      const result = await run('gh', ['auth', 'status'], projectPath, { env: environment });
       const out = `${result.stdout}${result.stderr}`;
       const match = out.match(/(?:account|as)\s+([\w-]+)/i);
       return {
         installed: true as const,
         authed: true as const,
-        user: match ? capture(match, 1) : undefined,
+        user: config.githubAccount || (match ? capture(match, 1) : undefined),
       };
     } catch {
       return { installed: true as const, authed: false as const };
@@ -159,6 +164,7 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
   });
 
   ipcMain.handle('git:log', async (_event, payload) => readGitLog(payload));
+  ipcMain.handle('git:commitDiff', async (_event, payload) => readCommitDiff(git, payload));
 
   ipcMain.handle('git:commitFiles', async (_event, { projectPath, ref }) =>
     gitHistory.describeFiles(await gitHistory.commitFiles(git, { projectPath, ref })),
@@ -232,7 +238,11 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
   });
 
   ipcMain.handle('git:push', async (_event, { projectPath, branch }) => {
-    await git(projectPath, ['push', '-u', 'origin', branch], { timeout: 120000 });
+    const environment = await publishingGitEnvironment(projectPath, readPublishConfig(projectPath));
+    await git(projectPath, ['push', '-u', 'origin', branch], {
+      timeout: 120000,
+      env: environment,
+    });
     return { ok: true as const };
   });
 }
@@ -258,7 +268,8 @@ function registerGitPublishHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
       'origin',
       '--push',
     ];
-    const result = await run('gh', args, projectPath, { timeout: 180000 });
+    const environment = await publishingGitEnvironment(projectPath, readPublishConfig(projectPath));
+    const result = await run('gh', args, projectPath, { timeout: 180000, env: environment });
     const output = result.stdout + result.stderr;
     // `gh` prints the new repo's URL; fall back to the remote it just set.
     let url = (output.match(/https:\/\/github\.com\/[^\s"']+/) || [])[0] || undefined;

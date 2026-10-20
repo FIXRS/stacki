@@ -8,7 +8,7 @@ import { PropertyDefault, propertyDefaultText } from './PropertyDefault';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 export { literalOptions };
 import { useRef, useState } from 'react';
-import useDismiss from '../../ui/useDismiss';
+import Popup from '../../ui/Popup';
 import { assert } from '../../../shared/core/assert';
 import type {
   ComponentProperty,
@@ -28,43 +28,53 @@ interface PropertyEditorProps {
 }
 export function PropertyEditor(props: PropertyEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-  useDismiss(editorRef, { active: props.access !== 'saving' }, props.onClose);
   const draft = usePropertyEditorDraft(props);
   return (
-    <div className="property-editor" ref={editorRef}>
-      <header>
-        <div className="property-editor-title">
-          <strong>{props.originalName ? 'Property settings' : 'New property'}</strong>
-          <PropertyDeclarationInfo property={props.property} />
-        </div>
-        <button
-          aria-label="Close property settings"
-          disabled={props.access === 'saving'}
-          onClick={props.onClose}
-        >
-          ×
-        </button>
-      </header>
-      <PropertyConditions property={props.property} />
-      {props.property.editing?.kind === 'override' && (
-        <p className="property-help">{props.property.editing.reason}</p>
+    <Popup
+      mode="popover"
+      portal={false}
+      className="property-editor"
+      ref={editorRef}
+      onClose={props.onClose}
+      dismissible={props.access !== 'saving'}
+    >
+      {({ close }) => (
+        <>
+          <header>
+            <div className="property-editor-title">
+              <strong>{props.originalName ? 'Property settings' : 'New property'}</strong>
+              <PropertyDeclarationInfo property={props.property} />
+            </div>
+            <button
+              aria-label="Close property settings"
+              disabled={props.access === 'saving'}
+              onClick={close}
+            >
+              ×
+            </button>
+          </header>
+          <PropertyConditions property={props.property} />
+          {props.property.editing?.kind === 'override' && (
+            <p className="property-help">{props.property.editing.reason}</p>
+          )}
+          {props.access === 'readonly' ? (
+            <PropertyReadOnlyFields property={draft.property} />
+          ) : (
+            <PropertyEditorFields
+              property={draft.property}
+              originalName={props.originalName}
+              frontmatter={props.frontmatter}
+              access={props.access}
+              onSave={props.onSave}
+              update={draft.update}
+              error={draft.error}
+              submit={draft.submit}
+              changeOptions={draft.changeOptions}
+            />
+          )}
+        </>
       )}
-      {props.access === 'readonly' ? (
-        <PropertyReadOnlyFields property={draft.property} />
-      ) : (
-        <PropertyEditorFields
-          property={draft.property}
-          originalName={props.originalName}
-          frontmatter={props.frontmatter}
-          access={props.access}
-          onSave={props.onSave}
-          update={draft.update}
-          error={draft.error}
-          submit={draft.submit}
-          changeOptions={draft.changeOptions}
-        />
-      )}
-    </div>
+    </Popup>
   );
 }
 

@@ -687,3 +687,84 @@ test(
     }
   },
 );
+
+test('context events use the gate and translate zoomed frame coordinates', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const calls = [];
+  const verdicts = [];
+  const token = 'a'.repeat(64);
+  const props = {
+    ...hoverPreviewProps(),
+    selPath: '0.1',
+    focusPath: undefined,
+    judgeEvent: async (value, render, request) => {
+      calls.push(['gate', request]);
+      return value === render?.token
+        ? { tag: 'current' }
+        : { tag: 'stale', reason: 'no-render', file: undefined };
+    },
+    onContextPath: (path, point) => calls.push(['context', path, point]),
+    onStaleEvent: (verdict) => verdicts.push(verdict),
+  };
+  const act = (action) =>
+    React.act(async () => {
+      await action();
+      await settle();
+    });
+  try {
+    await act(() => root.render(React.createElement(PreviewPane, props)));
+    const frame = document.querySelector('iframe');
+    Object.defineProperty(frame, 'offsetWidth', { value: 1000 });
+    frame.getBoundingClientRect = () => ({ left: 200, top: 100, width: 500, height: 400 });
+    const send = (data, source = frame.contentWindow) =>
+      act(() => {
+        window.dispatchEvent(new window.MessageEvent('message', { source, data }));
+      });
+    const event = {
+      type: 'avb:context-node',
+      path: '0.1',
+      occurrence: 1,
+      outside: false,
+      left: 80,
+      top: 120,
+      token,
+    };
+    await send({ type: 'avb:render', token, stamps: [] });
+    await send(event, window);
+    assert.equal(calls.length, 0, 'another window cannot open the menu');
+    await send({ ...event, token: 'b'.repeat(64) });
+    assert.equal(verdicts.length, 1, 'a stale right-click is reported');
+    assert.equal(calls.filter(([kind]) => kind === 'context').length, 0);
+    await send(event);
+    assert.deepEqual(calls.at(-2), ['gate', { kind: 'open' }]);
+    assert.deepEqual(calls.at(-1), [
+      'context',
+      '0.1',
+      {
+        left: 240,
+        top: 160,
+        occurrence: 1,
+        outside: false,
+      },
+    ]);
+    await send({
+      type: 'avb:rects',
+      classes: {},
+      spacing: {},
+      rects: {
+        0.1: [
+          { x: 10, y: 20, w: 30, h: 40 },
+          { x: 10, y: 90, w: 30, h: 40 },
+        ],
+      },
+    });
+    assert.equal(document.querySelectorAll('.node-outline.sel').length, 1);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});

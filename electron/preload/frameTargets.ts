@@ -243,6 +243,7 @@ export const startOutlines = () => {
   // fires for that; see followMotion.
   lookForMotion();
   listenForPointer();
+  listenForContextMenu();
 };
 
 // Polls for motion nothing announces (see followMotion).
@@ -322,6 +323,29 @@ const listenForPointer = () => {
     true,
   );
 };
+
+// Right-click resolves the same source node and occurrence as an ordinary selection.
+function listenForContextMenu(): void {
+  document.addEventListener(
+    'contextmenu',
+    (event) => {
+      if (!designMode) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const { path, occurrence, outside } = nodeAtEvent(event);
+      postLocated('avb:context-node', {
+        path: path || undefined,
+        occurrence,
+        outside: !!outside,
+        left: event.clientX,
+        top: event.clientY,
+      });
+    },
+    true,
+  );
+}
 
 function startOutlinesClearHover(): void {
   // Told nothing yet, or told of a node: either way, the pointer has left.

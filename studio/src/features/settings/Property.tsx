@@ -1,3 +1,4 @@
+import Popup from '../../../vendor/stacki/src/ui/Popup';
 import { useState } from 'react';
 import JSON5 from 'json5';
 import { ValueFields } from '../../shared/ui/ValueFields';
@@ -61,7 +62,13 @@ export function Property({
         change={change}
       />
       {field.name === 'class' && suggest && !mode && (
-        <ClassSuggestions classes={classes} shown={shown} last={last} change={change} />
+        <ClassSuggestions
+          onClose={() => setSuggest(false)}
+          classes={classes}
+          shown={shown}
+          last={last}
+          change={change}
+        />
       )}
       {!applies && <small>Not used by this variant</small>}
     </div>
@@ -168,13 +175,18 @@ function PropertyControl({
   );
 }
 function ClassSuggestions({
+  onClose,
   classes,
   shown,
   last,
   change,
-}: Pick<PropertyProps, 'classes' | 'change'> & { shown: string; last: string }) {
+}: Pick<PropertyProps, 'classes' | 'change'> & {
+  shown: string;
+  last: string;
+  readonly onClose: () => void;
+}) {
   return (
-    <div className="class-suggestions">
+    <Popup mode="popover" portal={false} className="class-suggestions" onClose={onClose}>
       {classes
         .filter((name) => name.includes(last) && !shown.split(/\s+/).includes(name))
         .slice(0, 12)
@@ -190,7 +202,7 @@ function ClassSuggestions({
             {name}
           </button>
         ))}
-    </div>
+    </Popup>
   );
 }
 function decode(value: string) {

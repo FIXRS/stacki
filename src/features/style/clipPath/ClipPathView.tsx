@@ -1,3 +1,4 @@
+import Popup from '../../../ui/Popup';
 // The clip-path editor's view: its class tags, presets and source menu, fit
 // mode and scale variables, shortcut help, and the canvas (ClipPath.tsx).
 
@@ -118,7 +119,13 @@ export function ClipPathLabel({ editor }: EditorProps) {
         </span>
       )}
       {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'current' ? (
-        <div className="clip-path_label-menu" role="menu">
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={() => editor.setIsClipPathLabelMenuOpen(false)}
+          className="clip-path_label-menu"
+          role="menu"
+        >
           <button
             type="button"
             className="clip-path_label-menu-item"
@@ -132,7 +139,7 @@ export function ClipPathLabel({ editor }: EditorProps) {
             <span>Reset</span>
             <span className="clip-path_label-menu-shortcut">Option + click</span>
           </button>
-        </div>
+        </Popup>
       ) : undefined}
       {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'inherited' ? (
         <ClipPathSourceMenu editor={editor} />
@@ -145,10 +152,13 @@ export function ClipPathLabel({ editor }: EditorProps) {
 export function ClipPathSourceMenu({ editor }: EditorProps) {
   const { clipPathSourceBreakpoint, clipPathSourceSelector, appliedClassName } = editor;
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={() => editor.setIsClipPathLabelMenuOpen(false)}
       className="clip-path_label-menu clip-path_source-menu"
       role="dialog"
-      aria-label="Clip path value source"
+      label="Clip path value source"
     >
       <span className="clip-path_source-title">Value comes from:</span>
       <div className="clip-path_source-row">
@@ -172,7 +182,7 @@ export function ClipPathSourceMenu({ editor }: EditorProps) {
           </span>
         ))}
       </div>
-    </div>
+    </Popup>
   );
 }
 
@@ -221,13 +231,17 @@ export function PresetList({ editor }: EditorProps) {
   const { presetListRef, activePresetOptionId, onPresetListKeyDown, activePreset } = editor;
   const { activePresetIndex, setActivePresetIndex, choosePreset } = editor;
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={editor.closePresetDropdown}
+      anchor={editor.presetButtonRef.current ?? undefined}
       id="clip-path_preset-listbox"
       ref={presetListRef}
       className="clip-path_preset-list"
       role="listbox"
       tabIndex={-1}
-      aria-labelledby="clip-path_preset-label"
+      labelledBy="clip-path_preset-label"
       aria-activedescendant={activePresetOptionId}
       onKeyDown={onPresetListKeyDown}
     >
@@ -259,7 +273,7 @@ export function PresetList({ editor }: EditorProps) {
           </div>
         );
       })}
-    </div>
+    </Popup>
   );
 }
 
@@ -445,11 +459,14 @@ export function ShortcutHelpControl({ editor }: EditorProps) {
         </svg>
       </button>
       {isShortcutHelpOpen ? (
-        <div
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={() => setIsShortcutHelpOpen(false)}
           id="clip-path_shortcuts-popover"
           className="clip-path_shortcuts-popover"
           role="dialog"
-          aria-label="Clip Path shortcuts"
+          label="Clip Path shortcuts"
         >
           <div className="clip-path_shortcuts-header">
             <span className="clip-path_shortcuts-title">Shortcuts</span>
@@ -459,7 +476,7 @@ export function ShortcutHelpControl({ editor }: EditorProps) {
             </span>
           </div>
           <ShortcutHelpGroups editor={editor} />
-        </div>
+        </Popup>
       ) : undefined}
     </div>
   );

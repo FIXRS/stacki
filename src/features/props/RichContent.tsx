@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import DataPicker from './DataPicker';
@@ -74,7 +75,6 @@ export default function RichContent({ nodes, onChange, bindContext, insertRef }:
   useRichInsertion(insertRef, state, emit);
   useRichSelection(state);
   useRichPosition(state);
-  useRichChipDismiss(state);
   const onBlur = useRichBlur(state);
   return (
     <>
@@ -531,39 +531,6 @@ function richChipActions(state: RichState, emit: () => void) {
 
   return { onChipMouseDown, pickExpr };
 }
-function useRichChipDismiss(state: RichState): void {
-  const { chipMenu, setChipMenu } = state;
-  useEffect(() => {
-    if (!chipMenu) {
-      return;
-    }
-    const close = (event: MouseEvent) => {
-      // Chips are excluded, not just the menu: React flushes this effect
-      // synchronously for a discrete event, so the listener is live while the
-      // very mousedown that opened the menu is still propagating to document.
-      // Without the exclusion the menu closes on the click that opened it —
-      // and clicking straight from one chip to another would too.
-      const ElementType = chipMenu.chip.ownerDocument.defaultView?.Element;
-      if (ElementType && event.target instanceof ElementType) {
-        if (event.target.closest('.bind-menu, .expr-chip')) {
-          return;
-        }
-      }
-      setChipMenu(undefined);
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        setChipMenu(undefined);
-      }
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [chipMenu, setChipMenu]);
-}
 function RichChipMenu({
   state,
   bindContext,
@@ -578,7 +545,10 @@ function RichChipMenu({
     return undefined;
   }
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={() => state.setChipMenu(undefined)}
       className="dd-popup bind-menu"
       style={{ left: chipMenu.left, top: chipMenu.top, width: 260 }}
     >
@@ -593,7 +563,7 @@ function RichChipMenu({
         onExpand={(node) => node.query && bindContext?.onNeedSample?.(node.query.collection)}
         footer={false}
       />
-    </div>
+    </Popup>
   );
 }
 type BubbleStyle = React.CSSProperties & { readonly '--arrow-x': string };

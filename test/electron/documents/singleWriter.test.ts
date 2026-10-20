@@ -90,8 +90,8 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
       reason: 'writes inside the text of a generated Astro integration that runs in the dev server',
     },
   },
-  'electron/preview/previewWorktree.ts': {
-    appendFileSync: { count: 1, reason: 'git exclude file of the preview worktree' },
+  'electron/lib/projectExclusions.ts': {
+    writeFileSync: { count: 1, reason: 'git local exclude migration; never website source' },
   },
   'electron/previewServer/studioLocal.ts': {
     writeFileSync: {

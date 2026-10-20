@@ -1,3 +1,4 @@
+import type { PropValuePolicy } from './propValuePolicy';
 // The shapes the settings panel is built from: the selected node, the panel's
 // props, and the props each kind of node's panel takes (PropsPanel.tsx).
 
@@ -21,6 +22,7 @@ import LinkField from './LinkField';
 export type SelectedNode = PageNode | { readonly kind: 'frontmatter'; readonly id: string };
 export type ElementNode = (PairedNode | ChunkGroupNode) & { readonly props?: PropValues };
 export interface PropsPanelProps {
+  readonly valuePolicy?: PropValuePolicy;
   readonly node?: SelectedNode | undefined;
   readonly focusClass?: number;
   readonly focusContent?: number;

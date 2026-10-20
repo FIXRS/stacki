@@ -1,3 +1,4 @@
+import { PropValuePolicyContext } from './propValuePolicy';
 import { PropPreviewContext } from './propPreviewContext';
 // The control a prop field shows for its kind of value: a binding, style,
 // attribute, class, slot, an option, a boolean, a number, a link, media, an
@@ -205,6 +206,7 @@ export function SlotControl({ state }: { readonly state: PropControlState }) {
 }
 export function EnumControl({ state }: { readonly state: PropControlState }) {
   const preview = useContext(PropPreviewContext);
+  const policy = useContext(PropValuePolicyContext);
   const { field, value, onChange, placeholderFor, label } = state;
   assert(field.options?.length, 'Enum control: options exist');
 
@@ -216,8 +218,7 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
   // stay visible, and the dropdown is the only field that can show it.
   if (
     field.options.length === 2 &&
-    defaultText !== undefined &&
-    field.options.includes(defaultText) &&
+    (policy === 'defaults' || (defaultText !== undefined && field.options.includes(defaultText))) &&
     (raw === undefined || field.options.includes(raw))
   ) {
     const current = raw ?? defaultText;
@@ -228,9 +229,8 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
           options={field.options.map((option) => ({ value: option, label: option }))}
           current={current}
           onPick={(next) =>
-            // Picking the default clears the prop, exactly as the dropdown
-            // does — an untouched component stays untouched in the markup.
-            next === defaultText
+            // Defaults recipes retain every explicit choice.
+            policy === 'instance' && next === defaultText
               ? onChange(undefined, true)
               : onChange({ type: field.numeric ? 'expr' : 'string', value: next }, true)
           }
@@ -238,10 +238,11 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
       </div>
     );
   }
-  // The default option is encoded as '' (= prop not set), so an unset prop
-  // shows its default as the selected option and picking the default
-  // resets the prop rather than writing it out explicitly.
-  const selected = raw === undefined || raw === defaultText ? '' : raw;
+  // Only ordinary instances encode the default as an omitted prop.
+  const omittedDefault = policy === 'instance' ? defaultText : undefined;
+  // An unset recipe uses the placeholder so choosing its fallback still commits.
+  const selected = raw ?? (policy === 'instance' ? (defaultText ?? '') : '');
+  const selectedOption = selected === omittedDefault ? '' : selected;
   // Keep an out-of-schema current value selectable rather than losing it.
   const choices =
     raw === undefined || field.options.includes(raw) ? field.options : [raw, ...field.options];
@@ -249,14 +250,14 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
     <div className="props-field">
       {label}
       <Dropdown
-        value={selected}
+        value={selectedOption}
         {...(preview
           ? {
               onPrepare: () =>
                 preview.prepare(
                   field.name,
                   choices.map((option) =>
-                    option === defaultText ? undefined : field.numeric ? Number(option) : option,
+                    option === omittedDefault ? undefined : field.numeric ? Number(option) : option,
                   ),
                 ),
               onPreview: (next: string) =>
@@ -270,7 +271,7 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
         // the two answers as if it were the only one.
         placeholder={placeholderFor(field) || '(not set)'}
         options={choices.map((option) => ({
-          value: option === defaultText ? '' : option,
+          value: option === omittedDefault ? '' : option,
           label: option,
         }))}
         // A union of numbers is still numbers: the component is typed for one,
@@ -285,19 +286,13 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
   );
 }
 export function BooleanControl({ state }: { readonly state: PropControlState }) {
+  const policy = useContext(PropValuePolicyContext);
   const { field, value, onChange, label } = state;
 
-  // A checkbox can only say on/off, and a boolean prop has three states:
-  // true, false, and unset (= whatever the component defaults to). Two
-  // segments say which one is in effect, and picking the default clears the
-  // prop rather than writing it out — the same rule the enum dropdown uses,
-  // so an untouched component stays untouched in the markup.
-  // A boolean that isn't there is false — that's what the component sees for
-  // an undeclared default, so false IS the default unless the component says
-  // otherwise. Picking it clears the prop instead of writing `x={false}`,
-  // which would mark the field set and put `false` in the markup to say what
-  // its absence already said.
-  const fallback = field.default === undefined ? false : !!field.default;
+  // Instances omit redundant fallbacks; recipes keep explicit choices so they
+  // remain visible as set and survive future changes to the Astro fallback.
+  // Show the effective boolean while the label tracks only an explicit override.
+  const fallback = !!field.default;
   const current = value ? value.type !== 'expr' || value.value === 'true' : fallback;
   return (
     <div className="props-field">
@@ -309,7 +304,7 @@ export function BooleanControl({ state }: { readonly state: PropControlState }) 
         ]}
         current={current}
         onPick={(next) =>
-          next === fallback
+          policy === 'instance' && next === fallback
             ? onChange(undefined, true)
             : onChange({ type: 'expr', value: next ? 'true' : 'false' }, true)
         }

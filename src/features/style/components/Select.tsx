@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, RefObject } from 'react';
 import { panelBounds } from '../model/panelBox';
-import { isHTMLElementInDocument, isNodeInDocument } from '../model/dom';
+import { isHTMLElementInDocument } from '../model/dom';
 import { endDragNotes, hoverNote } from '../../../ui/sound';
 import { type SelectOption, type Props } from './selectTypes';
 import { SelectTrigger, SelectList } from './SelectViews';
@@ -103,7 +103,6 @@ function useSelectState<T extends string>(props: Props<T>) {
     setActiveIndex: activateIndex,
     setQuery,
   });
-  useDismissOutside({ open, rootRef: refs.root, cancelMenu });
   const dropUp = useListPlacement({ open, activeIndex, query, variant, refs });
   return {
     open,
@@ -556,35 +555,6 @@ function useMenuResets({
 }
 
 // Close when clicking outside the control.
-function useDismissOutside({
-  open,
-  rootRef,
-  cancelMenu,
-}: {
-  readonly open: boolean;
-  readonly rootRef: RefObject<HTMLDivElement>;
-  readonly cancelMenu: () => void;
-}): void {
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onPointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      if (
-        root &&
-        isNodeInDocument(event.target, root.ownerDocument) &&
-        root.contains(event.target)
-      ) {
-        return;
-      }
-      cancelMenu();
-    };
-    window.addEventListener('pointerdown', onPointerDown, true);
-    return () => window.removeEventListener('pointerdown', onPointerDown, true);
-  }, [open, rootRef, cancelMenu]);
-}
-
 // Flip above the button when there isn't room below; keep the active option
 // visible; and clamp horizontally so the menu never overflows the panel.
 function useListPlacement({

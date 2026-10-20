@@ -7,10 +7,12 @@ import { dropTarget } from './dropTarget';
 import { flatten, parsePage, type TreeAction } from '../source/source';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { useTouchTree } from './useTouchTree';
-import { copyNode, pasteNode, hasCopiedNode } from './clipboard';
+import { studioElementActions } from './studioElementActions';
 import type { Component } from '../project/projectClient';
 
-interface Props {
+export interface NavigatorProps {
+  readonly editRootId?: string | undefined;
+  readonly setDefaults?: (name: string, id: string) => void;
   readonly components: readonly Component[];
   readonly document: SharedDocument | undefined;
   readonly selected: string;
@@ -23,7 +25,7 @@ interface Props {
   readonly openComponent: (name: string, id: string) => void;
   readonly report: (error: unknown) => void;
 }
-export function Navigator(props: Props) {
+export function Navigator(props: NavigatorProps) {
   const client = useEditorRole() === 'client';
   const source = props.document?.text.toString() ?? '';
   const parsed = useMemo(() => parsePage(source, { locs: true }), [source]);
@@ -55,26 +57,17 @@ export function Navigator(props: Props) {
   return (
     <div className="studio-navigator" ref={wrapper}>
       <StructurePanel
-        clientMode={client}
+        {...studioElementActions(props, client ? 'client' : 'designer')}
         pageState={pageState}
         layouts={[]}
         currentLayoutName={nodes.find((node) => node.id === 'layout')?.name ?? ''}
         selectedId={props.selected}
         onSelect={props.select}
         onHoverNode={props.hover}
-        {...(client
-          ? {}
-          : { onOpenComponent: props.openComponent, onOpenCode: props.openCodeWindow })}
+        {...(client ? {} : { onOpenCode: props.openCodeWindow })}
         onChangeLayout={() => props.openCode()}
         onDropComponent={props.insert}
         onMoveNode={move}
-        onRemoveNode={(id) => props.action({ kind: 'delete', node: id })}
-        onDuplicateNode={(id) => props.action({ kind: 'duplicate', node: id })}
-        onCopyNode={(id) => copyNode(props.document, id, props.report)}
-        onPasteNode={() =>
-          pasteNode(props.document, props.selected, props.report, props.components)
-        }
-        hasClipboard={hasCopiedNode}
         onCodeChange={(text) => props.document?.replaceSource(text)}
         onOpenCodePanel={props.openCode}
         revealTick={flatten(nodes).findIndex((node) => node.id === props.selected)}

@@ -1,3 +1,4 @@
+import '../vendor/stacki/src/app/styles.css';
 import { createRoot } from 'react-dom/client';
 import { useEffect, useState } from 'react';
 import { SharedDocument } from '../src/features/collaboration/useDocument';

@@ -198,6 +198,10 @@ test('guide measurements parse, absent values stay absent, and bounds hold', () 
       variableCounts: { '--cols': 10, '--pad': undefined },
     },
   });
+  const five = { '--pad': 4, '--gap': 6, '--max': 8, '--cols': 25, '--site-columns': 12 };
+  const measured = parsePreviewMessage({ ...guide, variables: five, counts: five });
+  assert.deepEqual(measured.metrics.variablesPx, five);
+  assert.deepEqual(measured.metrics.variableCounts, five);
   // Counts arrive as the page read them: the range is the model's to apply.
   for (const count of [0, 49, 140, 999]) {
     const counts = { '--cols': count };
@@ -214,12 +218,40 @@ test('guide measurements parse, absent values stay absent, and bounds hold', () 
     { variables: undefined },
     { variables: { '--pad': -1 } },
     { variables: { 'pad;color:red': 4 } },
-    { variables: { '--a': 1, '--b': 2, '--c': 3, '--d': 4, '--e': 5 } },
+    { variables: { '--a': 1, '--b': 2, '--c': 3, '--d': 4, '--e': 5, '--f': 6 } },
     { counts: undefined },
     { counts: { '--cols': 2.5 } },
     { counts: { 'cols;color:red': 4 } },
-    { counts: { '--a': 1, '--b': 2, '--c': 3, '--d': 4, '--e': 5 } },
+    { counts: { '--a': 1, '--b': 2, '--c': 3, '--d': 4, '--e': 5, '--f': 6 } },
   ]) {
     assert.equal(parsePreviewMessage({ ...guide, ...bad }), undefined, JSON.stringify(bad));
+  }
+});
+
+test('context menu coordinates are bounded and preserve the located target', () => {
+  const message = {
+    type: 'avb:context-node',
+    path: '0.1',
+    occurrence: 2,
+    token: TOKEN,
+    outside: false,
+    left: 12.5,
+    top: 400,
+  };
+  assert.deepEqual(parsePreviewMessage(message), {
+    kind: 'context-node',
+    path: '0.1',
+    occurrence: 2,
+    token: TOKEN,
+    outside: false,
+    left: 12.5,
+    top: 400,
+  });
+  for (const bad of [undefined, PLATFORM_NULL, '20', -1, Infinity, NaN, 100_001]) {
+    assert.equal(parsePreviewMessage({ ...message, left: bad }), undefined);
+    assert.equal(parsePreviewMessage({ ...message, top: bad }), undefined);
+  }
+  for (const bad of [{ occurrence: -1 }, { outside: undefined }, { token: 'invalid' }]) {
+    assert.equal(parsePreviewMessage({ ...message, ...bad }), undefined);
   }
 });

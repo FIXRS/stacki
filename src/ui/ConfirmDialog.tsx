@@ -1,3 +1,4 @@
+import Popup from './Popup';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
@@ -80,7 +81,6 @@ export function ConfirmHost() {
     },
     [ask, checked],
   );
-  useConfirmKeys(ask, answer);
   if (!ask) {
     return undefined;
   }
@@ -96,27 +96,6 @@ export function ConfirmHost() {
   );
 }
 
-function useConfirmKeys(ask: Question | undefined, answer: (value: boolean) => void): void {
-  useEffect(() => {
-    if (!ask) {
-      return undefined;
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        answer(false);
-      } else if (event.key === 'Enter' && !ask.danger) {
-        event.preventDefault();
-        answer(true);
-      }
-    };
-    // Capture keeps the editor from acting on a key intended for the dialog.
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [ask, answer]);
-}
-
 interface SurfaceProps {
   readonly ask: Question;
   readonly checked: boolean;
@@ -127,47 +106,44 @@ interface SurfaceProps {
 }
 function ConfirmSurface({ ask, checked, setChecked, answer, confirmRef, cancelRef }: SurfaceProps) {
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          answer(false);
-        }
-      }}
-    >
-      <div className="modal confirm-dialog" role="alertdialog" aria-modal="true">
-        <div className="modal-header">{ask.title}</div>
-        {(ask.body || ask.checkbox) && (
-          <div className="modal-body confirm-body">
-            {ask.body}
-            {ask.checkbox && (
-              <label className="confirm-check">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => setChecked(event.target.checked)}
-                />
-                <span>
-                  {ask.checkbox.label}
-                  {ask.checkbox.hint && <em className="confirm-check-hint">{ask.checkbox.hint}</em>}
-                </span>
-              </label>
-            )}
+    <Popup className="modal confirm-dialog" role="alertdialog" onClose={() => answer(false)}>
+      {({ close, finish }) => (
+        <>
+          <div className="modal-header">{ask.title}</div>
+          {(ask.body || ask.checkbox) && (
+            <div className="modal-body confirm-body">
+              {ask.body}
+              {ask.checkbox && (
+                <label className="confirm-check">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => setChecked(event.target.checked)}
+                  />
+                  <span>
+                    {ask.checkbox.label}
+                    {ask.checkbox.hint && (
+                      <em className="confirm-check-hint">{ask.checkbox.hint}</em>
+                    )}
+                  </span>
+                </label>
+              )}
+            </div>
+          )}
+          <div className="modal-footer">
+            <button ref={cancelRef} onClick={close}>
+              {ask.cancelLabel}
+            </button>
+            <button
+              ref={confirmRef}
+              className={ask.danger ? 'danger' : 'primary'}
+              onClick={() => finish(() => answer(true))}
+            >
+              {ask.confirmLabel}
+            </button>
           </div>
-        )}
-        <div className="modal-footer">
-          <button ref={cancelRef} onClick={() => answer(false)}>
-            {ask.cancelLabel}
-          </button>
-          <button
-            ref={confirmRef}
-            className={ask.danger ? 'danger' : 'primary'}
-            onClick={() => answer(true)}
-          >
-            {ask.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </Popup>
   );
 }

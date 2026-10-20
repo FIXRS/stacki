@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
+import Popup from '../../ui/Popup';
 import type { StudioStatus } from '../../../shared/ipc/studioSetup';
 import { useStudioSetup as useSetup, type StudioActivity } from './useStudioSetup';
 import InstallProgress from './InstallProgress';
@@ -8,7 +8,6 @@ import CloudStep from './CloudStep';
 import './studioSetup.css';
 import { InfoLabel } from '../../ui/InfoLabel';
 import InstallCommand from './InstallCommand';
-import { useDialogClose } from '../../ui/useDialogClose';
 
 interface Props {
   readonly projectPath: string;
@@ -56,19 +55,17 @@ export default function StudioSetup(props: Props) {
           <InstallCommand />
         </div>
       </div>
-      {open &&
-        createPortal(
-          <SetupDialog
-            {...props}
-            setup={setup}
-            onClose={() => {
-              setOpen(false);
-              setRevision((value) => value + 1);
-              props.onClose?.();
-            }}
-          />,
-          document.body,
-        )}
+      {open && (
+        <SetupDialog
+          {...props}
+          setup={setup}
+          onClose={() => {
+            setOpen(false);
+            setRevision((value) => value + 1);
+            props.onClose?.();
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -81,49 +78,41 @@ function SetupDialog({
   readonly onClose: () => void;
   readonly setup: ReturnType<typeof useSetup>;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const [step, setStep] = useSetupStep(setup.status);
-  const { closing, close } = useDialogClose(onClose);
-  const busy = setup.activity.kind === 'busy' || closing;
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
+  const busy = setup.activity.kind === 'busy';
   return (
-    <dialog
-      ref={dialog}
-      className={`studio-setup${closing ? ' is-closing' : ''}`}
-      aria-labelledby="studio-setup-title"
-      onCancel={(event) => {
-        event.stopPropagation();
-        event.preventDefault();
-        if (!busy) {
-          close();
-        }
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
+    <Popup
+      className="studio-setup"
+      labelledBy="studio-setup-title"
+      onClose={onClose}
+      dismissible={!busy}
     >
-      <SetupHeader busy={busy} onClose={close} />
-      <SetupSteps step={step} busy={busy} onStep={setStep} />
-      <section className="studio-setup-content">
-        {step === 0 && <InstallStep {...setup} />}
-        {step === 1 && (
-          <LocalStep installed={setup.status?.kind === 'installed'} previewURL={previewURL} />
-        )}
-        {step === 2 && <CloudStep status={setup.status} />}
-        {setup.activity.kind === 'error' && (
-          <p role="alert" className="error-text">
-            {setup.activity.message}
-          </p>
-        )}
-      </section>
-      <SetupFooter
-        busy={busy}
-        step={step}
-        installed={setup.status?.kind === 'installed'}
-        onClose={close}
-        onStep={setStep}
-      />
-    </dialog>
+      {({ close }) => (
+        <>
+          <SetupHeader busy={busy} onClose={close} />
+          <SetupSteps step={step} busy={busy} onStep={setStep} />
+          <section className="studio-setup-content">
+            {step === 0 && <InstallStep {...setup} />}
+            {step === 1 && (
+              <LocalStep installed={setup.status?.kind === 'installed'} previewURL={previewURL} />
+            )}
+            {step === 2 && <CloudStep status={setup.status} />}
+            {setup.activity.kind === 'error' && (
+              <p role="alert" className="error-text">
+                {setup.activity.message}
+              </p>
+            )}
+          </section>
+          <SetupFooter
+            busy={busy}
+            step={step}
+            installed={setup.status?.kind === 'installed'}
+            onClose={close}
+            onStep={setStep}
+          />
+        </>
+      )}
+    </Popup>
   );
 }
 

@@ -1,3 +1,4 @@
+import { parseContextPoint, type ContextPoint } from './contextPosition';
 import type { Box } from './outlineBoxes';
 import type { Spacing } from './spacingBands';
 import {
@@ -35,6 +36,7 @@ export type PreviewMessage =
   | ({ readonly kind: 'hover-node' } & LocatedEvent)
   | ({ readonly kind: 'click-node'; readonly outside: boolean } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
+  | ({ readonly kind: 'context-node'; readonly outside: boolean } & LocatedEvent & ContextPoint)
   | { readonly kind: 'canvas-ready' }
   /** What the column guide is drawn from (electron/preload/frameGuide.ts). */
   | { readonly kind: 'guide'; readonly metrics: GuideMetrics }
@@ -163,6 +165,13 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         ...parseLocatedMessage(value),
         outside: boolean(value['outside']),
       };
+    case 'avb:context-node':
+      return {
+        kind: 'context-node',
+        ...parseLocatedMessage(value),
+        ...parseContextPoint(value),
+        outside: boolean(value['outside']),
+      };
     case 'avb:open-node':
       return { kind: 'open-node', ...parseLocatedMessage(value) };
     case 'avb:canvas-ready':
@@ -215,8 +224,7 @@ function parseGuideMetrics(value: Readonly<Record<string, unknown>>): GuideMetri
   };
 }
 
-// The menu's own variables, as measured: at most one per value, each a custom
-// property name.
+// One custom property per menu value plus the project's column fallback.
 function guideVariableEntries(input: unknown): ReadonlyArray<readonly [string, unknown]> {
   const entries = Object.entries(record(input));
   if (entries.length > GUIDE_LIMITS.variablesMax) {

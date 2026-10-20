@@ -87,7 +87,8 @@ function useAssetPanelState(props: AssetsPanelProps): AssetPanelState {
   const batch = useAssetBatch(props.project.path, props.showToast);
   const [entries, setEntries] = useState<readonly AssetPanelEntry[]>([]);
   const [missing, setMissing] = useState(false);
-  const [cwd, setCwd] = useState('');
+  // The first listing falls back to the root if the project's asset folder is absent.
+  const [cwd, setCwd] = useState(PICK_HOME);
   const [renaming, setRenaming] = useState<string | undefined>(undefined);
   const [newFolder, setNewFolder] = useState(false);
   const [dragTarget, setDragTarget] = useState<string | undefined>(undefined);
@@ -95,12 +96,6 @@ function useAssetPanelState(props: AssetsPanelProps): AssetPanelState {
   cwdRef.current = cwd;
   useAssetListing(props.project.path, props.showToast, cwdRef, setEntries, setMissing, setCwd);
   usePickPlacement(props.project.path, props.pick, entries, setCwd);
-  useEffect(() => {
-    setCwd('');
-    setRenaming(undefined);
-    setNewFolder(false);
-    setDragTarget(undefined);
-  }, [props.project.path]);
   return {
     batch,
     entries,

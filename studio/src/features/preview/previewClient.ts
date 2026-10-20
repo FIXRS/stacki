@@ -122,7 +122,7 @@ document.addEventListener('pointerleave', () => {
   hovered = undefined;
   draw();
 });
-for (const type of ['click', 'dblclick']) {
+for (const type of ['click', 'dblclick', 'contextmenu']) {
   document.addEventListener(
     type,
     (event) => {
@@ -139,7 +139,24 @@ for (const type of ['click', 'dblclick']) {
       if (type === 'dblclick') {
         window.getSelection()?.removeAllRanges();
       }
+      if (type === 'click' && !inFocus(event.target)) {
+        post({ type: 'studio:outside-focus' });
+        return;
+      }
       const id = pageId(event.target);
+      if (type === 'contextmenu') {
+        if (id && event instanceof MouseEvent) {
+          post({
+            type: 'avb:context-node',
+            path: id,
+            outside: false,
+            occurrence: occurrenceAt(id, event.clientX, event.clientY),
+            left: event.clientX,
+            top: event.clientY,
+          });
+        }
+        return;
+      }
       if (id) {
         post({
           type: type === 'click' ? 'studio:select' : 'studio:open',

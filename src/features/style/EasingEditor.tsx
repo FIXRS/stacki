@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../ui/Popup';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { easingToBezier, bezierToEasing, isEasing } from './model/transition';
 import VariableConnect from './VariableConnect';
@@ -414,61 +414,44 @@ export default function EasingEditor({
   // the field simply shows the curve.
   const [draft, setDraft] = useState<string | undefined>(undefined);
   const { playTime, playing, togglePlay } = usePlayback();
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
   const apply = (next: Bezier) => {
     setDraft(undefined);
     setBezier(next);
     onChange(bezierToEasing(next));
   };
 
-  return createPortal(
-    <div
-      className={
-        'embed-editor_bg-modal-backdrop embed-editor_ease-backdrop' + (frame ? ' is-framed' : '')
-      }
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
+  return (
+    <Popup
+      className={`embed-editor_ease-modal u-surface-surface${frame ? ' is-framed' : ''}`}
+      style={frame ? framedStyle(frame) : undefined}
+
+      label="Easing editor"
+      onClose={onClose}
     >
-      <div
-        className={`embed-editor_ease-modal u-surface-surface${frame ? ' is-framed' : ''}`}
-        style={frame ? framedStyle(frame) : undefined}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Easing editor"
-      >
-        <EasingHeader onClose={onClose} />
-        <div className="embed-editor_ease-body">
-          <div className="embed-editor_ease-main">
-            <div className="embed-editor_ease-main-head">
-              <button
-                type="button"
-                className={`embed-editor_ease-play ${playing ? 'is-playing' : ''}`}
-                onClick={togglePlay}
-                aria-label={playing ? 'Pause preview' : 'Preview easing'}
-              >
-                {playing ? <PauseIcon /> : <PlayIcon />}
-              </button>
-              <span className="embed-editor_ease-name">{presetName(bezier)}</span>
+      {({ close }) => (
+        <>
+          <EasingHeader onClose={close} />
+          <div className="embed-editor_ease-body">
+            <div className="embed-editor_ease-main">
+              <div className="embed-editor_ease-main-head">
+                <button
+                  type="button"
+                  className={`embed-editor_ease-play ${playing ? 'is-playing' : ''}`}
+                  onClick={togglePlay}
+                  aria-label={playing ? 'Pause preview' : 'Preview easing'}
+                >
+                  {playing ? <PauseIcon /> : <PlayIcon />}
+                </button>
+                <span className="embed-editor_ease-name">{presetName(bezier)}</span>
+              </div>
+              <BezierEditor value={bezier} onChange={apply} playTime={playTime} />
+              <EasingValueField bezier={bezier} draft={draft} setDraft={setDraft} apply={apply} />
             </div>
-            <BezierEditor value={bezier} onChange={apply} playTime={playTime} />
-            <EasingValueField bezier={bezier} draft={draft} setDraft={setDraft} apply={apply} />
+            <EasingPresets bezier={bezier} apply={apply} />
           </div>
-          <EasingPresets bezier={bezier} apply={apply} />
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </>
+      )}
+    </Popup>
   );
 }
 

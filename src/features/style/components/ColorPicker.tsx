@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../../ui/Popup';
 import {
   colorMode,
   formatColor,
@@ -13,7 +13,6 @@ import {
   type RGBA,
 } from '../model/colorSpace';
 import { dragNote, endDragNotes } from '../../../ui/sound';
-import { registerPopupLayer } from '../model/popupLayer';
 import type { CSSProperties, RefObject } from 'react';
 
 type EyeDropperConstructor = new () => { open: () => Promise<{ sRGBHex: string }> };
@@ -176,7 +175,6 @@ export default function ColorPicker({ value, anchor, trigger, onChange, onClose 
   const notation = useNotation(value, hsva, onChange);
   const rootRef = useRef<HTMLDivElement>(null);
   const position = usePickerPosition(rootRef, anchor);
-  useOutsideClose(rootRef, trigger, onClose);
   const alpha = useAlphaChoice();
 
   const emit = (next: HSVA, phase: DragPhase) => {
@@ -216,13 +214,16 @@ export default function ColorPicker({ value, anchor, trigger, onChange, onClose 
     emit(key === 'a' ? next : alpha.carry(next), 'final');
   };
 
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      anchor={trigger}
+      onClose={onClose}
       ref={rootRef}
       className="u-color-picker"
       style={position ? { top: position.top, left: position.left } : { visibility: 'hidden' }}
       role="dialog"
-      aria-label="Color picker"
+      label="Color picker"
     >
       <PickerSurfaces hsva={hsva} alpha={alpha} emit={emit} onPicked={setFromColor} />
       <PickerInputs
@@ -232,8 +233,7 @@ export default function ColorPicker({ value, anchor, trigger, onChange, onClose 
         onNumber={setNumber}
       />
       <NotationRow notation={notation} />
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 
@@ -315,43 +315,6 @@ function usePickerPosition(rootRef: RefObject<HTMLDivElement>, anchor: DOMRect) 
     setPosition({ top, left });
   }, [rootRef, anchor]);
   return position;
-}
-
-function useOutsideClose(
-  rootRef: RefObject<HTMLDivElement>,
-  trigger: HTMLElement | undefined,
-  onClose: () => void,
-): void {
-  // Announce this popup and the swatch it belongs to, so the popover that swatch
-  // lives in doesn't read a press in here as a press outside itself.
-  useLayoutEffect(
-    () => registerPopupLayer(rootRef.current ?? undefined, trigger),
-    [rootRef, trigger],
-  );
-
-  // Close on outside pointerdown / Escape.
-  useEffect(() => {
-    const onDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (
-        !(target instanceof Node) ||
-        (!rootRef.current?.contains(target) && !trigger?.contains(target))
-      ) {
-        onClose();
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    window.addEventListener('keydown', onKey, true);
-    return () => {
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('keydown', onKey, true);
-    };
-  }, [rootRef, onClose, trigger]);
 }
 
 // A colour nobody has set yet opens at alpha 0 — there is no colour, and

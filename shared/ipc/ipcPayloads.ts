@@ -1,5 +1,11 @@
+import { parseRepositoryRequest } from '../ipc/publishRepository';
+import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
+import { parseDiscoveryRequest } from '../properties/publishDiscovery';
+import { parsePublishTarget } from '../properties/publishConfig';
+import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
 import { parseImageFormat, parseImagePath } from './assetConversion';
 import { parseGitHubRepository } from './githubRepository';
+import { parseCommitDiffRequest } from './gitCommitDiff';
 import { parsePreferenceName } from './preferences';
 import { parseStudioSource } from './studioSetup';
 import { parseStudioRequestId } from './studioProgress';
@@ -85,6 +91,10 @@ function imageBytes(input: unknown): number[] {
 }
 
 export const IPC_PAYLOADS = {
+  'project:metadata': object({ ...project, kind: metadataKind }),
+  'project:createDefaultsCanvas': object({ ...project, canvas: parseCanvasCreate }),
+  'project:removeDefaultsCanvas': object({ ...project, file: defaultsCanvasFile }),
+  'project:writeMetadata': object({ ...project, write: parseMetadataWrite }),
   'studio:status': pathText,
   'studio:install': object({
     ...project,
@@ -173,6 +183,7 @@ export const IPC_PAYLOADS = {
   'git:checkout': object({ ...branch, create: maybeFlag, parkFirst: maybeFlag }),
   'git:commit': object({ ...project, message: text, paths: optional(list(pathText)) }),
   'git:commitFiles': object({ ...reference }),
+  'git:commitDiff': parseCommitDiffRequest,
   'git:deleteBranch': object({ ...branch, force: maybeFlag }),
   'git:fileAt': object({ ...reference, path: pathText }),
   'git:ghStatus': pathText,
@@ -190,6 +201,10 @@ export const IPC_PAYLOADS = {
   'git:repositories': nothing,
   'git:clone': object({ repository: parseGitHubRepository }),
   'git:connect': object({ ...project, repository: parseGitHubRepository }),
+  'publish:start': object({ ...project, target: parsePublishTarget }),
+  'publish:state': pathText,
+  'publish:repository': object({ ...project, request: parseRepositoryRequest }),
+  'publish:discover': object({ ...project, request: parseDiscoveryRequest }),
   'git:publish': object({ ...project, repoName: text, isPrivate: boolean }),
   'git:push': object({ ...branch }),
   'git:resolveMerge': object({ ...branch, choices: optional(dictionary(data)) }),

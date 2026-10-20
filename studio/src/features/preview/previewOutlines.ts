@@ -1,5 +1,6 @@
 import {
   collectRegions,
+  focusPath,
   announceMapped,
 } from '../../../vendor/stacki/electron/preload/frameRegions';
 import {
@@ -34,6 +35,9 @@ export function createOutlines(post: (message: unknown) => void) {
         target ? [target.id, outlineBoxPath(target.id, target.nodeKind)] : [],
       ),
     );
+    if (focusPath) {
+      paths.add(focusPath);
+    }
     for (const path of collaborators) {
       paths.add(path);
     }

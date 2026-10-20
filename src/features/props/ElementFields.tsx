@@ -3,6 +3,9 @@
 // and slot (PropsPanel.tsx).
 
 import type { RichContext } from './RichContent';
+import { useState } from 'react';
+import { ResetMenu } from './PropFieldLabel';
+import type { FieldPosition } from './propBindings';
 import { TagField } from './propNodeEditors';
 import PropField from './PropField';
 import { AttributesSection } from './propAttributes';
@@ -25,15 +28,17 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
     setContentPicker,
     contentInsertRef,
   } = state;
+  const contentSet = (node.children?.length ?? 0) > 0;
   return (
     <>
       {showContentField && (
         <div className="props-field" key="content">
           <label onClick={noLabelActivation}>
-            <span className="prop-label">
-              <VariableTextSizeIcon size={12} className="prop-label-icon" />
-              {isSlot ? 'Fallback' : 'Content'}
-            </span>
+            <ContentLabel
+              active={contentSet}
+              name={isSlot ? 'Fallback' : 'Content'}
+              onReset={() => onSetInline([])}
+            />
             {/* Text can hold data too — the same handle, the same picker,
                   dropping the same chip in at the caret. Without it, putting a
                   field into a sentence means knowing to type
@@ -79,6 +84,48 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   );
 }
 
+function ContentLabel(props: {
+  readonly active: boolean;
+  readonly name: string;
+  readonly onReset: () => void;
+}) {
+  const [position, setPosition] = useState<FieldPosition>();
+  return (
+    <>
+      <span
+        className={`prop-label${props.active ? ' set' : ''}`}
+        title={props.active ? '⌥-click to reset to default' : undefined}
+        onClick={(event) => {
+          event.preventDefault();
+          if (!props.active) {
+            return;
+          }
+          if (event.altKey) {
+            props.onReset();
+          } else {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            setPosition({ left: bounds.left, top: bounds.bottom + 4 });
+          }
+        }}
+      >
+        <VariableTextSizeIcon size={12} className="prop-label-icon" />
+        {props.name}
+      </span>
+      {position && (
+        <ResetMenu
+          position={position}
+          onReset={() => {
+            props.onReset();
+            setPosition(undefined);
+          }}
+          unbindLabel=""
+          onClose={() => setPosition(undefined)}
+        />
+      )}
+    </>
+  );
+}
+
 // RichContent spells a missing context by leaving the prop out.
 export function richContextProp(context: RichContext | undefined): {
   readonly bindContext?: RichContext;
@@ -93,10 +140,7 @@ export function ElementLooseText({ state }: { readonly state: ElementState }) {
       {showLooseTextField && (
         <div className="props-field" key="loose-text">
           <label onClick={noLabelActivation}>
-            <span className={`prop-label${looseText ? ' set' : ''}`}>
-              <VariableTextSizeIcon size={12} className="prop-label-icon" />
-              Content
-            </span>
+            <ContentLabel active={!!looseText} name="Content" onReset={() => onSetContent('')} />
           </label>
           <AutoTextarea
             key={node.id}

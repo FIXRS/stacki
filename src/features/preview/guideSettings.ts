@@ -1,12 +1,7 @@
-// The column guide's settings, kept per project in this app's local storage —
-// never in the project, which the guide only reads. A project opened again
-// shows the guide as it was left: on or off, its colour and its count or variable connection.
-//
-// Stored records outlive app versions, so what storage holds is parsed like
-// any other input. Each field is parsed on its own: one that does not parse
-// takes its default, and the others are kept.
+import { useProjectGuideSettings } from './guidePersistence';
+// The guide reads shared project metadata; local storage is only a one-time migration source.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import {
@@ -60,11 +55,12 @@ export function useColumnGuide(options: {
   readonly available: boolean;
   readonly frame: GuideFrameLink;
 }): { readonly menu: GuideMenuProps; readonly shown: ShownGuide | undefined } {
-  const [settings, update] = useGuideSettings(options.projectKey);
+  const { settings, update, persistence } = useProjectGuideSettings(options.projectKey);
+  useGuideShortcut(update);
   useGuideVariables(guideVariableNames(settings), options.frame);
   const metrics = options.metrics;
   const guide = metrics === undefined ? undefined : resolveGuide(metrics, settings);
-  const menu = { settings, update, metrics, guide, available: options.available };
+  const menu = { settings, update, metrics, guide, persistence, available: options.available };
   if (guide === undefined) {
     return { menu, shown: undefined };
   }
@@ -75,17 +71,7 @@ export function useColumnGuide(options: {
 export function useGuideSettings(
   projectKey: string | undefined,
 ): readonly [GuideSettings, GuideUpdate] {
-  const [settings, setSettings] = useState<GuideSettings>(() => loadGuideSettings(projectKey));
-  useEffect(() => setSettings(loadGuideSettings(projectKey)), [projectKey]);
-  const update = useCallback<GuideUpdate>(
-    (change) =>
-      setSettings((previous) => {
-        const next = change(previous);
-        saveGuideSettings(projectKey, next);
-        return next;
-      }),
-    [projectKey],
-  );
+  const { settings, update } = useProjectGuideSettings(projectKey);
   useGuideShortcut(update);
   return [settings, update] as const;
 }
@@ -179,7 +165,7 @@ function storageKey(projectKey: string): string {
   return GUIDE_STORAGE_PREFIX + projectKey;
 }
 
-function loadGuideSettings(projectKey: string | undefined): GuideSettings {
+export function loadLegacyGuideSettings(projectKey: string | undefined): GuideSettings {
   if (projectKey === undefined) {
     return GUIDE_DEFAULTS;
   }
@@ -197,20 +183,6 @@ function loadGuideSettings(projectKey: string | undefined): GuideSettings {
   } catch {
     // Unreadable storage or a corrupt record: the defaults, never a failed load.
     return GUIDE_DEFAULTS;
-  }
-}
-
-function saveGuideSettings(projectKey: string | undefined, settings: GuideSettings): void {
-  if (projectKey === undefined) {
-    return;
-  }
-  const key = storageKey(projectKey);
-  const raw = JSON.stringify({ ...settings, columnDefaultsVersion: GUIDE_COLUMN_DEFAULTS_VERSION });
-  assert(raw.length <= GUIDE_STORED_CHARS_MAX, 'Guide settings: record within limit');
-  try {
-    localStorage.setItem(key, raw);
-  } catch {
-    // Storage can be unavailable; the live setting still applies.
   }
 }
 

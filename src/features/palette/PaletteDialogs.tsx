@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ComponentUsageFile } from './paletteModel';
 import { componentNameError, toComponentName } from './componentName';
@@ -58,37 +59,32 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
     }
   };
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          props.onClose();
-        }
-      }}
-    >
-      <div className="modal">
-        <div className="modal-header">Create component</div>
-        <div className="modal-body">
-          <ComponentNameField
-            inputRef={inputRef}
-            text={text}
-            setText={setText}
-            name={name}
-            error={shown}
-            source={props.source}
-            submit={submit}
-            onClose={props.onClose}
-          />
-          <PropsOffer names={props.source.props} checked={withProps} onChange={setWithProps} />
-        </div>
-        <div className="modal-footer">
-          <button onClick={props.onClose}>Cancel</button>
-          <button className="primary" disabled={Boolean(error)} onClick={submit}>
-            Create
-          </button>
-        </div>
-      </div>
-    </div>
+    <Popup className="modal" onClose={props.onClose} dismissible={true}>
+      {({ close }) => (
+        <>
+          <div className="modal-header">Create component</div>
+          <div className="modal-body">
+            <ComponentNameField
+              inputRef={inputRef}
+              text={text}
+              setText={setText}
+              name={name}
+              error={shown}
+              source={props.source}
+              submit={submit}
+              onClose={close}
+            />
+            <PropsOffer names={props.source.props} checked={withProps} onChange={setWithProps} />
+          </div>
+          <div className="modal-footer">
+            <button onClick={close}>Cancel</button>
+            <button className="primary" disabled={Boolean(error)} onClick={submit}>
+              Create
+            </button>
+          </div>
+        </>
+      )}
+    </Popup>
   );
 }
 
@@ -195,7 +191,9 @@ export function InstancesPopup({
 }: InstancesPopupProps) {
   const place = usePopupPlacement(usage, here.length, popupRef);
   return (
-    <div
+    <Popup
+      mode="popover"
+      onClose={onClose}
       className="instances-popup"
       style={{
         left: place?.left ?? usage.anchor.left,
@@ -211,7 +209,7 @@ export function InstancesPopup({
       </div>
       <CurrentInstances name={usage.name} instances={here} onSelect={onSelect} />
       <UsageFiles usage={usage} hasCurrent={here.length > 0} onOpen={onOpen} />
-    </div>
+    </Popup>
   );
 }
 

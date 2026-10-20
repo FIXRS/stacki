@@ -142,14 +142,14 @@ function decodeEntities(text: unknown): string {
 }
 
 /**
- * Characters as text in a file: the three that would otherwise be read as
- * markup, and the spaces that are invisible in a source file. Everything else
+ * Characters as text in a file: markup delimiters, Astro expression braces,
+ * and the spaces that are invisible in a source file. Everything else
  * goes in as itself — `©` is a character the file can hold, and spelling it
  * `&copy;` in a file that says `©` everywhere else would be the editor imposing
  * its own habits.
  */
 function encodeText(text: unknown): string {
-  return String(text ?? '').replace(/[&<>    ‌‍­]/g, (character: string): string => {
+  return String(text ?? '').replace(/[&<>{}    ‌‍­]/g, (character: string): string => {
     if (character === '&') {
       return '&amp;';
     }

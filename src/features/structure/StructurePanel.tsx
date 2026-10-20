@@ -6,7 +6,10 @@ import type {
   DropLocation,
   DropTarget,
 } from './structureModel';
-import type { ContextAction, ContextPosition, StructureTreeContext } from './StructureTree';
+import type { StructureTreeContext } from './StructureTree';
+import type { ContextPosition } from './StructureContextMenu';
+import { ElementContextMenu } from './ElementContextMenu';
+import type { WrapperTag } from '../../editor/wrapRules';
 import { CollapseVerticalIcon, CodeIcon, DragIcon, ExpandVerticalIcon } from '../../ui/Icons';
 import { hidesChildRows } from '../../editor/treeSelection';
 import {
@@ -19,13 +22,15 @@ import {
   structureProjection,
 } from './structureModel';
 import CodeEditor from '../../ui/CodeEditor';
-import { ContextMenu, NodeList } from './StructureTree';
+import { NodeList } from './StructureTree';
 import { clearDrag } from '../../editor/dragState';
 import { parseNavigatorDrop } from './navigatorDrop';
 import { NO_LIVE_TEXT, useLiveValue, type LiveValue } from '../../ui/liveValue';
 
 interface StructurePanelProps {
   readonly clientMode?: boolean;
+  readonly editRootId?: string | undefined;
+  readonly onSetDefaults?: (name: string, id: string) => void;
   readonly pageState: StructurePageState | undefined;
   readonly currentPage?:
     | {
@@ -50,8 +55,10 @@ interface StructurePanelProps {
   readonly onChangeLayout: (name: string) => void;
   readonly onDropComponent: (name: string, target: DropLocation) => void;
   readonly onMoveNode: (id: string, target: DropLocation) => void;
+  readonly onWrapNode?: (id: string, tag: WrapperTag) => void;
   readonly onRemoveNode: (id: string) => void;
   readonly onCopyNode: (id: string) => void;
+  readonly onCutNode?: (id: string) => void;
   readonly onDuplicateNode: (id: string) => void;
   readonly onPasteNode: () => void;
   readonly hasClipboard?: (() => boolean) | false;
@@ -175,12 +182,11 @@ function EditableStructurePanel(props: EditableProps) {
       <NavigatorHeader state={state} nodes={props.pageState.model.nodes} />
       <NavigatorBody props={props} state={state} treeContext={treeContext} />
       {state.contextMenu && (
-        <ContextMenu
+        <ElementContextMenu
+          {...props}
+          nodes={props.pageState.model.nodes}
           position={state.contextMenu}
-          canPaste={typeof props.hasClipboard === 'function' && props.hasClipboard()}
-          protectedNode={props.clientMode === true && state.contextMenu.nodeId === 'layout'}
           onClose={() => state.setContextMenu(undefined)}
-          onAction={(action) => runContextAction(action, props, state)}
         />
       )}
     </div>
@@ -413,6 +419,8 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
   return {
     clientMode: props.clientMode === true,
     selectedId: props.selectedId,
+    editRootId: props.editRootId,
+    canEdit: (id) => canEditNode(props, id),
     ...(props.emptyNodeIds === undefined ? {} : { emptyNodeIds: props.emptyNodeIds }),
     ...(props.hiddenNodeIds === undefined ? {} : { hiddenNodeIds: props.hiddenNodeIds }),
     ...(props.inertNodeIds === undefined ? {} : { inertNodeIds: props.inertNodeIds }),
@@ -424,7 +432,11 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
     isDndPayload,
     performDrop: (event, target) => dropOnTree(event, target, props, state),
     nodeById: (id) => findNavigatorNode(props.pageState.model.nodes, id) ?? undefined,
-    onSelect: props.onSelect,
+    onSelect: (id) => {
+      if (canEditNode(props, id)) {
+        props.onSelect(id);
+      }
+    },
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
     ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
@@ -434,6 +446,9 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
       );
     },
     openContextMenu: (left, top, nodeId) => {
+      if (!canEditNode(props, nodeId)) {
+        return;
+      }
       props.onSelect(nodeId);
       state.setContextMenu({ left, top, nodeId });
     },
@@ -456,15 +471,21 @@ function dropOnTree(
   event.preventDefault();
   event.stopPropagation();
   state.setDropTarget(undefined);
+  if (props.editRootId && !canEditNode(props, target.parentId)) {
+    return;
+  }
   const drop = parseNavigatorDrop((type) => event.dataTransfer.getData(type));
   if (drop === undefined) {
     return;
   }
   switch (drop.kind) {
     case 'component':
-      props.onDropComponent(drop.name, target);
+      props.onDropComponent(drop.path ?? drop.name, target);
       return;
     case 'node':
+      if (drop.id === props.editRootId || !canEditNode(props, drop.id)) {
+        return;
+      }
       props.onMoveNode(drop.id, target);
       return;
     default: {
@@ -539,7 +560,7 @@ function NavigatorBody({
         state.setDropTarget(undefined);
       }}
     >
-      {!props.clientMode && <FrontmatterRow props={props} />}
+      {!props.clientMode && !props.editRootId && <FrontmatterRow props={props} />}
       <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
       {!props.clientMode && nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
     </div>
@@ -599,23 +620,14 @@ function EmptyDropTarget({
   );
 }
 
-function runContextAction(action: ContextAction, props: EditableProps, state: TreeState): void {
-  const menu = state.contextMenu;
-  state.setContextMenu(undefined);
-  if (!menu) {
-    return;
-  }
-  if (action === 'copy') {
-    props.onCopyNode(menu.nodeId);
-  } else if (action === 'duplicate') {
-    props.onDuplicateNode(menu.nodeId);
-  } else if (action === 'paste') {
-    props.onPasteNode();
-  } else {
-    props.onRemoveNode(menu.nodeId);
-  }
-}
-
 function collapsedState(node: NavigatorNode, toggled: ReadonlyMap<string, boolean>): boolean {
   return toggled.get(node.id) ?? defaultCollapsed(node);
+}
+
+function canEditNode(props: EditableProps, id: string | undefined): boolean {
+  if (!props.editRootId) {
+    return true;
+  }
+  const root = findNavigatorNode(props.pageState.model.nodes, props.editRootId);
+  return root !== undefined && id !== undefined && findNavigatorNode([root], id) !== undefined;
 }

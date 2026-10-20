@@ -388,6 +388,7 @@ function fakeAudio() {
     const view = new JSDOM('<!doctype html><div id="root"></div><div id="elsewhere"></div>', {
       pretendToBeVisual: true,
     });
+    require('../../helpers/popupDom').installPopupDOM(view.window);
     const prior = { window: global.window, document: global.document };
     global.window = view.window;
     global.document = view.window.document;
@@ -545,6 +546,7 @@ function fakeAudio() {
 
     const { JSDOM } = require('jsdom');
     const view = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+    require('../../helpers/popupDom').installPopupDOM(view.window);
     const prior = { window: global.window, document: global.document };
     global.window = view.window;
     global.document = view.window.document;

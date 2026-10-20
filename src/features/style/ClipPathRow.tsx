@@ -2,7 +2,7 @@
 // editor opens in, loaded only when it is (EffectsSection.tsx).
 
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../ui/Popup';
 import { displayOf } from './model/styleDisplay';
 import { type Props, EffLabel } from './EffectsKit';
 
@@ -134,45 +134,39 @@ export function clipPathType(value: string): string {
 // setProp/clearProp (so its own class picker is hidden).
 export function ClipPathModal({ props, onClose }: { props: Props; onClose: () => void }) {
   const { onApply, onClear } = useSettledClipPath(props);
-  return createPortal(
-    <div
-      className="embed-editor_bg-modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
+  return (
+    <Popup
+      className="embed-editor_clip-modal u-surface-page"
+
+      label="Clip path"
+      onClose={onClose}
     >
-      <div
-        className="embed-editor_clip-modal u-surface-page"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Clip path"
-      >
-        <div className="embed-editor_clip-modal-head">
-          <span className="embed-editor_clip-modal-title">Clip path</span>
-          <div className="embed-editor_clip-modal-actions">
-            {/* Portal target for the editor's shortcut-help control (it renders nothing
+      {({ close }) => (
+        <>
+          <div className="embed-editor_clip-modal-head">
+            <span className="embed-editor_clip-modal-title">Clip path</span>
+            <div className="embed-editor_clip-modal-actions">
+              {/* Portal target for the editor's shortcut-help control (it renders nothing
                 when this is absent). Provided here since it's no longer a hosted tool. */}
-            <div id="clip-path_header-shortcuts" />
-            <button
-              type="button"
-              className="embed-editor_bg-modal-close"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              <ClipCloseIcon />
-            </button>
+              <div id="clip-path_header-shortcuts" />
+              <button
+                type="button"
+                className="embed-editor_bg-modal-close"
+                onClick={close}
+                aria-label="Close"
+              >
+                <ClipCloseIcon />
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="embed-editor_clip-modal-body">
-          <Suspense fallback={<div className="embed-editor_clip-loading">Loading editor…</div>}>
-            <ClipPathEditor onApply={onApply} onClear={onClear} hideClassPicker />
-          </Suspense>
-        </div>
-      </div>
-    </div>,
-    document.body,
+          <div className="embed-editor_clip-modal-body">
+            <Suspense fallback={<div className="embed-editor_clip-loading">Loading editor…</div>}>
+              <ClipPathEditor onApply={onApply} onClear={onClear} hideClassPicker />
+            </Suspense>
+          </div>
+        </>
+      )}
+    </Popup>
   );
 }
 

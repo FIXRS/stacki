@@ -83,7 +83,7 @@ test('margin, gutter and maximum width are unset by default, and a stored size c
 });
 
 test('legacy counts survive independently of the removed preset list', () => {
-  for (const count of [4, 13, 24]) {
+  for (const count of [2, 3, 4, 13, 24, 32]) {
     const legacy = { ...STORED, columns: count, columnChoices: [12] };
     assert.deepEqual(parseGuideSettings(legacy).columns, { kind: 'count', count });
   }
@@ -112,8 +112,9 @@ test('old defaults become automatic while new literal overrides survive reopenin
 test('malformed stored column settings reset to automatic without changing other fields', () => {
   const badValues = [
     { kind: 'count' },
-    { kind: 'count', count: 3 },
-    { kind: 'count', count: 25 },
+    { kind: 'count', count: 0 },
+    { kind: 'count', count: 1 },
+    { kind: 'count', count: 33 },
     { kind: 'count', count: 4.5 },
     { kind: 'count', count: '12' },
     { kind: 'variable' },

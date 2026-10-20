@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
@@ -186,7 +187,7 @@ export default function DisplayControl({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const wantFocus = useRef(false);
-  const [open, setOpen] = useDismissibleMenu(rootRef);
+  const [open, setOpen] = useState(false);
 
   // After choosing Custom, focus (and select) the field once its `unset` write
   // settles — the input is disabled mid-save, so we wait for busy to clear.
@@ -237,6 +238,7 @@ export default function DisplayControl({
       <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
       {open ? (
         <DisplayMenu
+          onClose={() => setOpen(false)}
           customMode={customMode}
           current={current}
           pick={pick}
@@ -249,33 +251,6 @@ export default function DisplayControl({
 }
 
 // The menu's open state, closed again on an outside click or Escape.
-function useDismissibleMenu(rootRef: React.RefObject<HTMLDivElement>) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onDown = (event: MouseEvent) => {
-      if (event.target instanceof Node && rootRef.current?.contains(event.target)) {
-        return;
-      }
-      setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, rootRef]);
-  return [open, setOpen] as const;
-}
-
 interface SegmentTooltip {
   readonly hoveredValue: string | undefined;
   readonly arrowRight: number;
@@ -418,7 +393,21 @@ function DisplaySegments({
   );
 }
 
-function DisplayMenu({
+function DisplayMenu(props: Parameters<typeof DisplayMenuContent>[0]) {
+  return (
+    <Popup
+      mode="popover"
+      portal={false}
+      role="menu"
+      className="embed-editor_display-menu"
+      onClose={props.onClose}
+    >
+      <DisplayMenuContent {...props} />
+    </Popup>
+  );
+}
+
+function DisplayMenuContent({
   customMode,
   current,
   pick,
@@ -428,9 +417,10 @@ function DisplayMenu({
   current: string;
   pick: (next: string) => void;
   enterCustom: () => void;
+  readonly onClose: () => void;
 }) {
   return (
-    <div className="embed-editor_display-menu" role="menu">
+    <>
       {customMode ? (
         // From a custom value: offer every built-in to switch back to the bar.
         <>
@@ -485,6 +475,6 @@ function DisplayMenu({
           <MenuItem label="Custom" selected={false} onClick={enterCustom} />
         </>
       )}
-    </div>
+    </>
   );
 }

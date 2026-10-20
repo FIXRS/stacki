@@ -567,3 +567,43 @@ function groupImports<Import extends SerializableImport>(
 }
 
 export { readFrontmatter, writeFrontmatter };
+
+// Rebase only lexical module specifiers. Strings, comments, and regular expressions are
+// skipped so a preview copy never rewrites prose that happens to resemble an import.
+export function mapModuleSpecifiers(source: string, map: (path: string) => string): string {
+  const edits: { readonly start: number; readonly end: number; readonly text: string }[] = [];
+  for (let index = 0; index < source.length; index++) {
+    const skipped = skipCodeToken(source, index);
+    if (skipped !== index) {
+      index = skipped - 1;
+      continue;
+    }
+    if (/[\w$.]/.test(source.charAt(index - 1))) {
+      continue;
+    }
+    const match = /^(?:import\s*(?:\(\s*)?|from\s+)(['"])([^'"\\\r\n]+)\1/.exec(
+      source.slice(index),
+    );
+    const path = match?.[2];
+    if (match && path) {
+      const end = index + match[0].length;
+      const start = end - path.length - 2;
+      edits.push({ start, end, text: JSON.stringify(map(path)) });
+      index = end - 1;
+    }
+  }
+  let result = source;
+  let nextStart = source.length;
+  for (const edit of edits.reverse()) {
+    assert(edit.end <= nextStart, 'Module replacements do not overlap');
+    assert(
+      source.charAt(edit.start) === source.charAt(edit.end - 1),
+      'Module replacement consumes a complete quoted specifier',
+    );
+    nextStart = edit.start;
+    result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+  }
+  assert(edits.length <= source.length, 'Module edits are bounded by source tokens');
+  assert(typeof result === 'string', 'Module rebasing produces source text');
+  return result;
+}

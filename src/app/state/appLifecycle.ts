@@ -1,8 +1,10 @@
+import { astroChangeMessages } from '../../../shared/properties/astroFileChanges';
 // The app's lifecycle: picking assets, toasts, dev-server events, project
 // scans, starting the preview, the savers and flushing them, opening a file,
 // and composing the core state they share (App.tsx).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useToastStack, type ToastNotice } from '../../features/notifications/useToastStack';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import { createPreviewWatch } from '../../features/preview/previewRecovery';
 import { tellCanvas } from '../../editor/canvasQuery';
@@ -19,6 +21,7 @@ import { type AppHistory, type ProjectScans, type ToastKind } from '../appTypes'
 import { toEditorPageState, type EditorPageState, type OpenFile } from '../../editor/pageState';
 import {
   closeProject,
+  onFilesChanged,
   diagnoseProject,
   onAppProgress,
   onDevExit,
@@ -141,25 +144,28 @@ export function useAssetPick(coreState: ReturnType<typeof useCoreState>) {
 }
 
 // Toasts, and failures said the way the app says any failure.
-export function useToasts(coreState: ReturnType<typeof useCoreState>) {
-  const { setToast } = coreState;
-
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+export function useToasts() {
+  const { notices, push, dismiss } = useToastStack<ToastNotice>();
   const showToast = useCallback(
     (message: string, kind: ToastKind = 'info') => {
-      setToast({ msg: message, kind });
-      clearTimeout(toastTimer.current);
-      toastTimer.current = setTimeout(() => setToast(undefined), 5000);
+      push({ id: crypto.randomUUID(), message, kind });
     },
-    [setToast],
+    [push],
   );
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
-  // A failure no other handler caught, said the way the app says any failure.
   const reportFailure = useCallback(
     (error: unknown) => showToast(cleanError(error), 'error'),
     [showToast],
   );
-  return { reportFailure, showToast };
+  useEffect(
+    () =>
+      onFilesChanged(({ astroChanges }) => {
+        for (const message of astroChangeMessages(astroChanges)) {
+          showToast(message);
+        }
+      }),
+    [showToast],
+  );
+  return { notices, dismissToast: dismiss, reportFailure, showToast };
 }
 
 // Progress, dev server output, and recovering the preview after an error.

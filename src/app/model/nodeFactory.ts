@@ -546,6 +546,9 @@ export function saveDelay({ urgency }: { readonly urgency: boolean | 'live' }): 
 // and answers the other with a 404 help page. So the project's trailingSlash
 // is applied on the way from one to the other, never before.
 export function routeToPath(route: string, trailingSlash: TrailingSlash): string {
+  if (route.startsWith('/__avb/preview?defaults=')) {
+    return route;
+  }
   if (!route || route === '/') {
     return route || '/';
   }

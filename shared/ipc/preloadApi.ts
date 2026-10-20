@@ -3,6 +3,10 @@
 import type { IpcPayloads } from './ipcPayloads';
 
 interface InvokeChannels {
+  readonly createDefaultsCanvas: 'project:createDefaultsCanvas';
+  readonly removeDefaultsCanvas: 'project:removeDefaultsCanvas';
+  readonly projectMetadata: 'project:metadata';
+  readonly writeProjectMetadata: 'project:writeMetadata';
   readonly studioStatus: 'studio:status';
   readonly installStudio: 'studio:install';
   readonly openProjectDialog: 'project:openDialog';
@@ -100,6 +104,7 @@ interface InvokeChannels {
   readonly checkPreview: 'preview:check';
   readonly gitLog: 'git:log';
   readonly gitCommitFiles: 'git:commitFiles';
+  readonly gitCommitDiff: 'git:commitDiff';
   readonly gitAllFiles: 'git:allFiles';
   readonly gitStatus: 'git:status';
   readonly gitFileAt: 'git:fileAt';
@@ -116,6 +121,10 @@ interface InvokeChannels {
   readonly gitRepositories: 'git:repositories';
   readonly gitClone: 'git:clone';
   readonly gitConnect: 'git:connect';
+  readonly publishStart: 'publish:start';
+  readonly publishState: 'publish:state';
+  readonly publishingRepositories: 'publish:repository';
+  readonly discoverPublishing: 'publish:discover';
   readonly gitPublish: 'git:publish';
   readonly openExternal: 'shell:openExternal';
   readonly pendingProject: 'project:pending';

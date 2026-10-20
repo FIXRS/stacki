@@ -1,3 +1,4 @@
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { pathFor } from '../project/previewSelection';
 import { randomUUID } from 'node:crypto';
 import type { ViteDevServer, WebSocketClient } from 'vite';
@@ -151,7 +152,7 @@ function variantRenderer(
       component: request.component,
       prop: request.prop,
       value,
-      target: request.file.startsWith('src/pages/')
+      target: isCanvasPage(request.file)
         ? pathFor(request.node)
         : `${request.file}|${pathFor(request.node)}`,
     });

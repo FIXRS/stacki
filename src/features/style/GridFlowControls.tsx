@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 // The grid's flow controls: direction and density, the custom value input and
 // its menu, content distribution, and the column and row counts
 // (GridControls.tsx).
@@ -90,6 +91,7 @@ export function GridDirectionControl({
         />
         {menu.open ? (
           <DirectionMenu
+            onClose={() => menu.setOpen(false)}
             customMode={customMode}
             pickPreset={pickPreset}
             enterCustom={enterCustom}
@@ -109,6 +111,7 @@ export function GridDirectionControl({
 
 // From custom mode: back to Horizontal or Vertical; from the bar: on to Custom.
 export function DirectionMenu({
+  onClose,
   customMode,
   pickPreset,
   enterCustom,
@@ -116,9 +119,16 @@ export function DirectionMenu({
   customMode: boolean;
   pickPreset: (direction: string) => void;
   enterCustom: () => void;
+  readonly onClose: () => void;
 }) {
   return (
-    <div className="embed-editor_display-menu" role="menu">
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={onClose}
+      className="embed-editor_display-menu"
+      role="menu"
+    >
       {customMode ? (
         <>
           <MenuButton label="Horizontal" onClick={() => pickPreset('row')} />
@@ -127,7 +137,7 @@ export function DirectionMenu({
       ) : (
         <MenuButton label="Custom" onClick={enterCustom} />
       )}
-    </div>
+    </Popup>
   );
 }
 
@@ -162,27 +172,6 @@ export function useCustomMenu({ customMode, busy }: { customMode: boolean; busy:
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const wantFocus = useRef(false);
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onDown = (event: MouseEvent) => {
-      if (!(event.target instanceof Node) || !rootRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
   // Focus the field after switching to Custom, once its `unset` write settles.
   useEffect(() => {
     if (customMode && wantFocus.current && !busy) {
@@ -371,13 +360,12 @@ export function GridContentControl(props: GridContentControlProps) {
         onToggle={menu.toggle}
       />
       {menu.open ? (
-        <div className="embed-editor_display-menu" role="menu">
-          {customMode ? (
-            <ContentPresetItems pickPreset={pickPreset} />
-          ) : (
-            <MenuButton label="Custom" onClick={enterCustom} />
-          )}
-        </div>
+        <GridContentMenu
+          customMode={customMode}
+          pickPreset={pickPreset}
+          enterCustom={enterCustom}
+          onClose={() => menu.setOpen(false)}
+        />
       ) : undefined}
     </div>
   );
@@ -493,5 +481,33 @@ export function CountSteppers({ busy, step }: { busy: boolean; step: (delta: num
         <ChevDown />
       </button>
     </div>
+  );
+}
+
+function GridContentMenu({
+  customMode,
+  pickPreset,
+  enterCustom,
+  onClose,
+}: {
+  readonly customMode: boolean;
+  readonly pickPreset: (value: string) => void;
+  readonly enterCustom: () => void;
+  readonly onClose: () => void;
+}) {
+  return (
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={onClose}
+      className="embed-editor_display-menu"
+      role="menu"
+    >
+      {customMode ? (
+        <ContentPresetItems pickPreset={pickPreset} />
+      ) : (
+        <MenuButton label="Custom" onClick={enterCustom} />
+      )}
+    </Popup>
   );
 }

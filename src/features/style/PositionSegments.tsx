@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 // Float and clear as segmented icon bars: the segments, a custom value and
 // the overflow menu; and the writers and reader the position section's
 // controls are handed (PositionSection.tsx).
@@ -8,7 +9,7 @@ import VariableConnect from './VariableConnect';
 import type { ResolvedProp } from './model/resolved';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
-import { ChevronIcon, MenuItem, useMenuDismiss } from './components/MenuParts';
+import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
 import {
@@ -67,7 +68,6 @@ export function SegmentedIconControl({
   const customMode = !supported.has(current);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  useMenuDismiss({ open, rootRef, setOpen });
   const { inputRef, requestFocus } = useCustomFocus({ customMode, busy });
 
   const pick = (next: string) => {
@@ -257,7 +257,13 @@ export function SegmentMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <div className="embed-editor_display-menu" role="menu">
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={onToggle}
+          className="embed-editor_display-menu"
+          role="menu"
+        >
           {customMode ? (
             segments.map((segment) => (
               <MenuItem
@@ -270,7 +276,7 @@ export function SegmentMenu({
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
           )}
-        </div>
+        </Popup>
       ) : undefined}
     </>
   );

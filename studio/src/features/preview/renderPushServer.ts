@@ -19,7 +19,8 @@ export function renderPath(input: unknown): string | undefined {
     return undefined;
   }
   const url = new URL(path, 'http://studio');
-  if (url.origin !== 'http://studio' || /^\/(studio|@|__)/.test(url.pathname)) {
+  const defaults = /^\/__avb\/preview\?defaults=[a-f0-9-]{36}$/.test(path);
+  if (url.origin !== 'http://studio' || (!defaults && /^\/(studio|@|__)/.test(url.pathname))) {
     return undefined;
   }
   return url.pathname + url.search;

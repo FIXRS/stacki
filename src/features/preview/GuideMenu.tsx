@@ -1,6 +1,6 @@
+import type { GuidePersistence } from './guidePersistence';
 import { useCallback, useRef, useState, type ReactElement } from 'react';
 import { GuideIcon } from '../../ui/Icons';
-import useDismiss from '../../ui/useDismiss';
 import LayerPopover from '../style/LayerPopover';
 import ColorSwatch from '../style/components/ColorSwatch';
 import FieldLabel from '../style/components/FieldLabel';
@@ -41,6 +41,7 @@ const COUNT_RANGE = `A whole number from ${columnPickMin} to ${columnPickMax}.`;
 const COUNT_SPAN = `${columnPickMin}–${columnPickMax}`;
 
 export interface GuideMenuProps {
+  readonly persistence?: GuidePersistence;
   readonly settings: GuideSettings;
   readonly update: GuideUpdate;
   /** What the frame measured; undefined until it reports. */
@@ -54,10 +55,6 @@ export function GuideMenu(props: GuideMenuProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<HTMLElement | undefined>(undefined);
   const close = useCallback(() => setAnchor(undefined), []);
-  // The popover closes on clicks in the app's own window; a click in the
-  // canvas lands in the frame's document instead, which only this hears. No
-  // element is passed, so a click inside the menu never counts as outside.
-  useDismiss(undefined, { active: anchor !== undefined }, close);
   const title = props.available ? 'Column guide — ⇧G' : 'Column guide — not shown in Canvas';
   return (
     <div className="device-btns guide-btns">
@@ -90,12 +87,20 @@ export function GuideMenu(props: GuideMenuProps) {
   );
 }
 
-function GuideMenuRows({ settings, update, metrics, guide }: GuideMenuProps) {
+function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideMenuProps) {
   // The menu is portaled outside the style panel, so style-panel-surface gives
   // its controls the panel's own button and field rules instead of the app-wide
   // ones (see styles.css).
   return (
     <div className="guide-menu style-panel-surface">
+      {persistence?.message && (
+        <div role="status">
+          <p>{persistence.message}</p>
+          {!persistence.loading && (
+            <button onClick={persistence.reload}>Reload project settings</button>
+          )}
+        </div>
+      )}
       <SwitchRow
         label="Guide"
         value={settings.visible}
@@ -357,7 +362,7 @@ function GuideMenuNotes({
   );
 }
 
-// Only an explicitly connected variable can affect the column count.
+// Automatic defaults need no warning; explain when an explicit connection falls back.
 function columnCountNotes(settings: GuideSettings, metrics: GuideMetrics): readonly string[] {
   if (settings.columns.kind !== 'variable') {
     return [];

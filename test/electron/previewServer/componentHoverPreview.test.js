@@ -168,6 +168,7 @@ test('generated Astro route keeps its default slot and loads the selected source
   const frontmatter = template
     .split('---')[1]
     .replace(/export const prerender = false;/, '')
+    .replace("import 'virtual:stacki-component-preview-styles';", '')
     .replaceAll('import.meta.glob', 'glob');
   const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props }; })`, {
     Astro: { url: new URL('http://localhost/__avb/preview?p=' + selected) },

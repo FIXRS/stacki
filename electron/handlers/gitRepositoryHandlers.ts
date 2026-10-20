@@ -1,4 +1,6 @@
 import { mkdirSync } from 'node:fs';
+import { readPublishConfig } from '../project/publishConfig';
+import { publishingGitEnvironment } from '../project/publishGitHub';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { assert } from '../../shared/core/assert';
@@ -58,7 +60,14 @@ export function registerGitRepositoryHandlers({
     return { canceled: false as const, projectPath };
   });
   ipcMain.handle('git:connect', async (_event, payload) => {
-    const result = await connectRepository(git, payload);
+    const environment = await publishingGitEnvironment(
+      payload.projectPath,
+      readPublishConfig(payload.projectPath),
+    );
+    const result = await connectRepository(
+      (root, argumentsList) => git(root, argumentsList, { env: environment }),
+      payload,
+    );
     if (!result.ok) {
       throw new Error(result.error);
     }

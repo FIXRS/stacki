@@ -31,7 +31,7 @@ export function useEditorNavigation() {
     setFollowTarget(undefined);
     setFocus(focus);
     setFile(file);
-    if (file.startsWith('src/pages/')) {
+    if (isCanvasPage(file)) {
       setPreviewFile(file);
     }
   };
@@ -52,3 +52,4 @@ function clearPendingAsset() {
     clearAssetRequest();
   }
 }
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';

@@ -104,6 +104,16 @@ async function mountApp(root, files, build, options = {}) {
     {
       pendingProject: async () => undefined,
       scanProject: async () => files.scan,
+      projectMetadata: async (input) =>
+        require('#dist/electron/project/projectMetadata.js').readProjectMetadata(
+          input.projectPath,
+          input.kind,
+        ),
+      writeProjectMetadata: async (input) =>
+        require('#dist/electron/project/projectMetadata.js').writeProjectMetadata(
+          input.projectPath,
+          input.write,
+        ),
       hasNodeModules: async () => true,
       startDevServer: async () => ({ url: 'http://localhost:4321' }),
       listProjectClasses: async () => [],

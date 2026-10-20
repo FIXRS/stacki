@@ -4,11 +4,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, RefCallback } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../ui/Popup';
 import { type ProjectVariable } from './model/webflow';
 import { panelBox, panelSpan } from './model/panelBox';
-import { isNodeInDocument } from './model/dom';
-import { registerPopupLayer } from './model/popupLayer';
 import { CheckIcon, VariableTypeIcon, ChevronRightIcon } from './VariableIcons';
 import { varTypeAllowed, byCollection } from './sharedVars';
 
@@ -63,10 +61,6 @@ export function VariablePicker({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  // This popup belongs to the field it was opened from — see lib/popup-layer. A
-  // layout effect, so it is on the register before the search box takes focus and
-  // blurs that field.
-  useLayoutEffect(() => registerPopupLayer(ref.current ?? undefined, anchor), [anchor]);
   const [search, setSearch] = useState('');
   // Held here rather than in the list, which unmounts while a search matches
   // nothing: what was collapsed, and whether the selection was scrolled to, both
@@ -75,16 +69,18 @@ export function VariablePicker({
   const [collapsed, toggleCollapse] = useCollapsedSet();
   const style = usePickerPosition(ref, anchor);
   usePickerFocus(searchRef);
-  usePickerDismiss(ref, anchor, onClose);
   const query = search.trim().toLowerCase();
   const filtered = pickerVariables(vars, prop, query);
 
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      onClose={onClose}
+      anchor={anchor}
       ref={ref}
       className="embed-editor_varpicker"
       role="dialog"
-      aria-label="Connect to variable"
+      label="Connect to variable"
       style={style}
     >
       <input
@@ -114,8 +110,7 @@ export function VariablePicker({
           />
         )}
       </div>
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 
@@ -350,58 +345,3 @@ export function usePickerPosition(
 }
 
 // A press outside the picker (and outside its anchor) or Escape closes it.
-export function usePickerDismiss(
-  ref: React.RefObject<HTMLDivElement>,
-  anchor: HTMLElement,
-  onClose: () => void,
-): void {
-  useEffect(() => {
-    const onDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!isNodeInDocument(target, anchor.ownerDocument)) {
-        return;
-      }
-      if (ref.current?.contains(target) || anchor.contains(target)) {
-        return;
-      }
-      onClose();
-      swallowNextClick();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    document.addEventListener('pointerdown', onDown, true);
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('keydown', onKey, true);
-      // NOTE: deliberately do NOT remove the swallow-click listener here. Closing the
-      // popup unmounts this picker (running cleanup) BEFORE the pending click fires, so
-      // removing it here would let that click through to the element underneath. It
-      // removes itself once it swallows the click (or via its own 300ms fallback).
-    };
-  }, [ref, anchor, onClose]);
-}
-
-// Consume the dismiss gesture: swallow the click the dismissing pointerdown becomes,
-// so the element under the pointer (e.g. a section's collapse toggle) isn't ALSO
-// activated. It removes itself once it has swallowed that click, or after 300ms for
-// a press that never became one.
-export function swallowNextClick(): void {
-  let armed = true;
-  const click = (event: Event) => {
-    event.stopPropagation();
-    event.preventDefault();
-    document.removeEventListener('click', click, true);
-    armed = false;
-  };
-  document.addEventListener('click', click, true);
-  window.setTimeout(() => {
-    if (armed) {
-      document.removeEventListener('click', click, true);
-      armed = false;
-    }
-  }, 300);
-}

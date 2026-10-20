@@ -11,40 +11,6 @@
   box-shadow: 0 24px 90px #0008;
   font: inherit;
 }
-.studio-setup::backdrop {
-  background: #0008;
-}
-.studio-setup[open].is-closing {
-  pointer-events: none;
-  animation: studio-setup-close 160ms ease-in both;
-}
-.studio-setup[open].is-closing::backdrop {
-  animation: studio-setup-backdrop-close 160ms ease-in both;
-}
-@keyframes studio-setup-close {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(4px) scale(0.98);
-  }
-}
-@keyframes studio-setup-backdrop-close {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .studio-setup[open].is-closing,
-  .studio-setup[open].is-closing::backdrop {
-    animation: none;
-  }
-}
 .studio-setup header,
 .studio-setup footer,
 .studio-setup nav {

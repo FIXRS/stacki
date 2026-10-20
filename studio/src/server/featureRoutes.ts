@@ -1,3 +1,6 @@
+import { repositoryRoute } from '../features/publishing/repositoryRoutes';
+import { discoveryRoute } from '../features/publishing/discoveryRoutes';
+import { metadataRoute } from '../features/settings/projectMetadata';
 import { cmsRoutes } from '../features/cms/cmsServer';
 import { aiRoute } from '../features/ai/aiRoutes';
 import { publishRoute } from '../features/publishing/publishRoutes';
@@ -27,6 +30,10 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
     readBody: () => Promise<string>,
   ): Promise<boolean> => {
     if (
+      (await defaultsCanvasRoute(root, rooms, request, response, pathname, readBody)) ||
+      (await metadataRoute(root, rooms, request, response, pathname, readBody)) ||
+      (await discoveryRoute(root, request, response, pathname, readBody)) ||
+      (await repositoryRoute(root, request, response, pathname, readBody)) ||
       (await componentUsageRoute(root, request, response, pathname)) ||
       (await cms(request, response, pathname, readBody)) ||
       (await variables(request, response, pathname, readBody)) ||
@@ -146,3 +153,4 @@ async function syncProject(publisher: Publisher, synchronization: RepositorySync
     side === 'draft' || side === 'github' ? { side, sha: string(input['sha'], 64) } : undefined,
   );
 }
+import { defaultsCanvasRoute } from '../features/settings/defaultsCanvasServer';

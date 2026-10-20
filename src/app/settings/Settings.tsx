@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
+import Popup from '../../ui/Popup';
 import StudioSetup from '../../features/studioSetup/StudioSetup';
 import { cleanError } from '../../lib/cleanError';
 import { readPreferences, savePreference } from './preferencesBridge';
 import './settings.css';
 import { InfoLabel } from '../../ui/InfoLabel';
-import { useDialogClose } from '../../ui/useDialogClose';
 
 interface Props {
   readonly projectPath: string | undefined;
@@ -15,64 +14,39 @@ interface Props {
 export default function Settings(props: Props) {
   const [open, setOpen] = useState(false);
   useEffect(() => window.avb.onMenu('settings', () => setOpen(true)), []);
-  return open
-    ? createPortal(<SettingsDialog {...props} onClose={() => setOpen(false)} />, document.body)
-    : undefined;
+  return open ? <SettingsDialog {...props} onClose={() => setOpen(false)} /> : undefined;
 }
 
 function SettingsDialog(props: Props & { readonly onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const backdropPress = useRef(false);
-  const { closing, close } = useDialogClose(props.onClose);
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
   return (
-    <dialog
-      ref={dialog}
-      className={`app-settings${closing ? ' is-closing' : ''}`}
-      aria-labelledby="app-settings-title"
-      onCancel={(event) => {
-        event.preventDefault();
-        close();
-      }}
-      onPointerDown={(event) => {
-        backdropPress.current = outsideDialog(event);
-      }}
-      onClick={(event) => {
-        if (backdropPress.current && outsideDialog(event)) {
-          close();
-        }
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-    >
-      <header>
-        <h2 id="app-settings-title">Settings</h2>
-        <button aria-label="Close settings" onClick={close}>
-          ×
-        </button>
-      </header>
-      <div className="app-settings-content">
-        <Preferences />
-        {props.projectPath ? (
-          <StudioSetup
-            key={props.projectPath}
-            projectPath={props.projectPath}
-            previewURL={props.previewURL}
-            onOpen={() => {
-              // Hide Settings without unmounting the Studio flow it owns.
-              dialog.current?.close();
-            }}
-            onClose={props.onClose}
-          />
-        ) : (
-          <p>Open a project to add Stacki Studio.</p>
-        )}
-      </div>
-      <footer>
-        <button onClick={close}>Done</button>
-      </footer>
-    </dialog>
+    <Popup className="app-settings" labelledBy="app-settings-title" onClose={props.onClose}>
+      {({ close }) => (
+        <>
+          <header>
+            <h2 id="app-settings-title">Settings</h2>
+            <button aria-label="Close settings" onClick={close}>
+              ×
+            </button>
+          </header>
+          <div className="app-settings-content">
+            <Preferences />
+            {props.projectPath ? (
+              <StudioSetup
+                key={props.projectPath}
+                projectPath={props.projectPath}
+                previewURL={props.previewURL}
+                onClose={props.onClose}
+              />
+            ) : (
+              <p>Open a project to add Stacki Studio.</p>
+            )}
+          </div>
+          <footer>
+            <button onClick={close}>Done</button>
+          </footer>
+        </>
+      )}
+    </Popup>
   );
 }
 
@@ -172,23 +146,5 @@ function PreferenceToggle(props: {
         <span />
       </button>
     </div>
-  );
-}
-
-function outsideDialog(event: {
-  readonly target: EventTarget;
-  readonly currentTarget: HTMLDialogElement;
-  readonly clientX: number;
-  readonly clientY: number;
-}): boolean {
-  if (event.target !== event.currentTarget) {
-    return false;
-  }
-  const bounds = event.currentTarget.getBoundingClientRect();
-  return (
-    event.clientX < bounds.left ||
-    event.clientX > bounds.right ||
-    event.clientY < bounds.top ||
-    event.clientY > bounds.bottom
   );
 }

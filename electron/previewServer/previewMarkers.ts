@@ -17,6 +17,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
+import { isDefaultsCanvas } from '../../shared/properties/defaultsCanvas';
 import { toDigest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import { stampComment, stampPathProblem, type PreviewStamp } from '../../shared/page/previewToken';
@@ -48,7 +49,7 @@ export function markSourceFile(
       directory,
       relative: path.relative(directory, file).split(path.sep).join('/'),
     }))
-    .find(({ relative }) => relative.startsWith('src/'));
+    .find(({ relative }) => relative.startsWith('src/') || isDefaultsCanvas(relative));
   if (projectFile === undefined) {
     return undefined;
   }
@@ -67,7 +68,7 @@ export function markSourceFile(
     stampPathProblem(relativePath) === undefined,
     'A file under src has a project-relative path',
   );
-  const page = relativePath.startsWith('src/pages/');
+  const page = relativePath.startsWith('src/pages/') || isDefaultsCanvas(relativePath);
   const checksum = toDigest(createHash('sha256').update(bytes).digest('hex'));
   const stamp: PreviewStamp = { file: relativePath, checksum };
   const marked = page

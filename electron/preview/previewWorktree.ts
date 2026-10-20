@@ -1,3 +1,4 @@
+import { ensureExcluded } from '../lib/projectExclusions';
 // The checkout an old version is previewed from.
 //
 // Looking at what the site was like three commits ago means running it, and
@@ -41,59 +42,8 @@ import type { Git } from '../git/git';
 
 /** Where the preview checkout lives, and the directory git must not see. */
 const PREVIEW_DIRECTORY = path.join('.stacki', 'preview');
-const EXCLUDE_LINE = '.stacki/';
 
 const previewPath = (projectPath: string): string => path.join(projectPath, PREVIEW_DIRECTORY);
-
-/**
- * Make git ignore `.stacki/` locally.
- *
- * Without this the preview checkout shows up as an untracked folder in the
- * user's own project — in the file picker, in the commit box, in every status
- * the app reads — and the first thing they would do is commit it.
- */
-function ensureExcluded(projectPath: string): boolean {
-  // In a worktree, `.git` is a file pointing elsewhere; the exclude file we
-  // want is always the main repository's.
-  const gitDirectory = path.join(projectPath, '.git');
-  let infoDirectory: string;
-  try {
-    const stat = fs.statSync(gitDirectory);
-    infoDirectory = stat.isDirectory()
-      ? path.join(gitDirectory, 'info')
-      : // "gitdir: /path/to/.git/worktrees/x" — the common dir is two up.
-        path.join(
-          path.resolve(
-            path.dirname(gitDirectory),
-            fs
-              .readFileSync(gitDirectory, 'utf8')
-              .replace(/^gitdir:\s*/, '')
-              .trim(),
-            '..',
-            '..',
-          ),
-          'info',
-        );
-  } catch {
-    return false;
-  }
-  try {
-    fs.mkdirSync(infoDirectory, { recursive: true });
-    const file = path.join(infoDirectory, 'exclude');
-    const current = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-    if (current.split('\n').some((line) => line.trim() === EXCLUDE_LINE)) {
-      return true;
-    }
-    const sep = current && !current.endsWith('\n') ? '\n' : '';
-    fs.appendFileSync(
-      file,
-      `${sep}# Stacki's preview checkout — not part of your project.\n${EXCLUDE_LINE}\n`,
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * A checkout of `ref`, ready to run a dev server against.

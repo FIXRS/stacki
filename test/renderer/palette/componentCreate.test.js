@@ -648,6 +648,7 @@ const check = (what, condition, detail) => {
 
     const { JSDOM } = require('jsdom');
     const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+    require('../../helpers/popupDom').installPopupDOM(dom.window);
     global.window = dom.window;
     global.document = dom.window.document;
     global.navigator = dom.window.navigator;

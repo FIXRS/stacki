@@ -1,0 +1,55 @@
+import { git, run } from '../lib/nodeTools';
+import type { PublishConfig } from '../../shared/properties/publishConfig';
+
+/** Resolve the selected account without changing gh's global active account. */
+export async function publishingGitEnvironment(
+  root: string,
+  config: PublishConfig,
+): Promise<NodeJS.ProcessEnv> {
+  if (!config.githubAccount) {
+    return { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  }
+  const environment = { ...process.env };
+  delete environment['GH_TOKEN'];
+  delete environment['GITHUB_TOKEN'];
+  let token: string;
+  try {
+    const result = await run(
+      'gh',
+      ['auth', 'token', '--hostname', 'github.com', '--user', config.githubAccount],
+      root,
+      { env: environment },
+    );
+    token = result.stdout.trim();
+  } catch {
+    throw new Error(`Sign in once with gh auth login for ${config.githubAccount}.`);
+  }
+  if (!/^[\w-]{10,512}$/.test(token)) {
+    throw new Error('GitHub CLI returned an invalid credential.');
+  }
+  // The token lives only in the child environment, never in argv or repository config.
+  return {
+    ...environment,
+    GH_TOKEN: token,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_CONFIG_COUNT: '3',
+    GIT_CONFIG_KEY_0: 'credential.helper',
+    GIT_CONFIG_VALUE_0: '',
+    GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
+    GIT_CONFIG_VALUE_1: '!gh auth git-credential',
+    GIT_CONFIG_KEY_2: 'url.https://github.com/.insteadOf',
+    GIT_CONFIG_VALUE_2: 'git@github.com:',
+  };
+}
+
+export async function publishingGitRemote(root: string, config: PublishConfig): Promise<string> {
+  const remote = (await git(root, ['remote', 'get-url', 'origin'])).stdout.trim();
+  const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(
+    remote,
+  );
+  if (!match?.[1]) {
+    throw new Error('Connect a github.com repository from the branch menu before publishing.');
+  }
+  // HTTPS lets a pinned account override an unrelated SSH identity without rewriting origin.
+  return config.githubAccount ? `https://github.com/${match[1]}.git` : remote;
+}

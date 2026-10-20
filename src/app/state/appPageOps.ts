@@ -1,9 +1,10 @@
+import { componentReference } from '../model/componentReference';
 // Page operations: changing the layout, creating, moving and deleting pages
 // and folders, the selection's model, creating from a selection, the
 // selected schema, and composing the shortcuts (App.tsx).
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { ScanPage } from '../../../shared/properties/projectScan';
+import type { ScanPage, ScanComponent } from '../../../shared/properties/projectScan';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { astroAsset as astroAssetDef } from '../../features/palette/astroAssets';
 import { getElementSchema } from '../../editor/elementSchemas';
@@ -548,7 +549,7 @@ export function useSelectedSchema(
   const { tree } = selectionModel;
   const { isMarkdownFormatRef } = layoutChange;
   const { model } = shortcuts;
-  const { insertables, scan, selectedId } = coreState;
+  const { insertables, scan, selectedId, project, currentPage } = coreState;
   const { selectedNode } = createFromScope;
 
   const layoutNode = tree.node('layout');
@@ -588,27 +589,38 @@ export function useSelectedSchema(
     return layoutNode.name ?? '';
   })();
 
-  const selectedSchema: readonly FieldDefinition[] = (() => {
-    if (!selectedNode) {
-      return [];
-    }
-    if (selectedId === 'layout') {
-      return schemaFor(scan.layouts.find((layout) => layout.name === currentLayoutName));
-    }
-    if (selectedNode.kind === 'element') {
-      return withClassField(getElementSchema(selectedNode.name));
-    }
-    if (selectedNode.kind !== 'component') {
-      return [];
-    }
-    if (selectedNode.dynamicTag) {
-      return withClassField([]);
-    }
-    return schemaFor(
-      selectedNode.astroAsset
-        ? astroAssetDef(selectedNode.name)
-        : insertables.find((component) => component.name === selectedNode.name),
-    );
-  })();
-  return { currentLayoutName, layoutNode, selectedSchema };
+  const selectedComponent =
+    selectedNode?.kind === 'component'
+      ? componentReference({
+          name: selectedNode.name,
+          project: project?.path,
+          file: currentPage?.path,
+          imports: model?.imports ?? [],
+          components: insertables,
+        })
+      : undefined;
+  const selectedSchema =
+    selectedId === 'layout' && isMarkdownFormatRef.current
+      ? schemaFor(scan.layouts.find((layout) => layout.name === currentLayoutName))
+      : selectedFields(selectedNode, selectedComponent);
+  return { currentLayoutName, layoutNode, selectedSchema, selectedComponent };
+}
+
+function selectedFields(
+  node: ReturnType<typeof useCreateFrom>['selectedNode'],
+  component: ScanComponent | undefined,
+): readonly FieldDefinition[] {
+  if (!node) {
+    return [];
+  }
+  if (node.kind === 'element') {
+    return withClassField(getElementSchema(node.name));
+  }
+  if (node.kind !== 'component') {
+    return [];
+  }
+  if (node.dynamicTag) {
+    return withClassField([]);
+  }
+  return schemaFor(node.astroAsset ? astroAssetDef(node.name) : component);
 }

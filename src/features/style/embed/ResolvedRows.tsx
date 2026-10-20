@@ -3,14 +3,14 @@
 // vertical-align rows (EmbedEditor.tsx).
 
 import { useRef } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../../ui/Popup';
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import FieldLabel from '../components/FieldLabel';
 import { PropTip, ProvenanceLabel } from '../components/CssPropertyTip';
 import Select, { type SelectOption } from '../components/Select';
 import DisplayControl, { DISPLAY_VALUES } from '../DisplayControl';
-import { useAnchoredPosition, useProvenanceDismiss } from '../components/provenancePosition';
-export { useAnchoredPosition, useProvenanceDismiss } from '../components/provenancePosition';
+import { useAnchoredPosition } from '../components/provenancePosition';
+export { useAnchoredPosition } from '../components/provenancePosition';
 import { useHighlight } from '../model/computedStyle';
 import ProvenanceList from '../ProvenanceList';
 import VariableConnect from '../VariableConnect';
@@ -103,7 +103,6 @@ export function ProvenancePopover({
   anchor,
   resolved,
   onClose,
-  onAnchorReclick,
   onSelectSelector,
 }: {
   prop: string;
@@ -116,14 +115,15 @@ export function ProvenancePopover({
   const ref = useRef<HTMLDivElement>(null);
   const headerLabel = prop;
   const position = useAnchoredPosition(ref, anchor);
-  useProvenanceDismiss({ ref, anchor, prop, onClose, onAnchorReclick });
 
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      onClose={onClose}
       ref={ref}
       className="embed-editor_provenance"
       role="dialog"
-      aria-label={`Selectors setting ${headerLabel}`}
+      label={`Selectors setting ${headerLabel}`}
       style={{ left: position.left, top: position.top }}
     >
       <div className="embed-editor_provenance-head">
@@ -145,8 +145,7 @@ export function ProvenancePopover({
           onClose();
         }}
       />
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 

@@ -2,8 +2,8 @@
 // popover each opens, and the modal the grid settings open in
 // (GridSettings.tsx).
 
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useState } from 'react';
+import Popup from '../../ui/Popup';
 import type { ReactNode } from 'react';
 import { GroupLabel } from './TypographySection';
 import { serializeTrackSize, trackLabel, type TrackSize } from './model/gridTemplate';
@@ -118,44 +118,29 @@ export function AutoTrackPopover({
 }
 
 export function Modal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return createPortal(
-    <div
-      className="embed-editor_bg-modal-backdrop style-panel-surface"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
+  return (
+    <Popup
+      className="style-panel-surface embed-editor_grid-modal u-surface-surface"
+
+      label="Grid settings"
+      onClose={onClose}
     >
-      <div
-        className="embed-editor_grid-modal u-surface-surface"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Grid settings"
-      >
-        <div className="embed-editor_grid-modal-head">
-          <span className="embed-editor_grid-modal-title">Grid settings</span>
-          <button
-            type="button"
-            className="embed-editor_bg-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-        <div className="embed-editor_grid-modal-body">{children}</div>
-      </div>
-    </div>,
-    document.body,
+      {({ close }) => (
+        <>
+          <div className="embed-editor_grid-modal-head">
+            <span className="embed-editor_grid-modal-title">Grid settings</span>
+            <button
+              type="button"
+              className="embed-editor_bg-modal-close"
+              onClick={close}
+              aria-label="Close"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+          <div className="embed-editor_grid-modal-body">{children}</div>
+        </>
+      )}
+    </Popup>
   );
 }

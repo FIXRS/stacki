@@ -27,6 +27,7 @@ buildSync({
   logLevel: 'silent',
 });
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+require('../../helpers/popupDom').installPopupDOM(dom.window);
 global.window = dom.window;
 for (const name of [
   'document',
@@ -99,7 +100,7 @@ test(
         'the item dialog uses the quieter destructive action',
       );
       await click(document.querySelector('.cms-modal .cms-repeat-row'));
-      assert.equal(document.querySelectorAll('.cms-modal-overlay').length, 2);
+      assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 2);
       await click(document.querySelectorAll('.cms-modal .af-choose')[0]);
       const request = getPendingAsset();
       assert.ok(request);
@@ -110,14 +111,14 @@ test(
         __asset: 'src/assets/new.png',
       });
       await act(async () =>
-        window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })),
+        document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })),
       );
-      assert.equal(document.querySelectorAll('.cms-modal-overlay').length, 1);
+      assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 1);
       assert.match(document.querySelector('.cms-modal-header').textContent, /Outer/);
       await act(async () =>
-        window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })),
+        document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })),
       );
-      assert.equal(document.querySelectorAll('.cms-modal-overlay').length, 0);
+      assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 0);
     } finally {
       await act(async () => root.unmount());
     }

@@ -4,6 +4,8 @@ import type { PreviewContainer } from './worker';
 export interface Environment extends AuthConfig {
   readonly EDITOR_ACCESS?: string;
   readonly SITE_DEPLOYMENT_URL?: string;
+  readonly PUBLISH_CLOUDFLARE_API_TOKEN?: string;
+  readonly PUBLISH_VERCEL_TOKEN?: string;
   readonly AI_BASE_URL?: string;
   readonly AI_MODEL?: string;
   readonly AI_MODELS?: string;

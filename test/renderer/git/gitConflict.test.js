@@ -91,6 +91,7 @@ test('merge dialog sends exact selected choices and locks binary choices while b
     logLevel: 'silent',
   });
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
   global.document = dom.window.document;
   global.navigator = dom.window.navigator;
@@ -144,18 +145,18 @@ test('merge dialog sends exact selected choices and locks binary choices while b
     assert.ok(
       [...document.querySelectorAll('.conflict-whole button')].every((entry) => entry.disabled),
     );
-    await act(async () =>
-      document
-        .querySelector('.modal-overlay')
-        .dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })),
-    );
+    await act(async () => {
+      const dialog = document.querySelector('dialog.popup-dialog');
+      dialog.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
+      dialog.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
     assert.equal(cancellations, 0);
     await show();
-    await act(async () =>
-      document
-        .querySelector('.modal-overlay')
-        .dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })),
-    );
+    await act(async () => {
+      const dialog = document.querySelector('dialog.popup-dialog');
+      dialog.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
+      dialog.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
     assert.equal(cancellations, 1);
   } finally {
     await act(async () => root.unmount());

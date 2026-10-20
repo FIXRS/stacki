@@ -162,7 +162,7 @@ function listCms(root) {
     /26 collections/.test(rowNamed('Content collections')?.textContent || ''),
     rowNamed('Content collections')?.textContent,
   );
-  check('and the project does not read as empty', !/No content found/.test(text()));
+  check('and the project does not read as empty', !/No collections to show/.test(text()));
   check(
     'a data file a collection owns is not listed twice',
     !all('.cms-collection').some((element) =>
@@ -185,7 +185,7 @@ function listCms(root) {
     all('.cms-collection').length > 0,
     'the panel went empty because one of its two questions failed',
   );
-  check('and does not claim the project is empty', !/No content found/.test(text()));
+  check('and does not claim the project is empty', !/No collections to show/.test(text()));
 
   // --- an older preload, with no content bridge at all ------------------------
   await mount({ listCms: async (root) => listCms(root) });
@@ -196,7 +196,7 @@ function listCms(root) {
     listCms: async () => ({ files: [] }),
     contentCollections: async () => ({ collections: [] }),
   });
-  check('an actually empty project says so', /No content found/.test(text()));
+  check('an actually empty project says so', /No collections to show/.test(text()));
 
   await act(async () => reactRoot.unmount());
 

@@ -568,10 +568,7 @@ const check = (what, condition, detail) => {
     'and the pick rewrites that hole, not the expression',
     /replaceRange\(chip\.from, chip\.to/.test(panel),
   );
-  check(
-    'with the press surviving its own mousedown',
-    /closest\('\.expr-chip, \.cm-chip'\)/.test(panel),
-  );
+  check('with the press surviving its own mousedown', /<Popup/.test(panel));
 
   // ── A chip that writes a tail ─────────────────────────────────────────────
   // `featured?.data.title` is drawn as three pieces, and the last of them
@@ -701,10 +698,7 @@ const check = (what, condition, detail) => {
   );
   check(
     'a chip in another field closes this one',
-    new RegExp(
-      /const chip = eventElement\(event\.target\)\?\.closest\('\.expr-chip/.source +
-        /, \.cm-chip'\)[\s\S]{0,120}wrapRef\.current\?\.contains\(chip\)/.source,
-    ).test(panel),
+    /onClose=\{\(\) => setMenu\(undefined\)\}/.test(panel),
     'any chip anywhere keeps this picker open',
   );
 

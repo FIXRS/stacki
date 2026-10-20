@@ -1,3 +1,4 @@
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { flatten, type ParserNode } from '../source/source';
 
 const transparent = new Set(['cond', 'branch', 'map', 'chunk-group']);
@@ -7,7 +8,7 @@ const inert = new Set(['head', 'script', 'style', 'link', 'meta', 'title', 'base
 // through control flow/slots/fragments to the first actual rendered element.
 export function openingSelection(file: string, nodes: readonly ParserNode[]) {
   const outer = nodes.find(markup) ?? nodes[0];
-  if (file.startsWith('src/pages/')) {
+  if (isCanvasPage(file)) {
     return outer;
   }
   const body = flatten(nodes).find((node) => node.kind === 'element' && node.name === 'body');

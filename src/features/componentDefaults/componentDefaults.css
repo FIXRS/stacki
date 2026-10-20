@@ -1,0 +1,12 @@
+.structure-node[aria-disabled='true'] {
+  opacity: 0.35;
+}
+.defaults-canvas-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+}
+.defaults-canvas-bar > span {
+  flex: 1;
+}

@@ -26,6 +26,8 @@ export async function copyProject(source: string, workspace: string, packageRoot
     const absolute = path.resolve(file);
     return (
       !excluded.has(path.basename(file)) &&
+      absolute !== path.join(project, '.stacki', 'preview') &&
+      absolute !== path.join(project, '.stacki', 'canvas') &&
       absolute !== studio &&
       absolute !== destination &&
       !destination.startsWith(absolute + path.sep)

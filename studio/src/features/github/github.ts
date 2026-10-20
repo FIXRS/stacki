@@ -173,7 +173,10 @@ export class GitHubRepository {
         continue;
       }
       // Runtime/config changes need a fresh container with dependencies installed.
-      if (!/^src\/.+\.(astro|json|md|mdx|css|ts|js)$/.test(file)) {
+      if (
+        !/^src\/.+\.(astro|json|md|mdx|css|ts|js)$/.test(file) &&
+        !['.stacki/components.json', '.stacki/guide.json', '.stacki/publish.json'].includes(file)
+      ) {
         throw new Error(
           `GitHub changed ${file}. Restart from a fresh repository revision before syncing runtime or binary changes.`,
         );

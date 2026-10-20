@@ -1,8 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useLayoutEffect, useRef, useState } from 'react';
+import Popup from '../../ui/Popup';
 import type { ReactNode, RefObject } from 'react';
 import { panelSpan } from './model/panelBox';
-import { inOwnedPopup } from './model/popupLayer';
 
 // A layer editor anchored directly below the row it edits (flips above when there's no
 // room to drop down), spanning the panel's full width — measured, since the panel is a
@@ -43,13 +42,15 @@ export default function LayerPopover({
   // layout — the flip decision below measures a height that depends on it.
   const [span] = useState(() => placedSpan ?? panelSpan(anchorElement));
   const top = usePopoverTop(ref, anchorElement);
-  usePopoverDismiss(ref, anchorElement, onClose);
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      anchor={anchorElement}
+      onClose={onClose}
       ref={ref}
       className="embed-editor_layer-popover"
       role="dialog"
-      aria-label={ariaLabel}
+      label={ariaLabel}
       style={{
         position: 'fixed',
         left: span.left,
@@ -66,8 +67,7 @@ export default function LayerPopover({
       >
         {children}
       </div>
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 
@@ -91,77 +91,6 @@ function usePopoverTop(
     setTop(below ? anchorRect.bottom + gap : Math.max(gap, anchorRect.top - gap - height));
   }, [ref, anchorElement]);
   return top;
-}
-
-// Closes on outside press, Escape, and a scroll of the page beneath.
-function usePopoverDismiss(
-  ref: RefObject<HTMLDivElement>,
-  anchorElement: HTMLElement,
-  onClose: () => void,
-): void {
-  useEffect(() => {
-    const onDown = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-      // A popup this one opened (the colour picker from a swatch in here) is drawn
-      // through a portal, so `contains` says outside — see lib/popup-layer.
-      if (inOwnedPopup(target, ref.current ?? undefined)) {
-        return;
-      }
-      if (ref.current?.contains(target) || anchorElement.contains(target)) {
-        return;
-      }
-      // The anchor row is excluded above: pressing it toggles the popover shut
-      // through its own handler, which is a press meant for it.
-      swallowNextClick();
-      onClose();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    // Closing on scroll is about the page moving out from under a popover that is
-    // pinned to a rectangle it can no longer see. A list scrolling INSIDE it is
-    // not that — and a dropdown scrolls itself the moment it opens, to bring the
-    // selected option into view, which shut the editor as soon as you opened the
-    // one control most of these editors lead with.
-    const onScroll = (event: Event) => {
-      const target = event.target;
-      if (target instanceof Node) {
-        const root = ref.current ?? undefined;
-        if (ref.current?.contains(target) || inOwnedPopup(target, root)) {
-          return;
-        }
-      }
-      onClose();
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-    };
-  }, [ref, onClose, anchorElement]);
-}
-
-// The press that dismisses this popover is spent dismissing it. Without that,
-// clicking a control outside to get rid of the popover also pressed the
-// control: aiming at "Events: Auto" to close the transform editor set
-// pointer-events on the element. One press, one thing.
-function swallowNextClick(): void {
-  const eat = (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-  document.addEventListener('click', eat, { capture: true, once: true });
-  // A press that never becomes a click (a drag away, a right-click) must not
-  // leave this armed for whatever is clicked next.
-  window.setTimeout(() => document.removeEventListener('click', eat, true), 400);
 }
 
 function usePopoverOverflow(boxRef: RefObject<HTMLDivElement>): boolean {

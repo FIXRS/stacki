@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 // The field kit the style panel's sections are drawn with — first written for
 // typography, now shared: the property and group labels, the live text input
 // and its stacked field, and the segmented bar with its custom value and
@@ -300,7 +301,6 @@ export function SegBar(props: SegBarProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  useSegMenuDismiss({ open, rootRef, setOpen });
   const dropUp = useSegMenuClamp({ open, customMode, rootRef, menuRef });
   const { inputRef, requestFocus } = useSegCustomFocus({ customMode, busy });
 
@@ -517,7 +517,10 @@ export function SegBarMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <div
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={onToggle}
           ref={menuRef}
           className={`embed-editor_display-menu ${dropUp ? 'is-up' : ''}`}
           role="menu"
@@ -534,49 +537,13 @@ export function SegBarMenu({
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
           )}
-        </div>
+        </Popup>
       ) : undefined}
     </>
   );
 }
 
 // While the menu is open, a press outside the bar or Escape closes it.
-export function useSegMenuDismiss({
-  open,
-  rootRef,
-  setOpen,
-}: {
-  open: boolean;
-  rootRef: React.RefObject<HTMLDivElement>;
-  setOpen: (open: boolean) => void;
-}): void {
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onDown = (event: MouseEvent) => {
-      if (!(event.target instanceof Node) || !rootRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, rootRef, setOpen]);
-}
-
-// Keep the (right-anchored) dropdown inside the panel: shift it right when its left
-// edge would run off (a narrow column), and flip it above when it would overflow the
-// bottom (this is the bottom row). Mirrors FieldLabel's menu clamp. Returns whether
-// the menu drops up.
 export function useSegMenuClamp({
   open,
   customMode,

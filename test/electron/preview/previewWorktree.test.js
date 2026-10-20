@@ -202,7 +202,7 @@ async function project() {
     check('the project stays clean', status === '', `git sees:\n${status}`);
     check(
       'and git agrees it is ignored',
-      (await sh(directory, 'check-ignore', '.stacki')) === '.stacki',
+      (await sh(directory, 'check-ignore', '.stacki/preview/')) === '.stacki/preview/',
     );
 
     // .gitignore is the user's file. Writing to it would be a change they did
@@ -219,7 +219,7 @@ async function project() {
     wt.ensureExcluded(directory);
     const lines = (read(directory, '.git/info/exclude') || '')
       .split('\n')
-      .filter((line) => line.trim() === '.stacki/');
+      .filter((line) => line.trim() === '.stacki/preview/');
     check('and is not written twice', lines.length === 1, String(lines.length));
   }
 

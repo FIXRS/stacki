@@ -199,5 +199,64 @@ test('partial libraries and occupied import names stay valid', async (context) =
     ['Tile', 'Grid2'],
   );
   assert.throws(() => componentInstancePlacement(model, grid, []), /dependency is resolved/);
-  assert.throws(() => componentInstance(find('Heading'), [], 5), /depth limit/);
+  assert.throws(
+    () =>
+      componentInstance(find('Heading'), [], {
+        projectPath: setup.root,
+        config: {
+          version: 1,
+          components: {
+            'src/components/Heading.astro': {
+              children: [{ component: 'src/components/Heading.astro' }],
+            },
+          },
+        },
+      }),
+    /cycle/,
+  );
+});
+
+test('project recipes preserve literal text and one-step undo', async (context) => {
+  const setup = fixture(context);
+  fs.mkdirSync(path.join(setup.root, '.stacki'));
+  fs.writeFileSync(
+    path.join(setup.root, '.stacki/components.json'),
+    JSON.stringify({
+      version: 1,
+      components: {
+        'src/components/ContentWrapper.astro': {
+          children: [{ component: 'src/components/Heading.astro' }],
+        },
+        'src/components/Heading.astro': {
+          props: { small: 4, hidden: false },
+          text: 'Project <text> & {code}',
+        },
+      },
+    }),
+  );
+  const app = await mountApp(setup.root, { scan: setup.scan }, 'project-component-defaults');
+  context.after(app.unmount);
+  const palette = [...document.querySelectorAll('.rail-btn')].find((button) =>
+    String(button.getAttribute('aria-label')).startsWith('Components'),
+  );
+  assert.ok(palette);
+  await app.act(async () => {
+    palette.click();
+    await tick();
+  });
+  await gesture(app, async () => {
+    __panels.PalettePanel.onInsert(path.join(setup.root, 'src/components/ContentWrapper.astro'));
+    await tick();
+  });
+  const source = fs.readFileSync(setup.file, 'utf8');
+  const parsed = parsePage(source, { locs: true });
+  const wrapper = parsed.model.nodes.find((node) => node.kind === 'component');
+  assert.equal(wrapper.name, 'ContentWrapper');
+  assert.equal(wrapper.children[0].name, 'Heading');
+  assert.equal(wrapper.children[0].children[0].value, 'Project <text> & {code}');
+  assert.equal(wrapper.children[0].props.small.value, '4');
+  assert.equal(wrapper.children[0].props.hidden.value, 'false');
+  assert.equal(parsed.model.imports.length, 2);
+  await undo(app);
+  assert.equal(fs.readFileSync(setup.file, 'utf8'), PAGE);
 });

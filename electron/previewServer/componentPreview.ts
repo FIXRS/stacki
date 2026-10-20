@@ -4,6 +4,7 @@ import { parsePropSchema } from '../parse/astroParser';
 import { assert } from '../../shared/core/assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { componentPreviewStylesModule } from './componentPreviewStyles';
 
 const PREVIEW_LIMITS = {
   sourceCharsMax: 10 * 1024 * 1024,
@@ -81,7 +82,15 @@ export function componentPreviewPlugin(projectDirectories: readonly string[]) {
   return {
     name: 'avb-component-preview',
     enforce: 'pre' as const,
+    resolveId(id: string): string | undefined {
+      return id === 'virtual:stacki-component-preview-styles' ? '\0' + id : undefined;
+    },
     load(id: string): string | undefined {
+      if (id === '\0virtual:stacki-component-preview-styles') {
+        const root = roots[0];
+        assert(root !== undefined, 'Preview styles require a project root');
+        return componentPreviewStylesModule(root);
+      }
       const separator = id.indexOf('?');
       if (separator < 0) {
         return undefined;
@@ -123,8 +132,13 @@ const PREVIEW_PAGE = `---
 // their searchParams stripped, even in dev).
 export const prerender = false;
 __STACKI_PREVIEW_PATH__
-const styles = import.meta.glob('/src/styles/**/*.{css,scss}', { eager: true });
+import 'virtual:stacki-component-preview-styles';
 const mods = import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro']);
+const canvasId = Astro.url.searchParams.get('defaults') || '';
+const canvasKey = '/.stacki/canvas/' + canvasId + '.astro';
+// Resolve on demand: a new canvas can be created after this route was compiled.
+const DefaultCanvas = /^[a-f0-9-]{36}$/.test(canvasId)
+  ? (await import(/* @vite-ignore */ canvasKey)).default : null;
 const inputs = import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro'], {
   query: '?raw&stacki-preview-props', import: 'default',
 });
@@ -139,7 +153,7 @@ if (selected) {
   C = (await mods[selected]()).default;
 }
 ---
-<html>
+{DefaultCanvas ? <DefaultCanvas /> : <html>
   <head>
     <meta charset="utf-8" />
     <style>
@@ -251,5 +265,5 @@ if (selected) {
       })();
     </script>
   </body>
-</html>
+</html>}
 `;

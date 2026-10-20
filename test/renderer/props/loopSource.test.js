@@ -100,7 +100,7 @@ assert.throws(() => withSource('posts', 'x'.repeat(1_000_001)), /path limit exce
   );
   check(
     'and the press that opens it does not also close it',
-    /\.bind-menu, \.bind-handle, \.dd-source, \.cm-chip/.test(source),
+    /<Popup/.test(source),
     'the picker treats the chip as outside itself, so a chip press opens and closes in one go',
   );
 

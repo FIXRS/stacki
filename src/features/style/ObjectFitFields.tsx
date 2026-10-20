@@ -3,7 +3,7 @@
 // modal editor (SizeSection.tsx).
 
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../ui/Popup';
 import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
@@ -152,34 +152,15 @@ export function asPositionOffset(typed: string): string {
 // Popup shell over the panel — the same darkening backdrop the transform / shadow
 // editors use; closes on backdrop click or Escape.
 export function PositionModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return createPortal(
-    <div
-      className="embed-editor_bg-modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
+  return (
+    <Popup
+      className="embed-editor_bg-modal embed-editor_pos-modal u-surface-surface"
+
+      label="Object position"
+      onClose={onClose}
     >
-      <div
-        className="embed-editor_bg-modal embed-editor_pos-modal u-surface-surface"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Object position"
-      >
-        {children}
-      </div>
-    </div>,
-    document.body,
+      {children}
+    </Popup>
   );
 }
 

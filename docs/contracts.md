@@ -516,3 +516,106 @@ accepts one named boolean preference and returns both current values plus `saved
 A failed disk write applies only to the current session and is shown in the popup.
 Disabling usage counts still aborts in-flight counting. Studio setup is available
 in the same popup when a project is open.
+
+## Shared project editor metadata
+
+`.stacki/components.json` (version 1) stores insertion recipes keyed by project-relative
+Astro paths. Recipes contain primitive `props` and either literal `text` or ordered
+`children`; children name a component path or HTML `element`, or hold `literal` text.
+Component children may override their recipe. Captured canvas children use `inherit: false`
+to preserve removed props as well as additions. An omitted child
+content uses that component's recipe, while `children: []` explicitly inserts empty content.
+The shared parser bounds stored nodes, depth, text, fields and file size. The resolver
+rejects missing references, unknown slots, cycles and excessive expanded node counts.
+Unconfigured projects retain shared starter recipes; the first defaults save makes those
+recipes explicit project data. Existing page instances are never rewritten.
+
+`.stacki/guide.json` contains `{ version: 1, settings: ... }`. Guide fields are validated
+against shared bounds before storage and consumption. Browser storage is consulted only
+when the project file is absent, for migration. Changes use a single pending value and
+serialized writes; conflicts stop saving until the user reloads the project settings.
+
+`project:metadata` and `project:writeMetadata` accept only registered metadata kinds.
+Desktop confines them to the open project and writes through the document actors against
+the supplied base. Studio exposes the same records through `/studio/api/metadata`, its
+serialized document rooms and durable draft storage. Neither endpoint permits arbitrary
+metadata paths. Settings writes reject stale bases rather than overwriting newer edits.
+Both files participate in Studio publishing and GitHub sync. The legacy local `.stacki/`
+Git exclusion is narrowed to `.stacki/preview/` and `.stacki/canvas/`; user-authored ignore rules are untouched.
+
+Component defaults are opened from the last component context-menu action, “Set component
+defaults”, in Desktop and Studio. Client mode disables the action and cannot save defaults.
+A bounded temporary page `.stacki/canvas/<uuid>.astro` copies the current source context and
+replaces only the selected instance with its resolved default props, text, and children.
+Module imports are rebased for the temporary location. Surrounding navigator rows are dimmed
+and cannot be selected or receive drops; canvas focus uses the ordinary component focus overlay.
+“Close defaults”, Escape, and a click outside the focused canvas subtree save and close the
+defaults session. Explicit boolean and enum choices remain stored even when they match an
+Astro fallback, so the inspector marks them as set. Defaults mode leaves unset text and enum
+fields empty. Boolean controls show the effective value while their blue labels still require
+an explicit override. Authored Content is blue in both modes; resetting removes the authored
+children so Astro supplies its slot fallback (or empty content). Resetting a prop removes that
+override.
+Closing captures the edited subtree for future insertions and restores the original
+file and navigator selection. Authored Astro files are unchanged. A stale metadata save keeps the editor open with a
+recoverable error. Save also checks that content outside the target has not changed.
+
+The scratch page uses normal document edits and the injected `/__avb/preview?defaults=<uuid>`
+route. Desktop creates/removes it through `project:createDefaultsCanvas` and
+`project:removeDefaultsCanvas`; Studio uses the equivalent `/studio/api/defaults-canvas` endpoint.
+Temporary canvases are excluded from publishing and removed on close. Saving rejects
+expressions that depend on page scope because those cannot be safely reused as defaults.
+Entry and exit keep the preview frame alive. The parent sends `avb:preview-route`; its shared
+parser accepts bounded same-origin HTTP(S) transitions only when one side is a defaults route.
+The preview fetches that rendering and morphs it in place, replacing its source stamps as well
+as content. Studio also updates its render subscription, and obsolete responses cannot repaint
+the previous mode.
+Relinking a moved component updates owner keys and nested references together and refuses
+collisions. Current file rename UI is page-only; external component renames must update the
+metadata references too. The installed Studio CLI's
+`check-project` command validates component references and guide settings for CI/refactors.
+
+
+## Historical file diffs
+
+`git:commitDiff` accepts a project path, a full SHA-1/SHA-256 commit hash, a repository-relative
+file path, and an optional previous path for renames. The shared parser rejects ambiguous refs,
+path traversal, empty paths and oversized strings. The renderer parses replies as a bounded
+`Result<string, string>`; operating failures remain visible instead of masquerading as empty diffs.
+
+Git reads the selected commit against its first parent (or the empty tree for a root commit),
+using literal pathspecs and disabling external diff/text conversion programs. The working tree
+is untouched. Patches exceeding 500,000 characters or 10,000 lines return an explicit error;
+smaller patches retain binary/rename metadata and validated hunk line numbers for inspection.
+
+## Project publishing
+
+`.stacki/publish.json` is shared metadata parsed by `shared/properties/publishConfig.ts`.
+It stores provider/project identifiers, a Desktop GitHub username, and bounded npm script names;
+credentials stay in each host's authentication store or environment. Metadata reads and writes use
+the existing witnessed, conflict-checked project metadata transport.
+
+`publish:start` accepts a project path and `all`, `github`, or `hosting`; `publish:state` accepts
+that project path. Both return `DesktopPublishState`, parsed by `publishState.ts` before renderer
+use. One Desktop job runs at a time. Failures preserve which external actions completed, so a
+hosting retry cannot be mistaken for rolling back a successful GitHub push. Studio's publish
+route accepts the same target and reads the same config before building its isolated snapshot.
+
+`publish:discover` accepts `{ projectPath, request: { provider, account } }`, where provider is
+Cloudflare, Vercel or GitHub and an empty account requests available connections/linked projects.
+`shared/properties/publishDiscovery.ts` parses bounded account labels and hosting destinations.
+Failures carry a sanitized message, never provider credentials or command output. Studio exposes
+the same discovery service at `/studio/api/publish/discover`; both hosts require an explicit
+project selection and settings save before changing the publish destination.
+
+`publish:repository` accepts bounded `list`, `create`, and `connect` requests parsed by
+`shared/ipc/publishRepository.ts`. Lists retain the actual Git origin even if discovery fails.
+Creation makes an empty GitHub repository using the selected account; it does not push files.
+Connecting validates write access and a revision of the current origin before changing it.
+Studio exposes the same contract at `/studio/api/publish/repository`; hosted deployments report
+their managed repository as read-only because deployment and synchronization share that binding.
+
+Cloudflare Workers have their own `cloudflare-workers` hosting variant. Discovery also accepts
+`linked` to inspect local Wrangler/Vercel destinations before settings exist. A discovered Worker
+may have an empty account ID when its local name is known but its account is unresolved; the saved
+publish-config parser rejects that incomplete value. This prevents assigning an unrelated account.

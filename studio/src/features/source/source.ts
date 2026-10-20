@@ -1,3 +1,4 @@
+import type { InsertionDefaults } from './instanceDefaults';
 import { componentInsertionEdits } from './componentInsertion';
 import { parsePage } from '../../../vendor/stacki/electron/parse/astroParser';
 import type { ParserNode } from '../../../vendor/stacki/electron/parse/astroParserTypes';
@@ -143,7 +144,12 @@ export function contentEdit(source: string, id: string, value: string): Edit {
   const end = closingOffset(source, node);
   return { start: end, end, text: escapeText(value) };
 }
-export function structuralEdits(source: string, action: TreeAction, file = ''): Edit[] {
+export function structuralEdits(
+  source: string,
+  action: TreeAction,
+  file = '',
+  settings?: InsertionDefaults,
+): Edit[] {
   if (action.kind === 'paste') {
     throw new Error('Paste requires the destination file context');
   }
@@ -151,7 +157,7 @@ export function structuralEdits(source: string, action: TreeAction, file = ''): 
     return contentInsertionEdits(source, action);
   }
   if (action.kind === 'insert') {
-    return componentInsertionEdits(source, action, file);
+    return componentInsertionEdits(source, action, file, settings);
   }
   const node = nodeAt(source, action.node);
   if (node.id === 'layout') {

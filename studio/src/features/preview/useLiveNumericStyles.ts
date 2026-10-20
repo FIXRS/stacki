@@ -1,3 +1,4 @@
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { useLayoutEffect, useRef } from 'react';
 import { flatten, type ParserNode } from '../source/source';
 import { componentAt } from '../project/componentEntry';
@@ -56,7 +57,7 @@ export function useLiveNumericStyles(
           }
           return [
             {
-              path: (file.startsWith('src/pages/') ? '' : file + '|') + pathFor(node.id ?? ''),
+              path: (isCanvasPage(file) ? '' : file + '|') + pathFor(node.id ?? ''),
               marker: `${component?.file}|${binding.marker}`,
               variable: binding.variable,
               value: number ? `${number}${binding.unit}` : '',

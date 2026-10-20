@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import { collectionDeletionMessage } from '../../ipc/editorEnvironment';
 import React, { useState } from 'react';
 import type { Collection, CmsField, FieldType } from './cmsSchema';
@@ -10,7 +11,6 @@ import { readCmsUsage, deleteCms } from './cmsBridge';
 import { cleanError } from '../../lib/cleanError';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import useListReorder from '../../ui/useListReorder';
-import { useCmsDialog } from './CmsField';
 import {
   PlusIcon,
   CloseIcon,
@@ -389,49 +389,42 @@ interface NewFieldProps {
 function NewFieldDialog({ onAdd, onClose }: NewFieldProps) {
   const [type, setType] = useState<FieldType | undefined>();
   const [name, setName] = useState('');
-  const overlayRef = useCmsDialog(onClose);
   const info = type === undefined ? undefined : typeInfo(type);
   return (
-    <div
-      ref={overlayRef}
-      className="modal-overlay cms-modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-    >
-      <div className="modal cms-modal cms-type-modal">
-        <div className="modal-header cms-modal-header">
-          {type && (
-            <button
-              className="ghost"
-              title="Back to field types"
-              onClick={() => setType(undefined)}
-            >
-              <ChevronLeftIcon size={13} />
-            </button>
-          )}
-          <span>{info ? `New ${info.label} field` : 'Choose a field type'}</span>
-          <button className="ghost" title="Close" onClick={onClose}>
-            <CloseIcon size={12} />
-          </button>
-        </div>
-        {type === undefined ? (
-          <div className="cms-type-grid">
-            {CREATABLE_TYPES.map(({ value, label, Icon, hint }) => (
-              <button key={value} className="cms-type-tile" onClick={() => setType(value)}>
-                <Icon size={18} />
-                <span className="cms-type-name">{label}</span>
-                <span className="cms-type-hint">{hint}</span>
+    <Popup className="modal cms-modal cms-type-modal" onClose={onClose} dismissible={true}>
+      {({ close }) => (
+        <>
+          <div className="modal-header cms-modal-header">
+            {type && (
+              <button
+                className="ghost"
+                title="Back to field types"
+                onClick={() => setType(undefined)}
+              >
+                <ChevronLeftIcon size={13} />
               </button>
-            ))}
+            )}
+            <span>{info ? `New ${info.label} field` : 'Choose a field type'}</span>
+            <button className="ghost" title="Close" onClick={close}>
+              <CloseIcon size={12} />
+            </button>
           </div>
-        ) : (
-          <NewFieldName type={type} name={name} setName={setName} onAdd={onAdd} onClose={onClose} />
-        )}
-      </div>
-    </div>
+          {type === undefined ? (
+            <div className="cms-type-grid">
+              {CREATABLE_TYPES.map(({ value, label, Icon, hint }) => (
+                <button key={value} className="cms-type-tile" onClick={() => setType(value)}>
+                  <Icon size={18} />
+                  <span className="cms-type-name">{label}</span>
+                  <span className="cms-type-hint">{hint}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <NewFieldName type={type} name={name} setName={setName} onAdd={onAdd} onClose={close} />
+          )}
+        </>
+      )}
+    </Popup>
   );
 }
 interface NewFieldNameProps extends NewFieldProps {

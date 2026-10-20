@@ -58,6 +58,7 @@ const check = (what, condition, detail) => {
 
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><body></body>');
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.document = dom.window.document;
 
   // A field of a given rendered width, holding a value of a given drawn width.
@@ -176,6 +177,7 @@ const check = (what, condition, detail) => {
       document: global.document,
       navigator: global.navigator,
     };
+    require('../../helpers/popupDom').installPopupDOM(win);
     global.window = win;
     global.document = win.document;
     global.navigator = win.navigator;

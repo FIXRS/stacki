@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { MapNode } from '../../../shared/page/pageNode';
 import type { RichContext } from './RichContent';
@@ -511,7 +512,10 @@ function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField
         onKeyDown={onKeyDown}
       />
       {popupPosition && (
-        <div
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={() => setFocused(false)}
           className="dd-popup class-suggest"
           style={{ left: popupPosition.left, top: popupPosition.top, width: popupPosition.width }}
         >
@@ -530,7 +534,7 @@ function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField
               <span className="dd-option-label">{option.name}</span>
             </div>
           ))}
-        </div>
+        </Popup>
       )}
     </div>
   );

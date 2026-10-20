@@ -2,11 +2,11 @@
 // navigable only when the preview path resolves in the current document tree.
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../../ui/Popup';
 import type { StyleSource } from '../../../../shared/properties/styleSource';
 import { getHost, walkNodes } from '../model/host';
 import { ProvenanceLabel } from './CssPropertyTip';
-import { useAnchoredPosition, useProvenanceDismiss } from './provenancePosition';
+import { useAnchoredPosition } from './provenancePosition';
 
 export default function InheritedPropertyLabel({
   children,
@@ -58,7 +58,6 @@ function InheritedPropertyPopover({
   source,
   anchor,
   onClose,
-  onAnchorReclick,
 }: {
   readonly property: string;
   readonly source: StyleSource;
@@ -68,19 +67,20 @@ function InheritedPropertyPopover({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const position = useAnchoredPosition(ref, anchor);
-  useProvenanceDismiss({ ref, anchor, prop: property, onClose, onAnchorReclick });
   const target = inheritedTarget(source);
   const content = (
     <code className="embed-editor_provenance-sel embed-editor_provenance-source">
       {target.label}
     </code>
   );
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      onClose={onClose}
       ref={ref}
       className="embed-editor_provenance"
       role="dialog"
-      aria-label={`Inherited ${property}`}
+      label={`Inherited ${property}`}
       style={{ left: position.left, top: position.top }}
     >
       <div className="embed-editor_provenance-head">
@@ -112,8 +112,7 @@ function InheritedPropertyPopover({
       ) : (
         <div className="embed-editor_provenance-item is-active">{content}</div>
       )}
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 

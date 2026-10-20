@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RefreshIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
 import { byteSize, parseReport, type CleanupReport } from './cleanupTypes';
@@ -7,12 +8,21 @@ export function StoragePanel({ refresh }: { readonly refresh: () => void }) {
   const model = useCleanup(refresh);
   return (
     <section className="storage-panel" aria-label="Storage and cleanup">
-      <button className="storage-toggle" onClick={() => void model.scan()} disabled={model.busy}>
-        {model.busy
-          ? 'Checking storage…'
-          : model.report
-            ? 'Refresh storage scan'
-            : 'Storage & cleanup'}
+      <button
+        className="storage-toggle"
+        onClick={() => void model.scan()}
+        disabled={model.busy}
+        aria-busy={model.busy}
+        aria-label={model.report ? 'Refresh storage scan' : undefined}
+        title={model.report ? 'Refresh storage scan' : undefined}
+      >
+        {model.report ? (
+          <RefreshIcon size={14} />
+        ) : model.busy ? (
+          'Checking storage…'
+        ) : (
+          'Storage & cleanup'
+        )}
       </button>
       {model.report && <StorageUsage report={model.report} />}
       {model.report && <CleanupChoices model={model} />}

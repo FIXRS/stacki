@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useState } from 'react';
 import type { PointerEvent } from 'react';
 import CodeEditor from '../../ui/CodeEditor';
@@ -28,10 +29,13 @@ export default function CodeWindow(props: CodeWindowProps) {
   const { title, language, value, onChange, onClose, editorKey, revealLine } = props;
   const { rectangle, startDrag, startResize } = useWindowRectangle();
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={onClose}
       className="code-window"
       role="dialog"
-      aria-label={title}
+      label={title}
       style={{ left: rectangle.x, top: rectangle.y, width: rectangle.w, height: rectangle.h }}
     >
       <div className="code-window-header" onPointerDown={startDrag}>
@@ -55,7 +59,7 @@ export default function CodeWindow(props: CodeWindowProps) {
       {EDGES.map((edge) => (
         <div key={edge} className={`cw-rz cw-rz-${edge}`} onPointerDown={startResize(edge)} />
       ))}
-    </div>
+    </Popup>
   );
 }
 

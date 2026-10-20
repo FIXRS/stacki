@@ -23,6 +23,7 @@
 // an import to resolve against.
 
 import { stripTemplateMarkers, asDocument } from './morphNodes';
+import { parsePreviewRoute } from '../../shared/properties/previewRoute';
 import { type ReloadReason, OverCap, refillMorphWork, checkMarkerCap } from './morphBudget';
 import {
   previewHost,
@@ -192,9 +193,10 @@ async function update(): Promise<void> {
     if (html !== undefined) {
       again = false;
     }
+    const renderingURL = location.href;
     const next = await fetchDocument(html);
     // A newer push arrived while a fallback fetch was in flight.
-    if (pushedHTML === undefined) {
+    if (pushedHTML === undefined && location.href === renderingURL) {
       applyRendering(next);
     } else {
       again = true;
@@ -285,6 +287,18 @@ window.addEventListener('message', (event: MessageEvent) => {
     return;
   }
   const data: unknown = event.data;
+  if (event.source === window.parent) {
+    const route = parsePreviewRoute(data, location.href);
+    if (route && route !== location.pathname + location.search + location.hash) {
+      // Reset queued renders before changing subscriptions so an old response cannot
+      // repaint the previous mode after the source has changed.
+      pushedHTML = undefined;
+      history.replaceState(history.state, '', route);
+      document.dispatchEvent(new Event('avb:preview-route'));
+      void update();
+      return;
+    }
+  }
   if (
     typeof data === 'object' &&
     data !== null &&

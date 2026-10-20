@@ -2,9 +2,11 @@ import React from 'react';
 import type { WireGitInfo } from '../../../shared/ipc/ipcResults';
 import { branchNameError, sanitizeBranchName } from './branchName';
 import BranchActions from './BranchActions';
-import FileBrowser from './FileBrowser';
+import type FileBrowser from './FileBrowser';
+import CommitFilePicker from './CommitFilePicker';
 import { BranchIcon, CheckIcon, CloseIcon, ExternalIcon } from '../../ui/Icons';
 import { repoSlug, webUrl } from './gitPublish';
+import Tooltip from '../../ui/Tooltip';
 
 type ChangedFiles = React.ComponentProps<typeof FileBrowser>['files'];
 
@@ -12,14 +14,11 @@ interface GitChipViewProps {
   readonly info: WireGitInfo;
   readonly busy: string | undefined;
   readonly error: string | undefined;
-  readonly open: boolean;
   readonly commitMessage: string;
   readonly newBranch: string;
   readonly picking: boolean;
   readonly picked: readonly string[] | undefined;
   readonly changed: ChangedFiles;
-  readonly wrapRef: React.RefObject<HTMLDivElement>;
-  readonly onToggle: () => void;
   readonly onDismissError: () => void;
   readonly onSwitch: (branch: string) => void;
   readonly onMerge: (branch: string) => void;
@@ -27,6 +26,7 @@ interface GitChipViewProps {
   readonly onNewBranch: (value: string) => void;
   readonly onCreateBranch: (branch: string) => void;
   readonly onCommitMessage: (value: string) => void;
+  readonly onRefreshFiles: () => void;
   readonly onTogglePicking: () => void;
   readonly onPick: (paths: readonly string[]) => void;
   readonly onCommit: () => void;
@@ -47,6 +47,7 @@ interface BranchesProps {
 }
 
 interface CommitProps {
+  readonly error: string | undefined;
   readonly dirty: boolean;
   readonly working: boolean;
   readonly message: string;
@@ -54,34 +55,10 @@ interface CommitProps {
   readonly picked: readonly string[] | undefined;
   readonly changed: ChangedFiles;
   readonly onMessage: (value: string) => void;
+  readonly onRefreshFiles: () => void;
   readonly onTogglePicking: () => void;
   readonly onPick: (paths: readonly string[]) => void;
   readonly onCommit: () => void;
-}
-
-function ChipButton({
-  info,
-  busy,
-  onToggle,
-}: Pick<GitChipViewProps, 'info' | 'busy' | 'onToggle'>) {
-  const working = busy !== undefined;
-  return (
-    <button className={`git-chip ${working ? 'busy' : ''}`} onClick={onToggle}>
-      {working ? (
-        <>
-          <span className="mini-spinner" />
-          {busy}
-        </>
-      ) : (
-        <>
-          <BranchIcon size={12} />
-          <span className={`dot ${info.dirty ? 'dirty' : ''}`} />
-          {info.branch}
-          {info.ahead > 0 && <span style={{ color: 'var(--text-faint)' }}>↑{info.ahead}</span>}
-        </>
-      )}
-    </button>
-  );
 }
 
 function Branches({
@@ -97,48 +74,85 @@ function Branches({
   const branchError = branchNameError(newBranch, info.branches);
   return (
     <>
-      <h3>Branches</h3>
+      <div className="history-branches-heading">
+        <h3>Branches</h3>
+        <span>Click to switch</span>
+      </div>
       {info.branches.map((branch) => (
-        <div
+        <BranchRow
           key={branch}
-          className={`list-item ${branch === info.branch ? 'active' : ''}`}
-          onClick={() => onSwitch(branch)}
-        >
-          <span className="icon" style={{ width: 14 }}>
-            {branch === info.branch && <CheckIcon size={12} />}
-          </span>
-          <span className="label">{branch}</span>
-          {info.parked.includes(branch) && branch !== info.branch && (
-            <span className="branch-parked" title="Changes waiting on this branch">
-              changes waiting
-            </span>
-          )}
-          <BranchActions
-            branch={branch}
-            current={info.branch}
-            {...(info.trunk === undefined ? {} : { trunk: info.trunk })}
-            disabled={working}
-            onMerge={onMerge}
-            onDelete={onDelete}
-          />
-        </div>
+          branch={branch}
+          info={info}
+          working={working}
+          onSwitch={onSwitch}
+          onMerge={onMerge}
+          onDelete={onDelete}
+        />
       ))}
-      <div className="dropdown-row">
+      <div className="dropdown-row git-create-branch">
         <input
+          aria-label="New branch name"
+          disabled={working}
           placeholder="new-branch-name"
           value={newBranch}
           aria-invalid={Boolean(branchError)}
           onChange={(event) => onNewBranch(sanitizeBranchName(event.target.value))}
           onKeyDown={(event) => {
             const name = newBranch.trim();
-            if (event.key === 'Enter' && name && !branchError) {
+            if (event.key === 'Enter' && name && !branchError && !working) {
               onCreateBranch(name);
             }
           }}
         />
+        <button
+          disabled={working || !newBranch.trim() || Boolean(branchError)}
+          onClick={() => onCreateBranch(newBranch.trim())}
+        >
+          Create
+        </button>
       </div>
       {branchError && <div className="git-hint">{branchError}</div>}
     </>
+  );
+}
+
+function BranchRow({
+  branch,
+  info,
+  working,
+  onSwitch,
+  onMerge,
+  onDelete,
+}: Pick<BranchesProps, 'info' | 'working' | 'onSwitch' | 'onMerge' | 'onDelete'> & {
+  readonly branch: string;
+}) {
+  const current = branch === info.branch;
+  return (
+    <div className={`history-branch-row ${current ? 'active' : ''}`}>
+      <button
+        className="history-branch-switch"
+        disabled={working || current}
+        aria-label={current ? `${branch}, current branch` : `Switch to ${branch}`}
+        onClick={() => onSwitch(branch)}
+      >
+        {current ? <CheckIcon size={12} /> : <BranchIcon size={12} />}
+        <Tooltip className="history-branch-name" text={branch} />
+        {current && <span className="history-branch-current">Current</span>}
+        {info.parked.includes(branch) && !current && (
+          <span className="branch-parked" title="Changes waiting on this branch">
+            Saved changes
+          </span>
+        )}
+      </button>
+      <BranchActions
+        branch={branch}
+        current={info.branch}
+        trunk={info.trunk}
+        disabled={working}
+        onMerge={onMerge}
+        onDelete={onDelete}
+      />
+    </div>
   );
 }
 
@@ -151,8 +165,10 @@ function CommitControls({
   changed,
   onMessage,
   onTogglePicking,
+  onRefreshFiles,
   onPick,
   onCommit,
+  error,
 }: CommitProps) {
   const pickedCount = picked?.length ?? 0;
   const label = !dirty
@@ -167,6 +183,8 @@ function CommitControls({
       <div className="dropdown-row" style={{ flexDirection: 'column', gap: 6 }}>
         <input
           placeholder="Commit message"
+          aria-label="Commit message"
+          disabled={working}
           value={message}
           onChange={(event) => onMessage(event.target.value)}
           onKeyDown={(event) => {
@@ -175,30 +193,27 @@ function CommitControls({
             }
           }}
         />
-        {dirty && (
-          <button className="git-pick-toggle" onClick={onTogglePicking}>
-            {picking ? 'Commit everything instead' : 'Choose what to commit…'}
+        <div className="git-commit-action-row">
+          <button
+            className="primary"
+            disabled={working || !dirty || (picking && pickedCount === 0)}
+            onClick={onCommit}
+          >
+            {label}
           </button>
-        )}
-        {picking && dirty && (
-          <div className="git-pick">
-            <FileBrowser
+          {dirty && (
+            <CommitFilePicker
               files={changed}
-              selectable
-              selected={picked ?? []}
-              onSelect={onPick}
-              emptyMessage="Nothing has changed."
-              autoFocusSearch
+              picked={picked}
+              picking={picking}
+              working={working}
+              error={error}
+              onTogglePicking={onTogglePicking}
+              onRefresh={onRefreshFiles}
+              onPick={onPick}
             />
-          </div>
-        )}
-        <button
-          className="primary"
-          disabled={working || !dirty || (picking && pickedCount === 0)}
-          onClick={onCommit}
-        >
-          {label}
-        </button>
+          )}
+        </div>
       </div>
     </>
   );
@@ -256,10 +271,15 @@ function GitHubControls({
   );
 }
 
-function Dropdown(props: GitChipViewProps) {
+export default function GitChipView(props: GitChipViewProps) {
   const working = props.busy !== undefined;
   return (
-    <div className="dropdown">
+    <div className="git-panel-controls" aria-label="Repository controls">
+      {props.busy && (
+        <p className="history-note" role="status">
+          {props.busy}
+        </p>
+      )}
       {props.error && (
         <div className="git-error">
           {props.error}
@@ -279,6 +299,8 @@ function Dropdown(props: GitChipViewProps) {
         onCreateBranch={props.onCreateBranch}
       />
       <CommitControls
+        error={props.error}
+        onRefreshFiles={props.onRefreshFiles}
         dirty={props.info.dirty}
         working={working}
         message={props.commitMessage}
@@ -297,15 +319,6 @@ function Dropdown(props: GitChipViewProps) {
         onPush={props.onPush}
         onPublish={props.onPublish}
       />
-    </div>
-  );
-}
-
-export default function GitChipView(props: GitChipViewProps) {
-  return (
-    <div ref={props.wrapRef} style={{ position: 'relative' }}>
-      <ChipButton info={props.info} busy={props.busy} onToggle={props.onToggle} />
-      {props.open && <Dropdown {...props} />}
     </div>
   );
 }

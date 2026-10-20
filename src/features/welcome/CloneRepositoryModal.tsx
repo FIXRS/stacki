@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import { useRef, useState } from 'react';
 import RepositoryPicker from '../../ui/RepositoryPicker';
 import { cloneRepository } from '../../ipc/repositoryBridge';
@@ -41,30 +42,34 @@ export default function CloneRepositoryModal(props: {
   };
   const busy = state.kind === 'cloning';
   return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <div className="modal-header">Open from GitHub</div>
-        <div className="modal-body">
-          <RepositoryPicker value={repository} onChange={setRepository} disabled={busy} />
-          <p className="hint-text">
-            Choose a folder next. Stacki downloads a new local copy with its Git history.
-          </p>
-          {state.kind === 'ready' && state.error && <div className="error-text">{state.error}</div>}
-          {busy && <div role="status">Downloading repository…</div>}
-        </div>
-        <div className="modal-footer">
-          <button onClick={props.onClose} disabled={busy}>
-            Cancel
-          </button>
-          <button
-            className="primary"
-            disabled={busy || !repository.trim()}
-            onClick={() => void clone()}
-          >
-            {busy ? 'Downloading…' : 'Choose folder and download'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Popup className="modal" onClose={props.onClose} dismissible={!busy}>
+      {({ close }) => (
+        <>
+          <div className="modal-header">Open from GitHub</div>
+          <div className="modal-body">
+            <RepositoryPicker value={repository} onChange={setRepository} disabled={busy} />
+            <p className="hint-text">
+              Choose a folder next. Stacki downloads a new local copy with its Git history.
+            </p>
+            {state.kind === 'ready' && state.error && (
+              <div className="error-text">{state.error}</div>
+            )}
+            {busy && <div role="status">Downloading repository…</div>}
+          </div>
+          <div className="modal-footer">
+            <button onClick={close} disabled={busy}>
+              Cancel
+            </button>
+            <button
+              className="primary"
+              disabled={busy || !repository.trim()}
+              onClick={() => void clone()}
+            >
+              {busy ? 'Downloading…' : 'Choose folder and download'}
+            </button>
+          </div>
+        </>
+      )}
+    </Popup>
   );
 }

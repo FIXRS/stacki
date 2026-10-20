@@ -1,3 +1,8 @@
+import { CanvasContextMenu } from '../features/navigator/CanvasContextMenu';
+import { pathFor } from '../features/project/previewSelection';
+import { isCanvasPage } from '../../vendor/stacki/shared/properties/defaultsCanvas';
+import { DefaultsCanvasBar } from '../../vendor/stacki/src/features/componentDefaults/DefaultsCanvasBar';
+import { useStudioDefaultsCanvas } from '../features/settings/useStudioDefaultsCanvas';
 import { CmsWorkspace } from '../features/cms/CmsWorkspace';
 import { QuickInsert } from '../features/components/QuickInsert';
 import type { Peer } from '../features/collaboration/presence';
@@ -39,7 +44,7 @@ export interface EditorProps {
 export function Editor(props: EditorProps) {
   const interactivePreview = useInteractivePreview(props);
   const { panel, setPanel } = props.view;
-  const componentOpen = props.file.endsWith('.astro') && !props.file.startsWith('src/pages/');
+  const componentOpen = props.file.endsWith('.astro') && !isCanvasPage(props.file);
   useComponentPanel(componentOpen, setPanel);
   const [mobileSettings, setMobileSettings] = useState(false);
   const [canPause, setCanPause] = useState(false);
@@ -61,6 +66,8 @@ export function Editor(props: EditorProps) {
     panel !== 'variables' && panel !== 'assets' && panel !== 'collections',
     props.focus,
   );
+  const defaultsCanvas = useStudioDefaultsCanvas(props, model);
+  const scopedModel = defaultsSelection(model, defaultsCanvas);
   if (session.paused) {
     return <PausedEditor resume={session.resume} />;
   }
@@ -71,10 +78,14 @@ export function Editor(props: EditorProps) {
         onKeyDown={interactivePreview.active ? (event) => event.stopPropagation() : undefined}
       >
         <EditorHeader
+          closeDefaults={() => void defaultsCanvas.run('done')}
+          defaultsMode={defaultsCanvas.state.kind !== 'idle'}
           {...props}
           document={model.document}
           interactivePreview={interactivePreview}
         />
+        <DefaultsCanvasBar canvas={defaultsCanvas} />
+        <CanvasContextMenu props={props} model={scopedModel} defaultsCanvas={defaultsCanvas} />
         <SyncNotice refresh={props.refresh} report={props.report} />
         <PreviewWorkspace preview={interactivePreview}>
           <EditorRail
@@ -85,19 +96,10 @@ export function Editor(props: EditorProps) {
               setMobileSettings(false);
             }}
           />
-          {panel && (
-            <EditorSidebar
-              panel={panel}
-              showNavigator={() => setPanel('navigator')}
-              openCode={() => setPanel('code')}
-              close={() => setPanel(undefined)}
-              props={props}
-              model={model}
-            />
-          )}
+          <Sidebar props={props} model={scopedModel} defaultsCanvas={defaultsCanvas} />
           <EditorContent
             props={props}
-            model={model}
+            model={scopedModel}
             mobileSettings={mobileSettings}
             setMobileSettings={setMobileSettings}
           />
@@ -106,6 +108,32 @@ export function Editor(props: EditorProps) {
     </CodeAccess.Provider>
   );
 }
+function Sidebar({
+  props,
+  model,
+  defaultsCanvas,
+}: {
+  readonly props: EditorProps;
+  readonly model: ReturnType<typeof useEditor>;
+  readonly defaultsCanvas: ReturnType<typeof useStudioDefaultsCanvas>;
+}) {
+  const { panel, setPanel } = props.view;
+  if (!panel) {
+    return null;
+  }
+  return (
+    <EditorSidebar
+      panel={panel}
+      defaultsCanvas={defaultsCanvas}
+      props={props}
+      model={model}
+      showNavigator={() => setPanel('navigator')}
+      openCode={() => setPanel('code')}
+      close={() => setPanel(undefined)}
+    />
+  );
+}
+
 function useComponentPanel(componentOpen: boolean, setPanel: EditorProps['view']['setPanel']) {
   useEffect(() => {
     if (!componentOpen) {
@@ -138,6 +166,7 @@ function EditorContent({
     <div className="studio-editor-content">
       <PreviewCanvas
         {...model}
+        focusPath={props.focus?.path}
         device={device}
         onDevice={setDevice}
         dimensions={props.view.dimensions}
@@ -274,4 +303,23 @@ function PausedEditor({ resume }: { resume: () => void }) {
       <button onClick={resume}>Resume editing</button>
     </div>
   );
+}
+
+function defaultsSelection(
+  model: ReturnType<typeof useEditor>,
+  canvas: ReturnType<typeof useStudioDefaultsCanvas>,
+): ReturnType<typeof useEditor> {
+  return {
+    ...model,
+    select: (id, occurrence) => {
+      if (canvas.isOpen && canvas.state.kind !== 'idle') {
+        const path = pathFor(id);
+        const root = canvas.state.session.targetPath;
+        if (path !== root && !path.startsWith(root + '.')) {
+          return;
+        }
+      }
+      model.select(id, occurrence);
+    },
+  };
 }

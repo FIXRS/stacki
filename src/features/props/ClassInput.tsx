@@ -1,5 +1,5 @@
+import Popup from '../../ui/Popup';
 import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useClassPopup } from './useClassPopup';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -155,26 +155,6 @@ function useClassFamily(tokens: readonly string[], onChange: ClassInputProps['on
     setFamily,
     setFamHighlight,
   });
-  const { closeFamily } = actions;
-  useEffect(() => {
-    if (!family) {
-      return undefined;
-    }
-    const onDown = (event: MouseEvent) => {
-      const ElementType = famRef.current?.ownerDocument.defaultView?.Element;
-      if (
-        ElementType &&
-        event.target instanceof ElementType &&
-        event.target.closest('.class-family')
-      ) {
-        return;
-      }
-      closeFamily({ revert: true });
-    };
-    document.addEventListener('mousedown', onDown, true);
-    return () => document.removeEventListener('mousedown', onDown, true);
-  }); // no deps: the handler closes over the current preview refs
-
   // Keep the arrowed option in view.
   useEffect(() => {
     if (!family || famHighlight < 0) {
@@ -490,8 +470,15 @@ function ClassSuggestions({ state }: { readonly state: ClassState }) {
   if (!popupPosition) {
     return undefined;
   }
-  return createPortal(
-    <div ref={popupRef} className="dd-popup class-suggest" style={popupPosition}>
+  return (
+    <Popup
+      mode="popover"
+      portal={true}
+      onClose={() => state.setFocused(false)}
+      ref={popupRef}
+      className="dd-popup class-suggest"
+      style={popupPosition}
+    >
       {matches.map((suggestion, i) => (
         <div
           key={suggestion}
@@ -503,8 +490,7 @@ function ClassSuggestions({ state }: { readonly state: ClassState }) {
           <span className="dd-option-label">{suggestion}</span>
         </div>
       ))}
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 function ClassFamilyMenu({ state }: { readonly state: ClassState }) {
@@ -516,8 +502,15 @@ function ClassFamilyMenu({ state }: { readonly state: ClassState }) {
   if (!family || !position) {
     return undefined;
   }
-  return createPortal(
-    <div ref={famRef} className="dd-popup class-family" style={position}>
+  return (
+    <Popup
+      mode="popover"
+      portal={true}
+      onClose={() => state.closeFamily({ revert: true })}
+      ref={famRef}
+      className="dd-popup class-family"
+      style={position}
+    >
       {family.options.map((option, i) => (
         <div
           key={option}
@@ -534,7 +527,6 @@ function ClassFamilyMenu({ state }: { readonly state: ClassState }) {
           <span className="dd-option-label">{option}</span>
         </div>
       ))}
-    </div>,
-    document.body,
+    </Popup>
   );
 }

@@ -84,7 +84,7 @@ export interface CommitInfo {
 }
 
 /**
- * Commits, newest first.
+ * Commits in child-before-parent order, across branches unless a ref is selected.
  *
  * `limit`/`skip` page it — the panel scrolls rather than loading a history
  * that can be tens of thousands of commits long.
@@ -105,7 +105,16 @@ async function log(
     readonly withFiles?: boolean;
   },
 ): Promise<{ commits: CommitInfo[]; atEnd: boolean }> {
-  const args = ['log', `--format=${LOG_FORMAT}`, `-n${limit}`, `--skip=${skip}`];
+  // Topological order keeps every parent below its children even when clocks
+  // disagree. Exclude stashes because their synthetic commits are not history.
+  const args = [
+    'log',
+    '--topo-order',
+    '--decorate=short',
+    `--format=${LOG_FORMAT}`,
+    `-n${limit}`,
+    `--skip=${skip}`,
+  ];
   // One call for the whole page, files included. The alternative — a `git
   // show` per commit to find out what it touched — is fifty processes to draw
   // one screen, and the panel needs the files to say "you changed Home"
@@ -115,6 +124,8 @@ async function log(
   }
   if (ref) {
     args.push(ref);
+  } else {
+    args.push('--exclude=refs/stash', '--all');
   }
   let stdout: string;
   try {

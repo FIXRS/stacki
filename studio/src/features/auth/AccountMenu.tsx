@@ -2,40 +2,37 @@ import { StudioUpdates } from '../updates/StudioUpdates';
 import { StoragePanel } from '../storage/StoragePanel';
 import type { Session } from './useSession';
 import { StackiLogo } from '../../shared/ui/StackiLogo';
-import { useRef } from 'react';
-import useDismiss from '../../../vendor/stacki/src/ui/useDismiss';
+import { useRef, useState } from 'react';
+import Popup from '../../../vendor/stacki/src/ui/Popup';
 import { RoleMenu } from '../roles/RoleMenu';
 import { SoundToggle } from '../settings/SoundToggle';
 
 export function AccountMenu({ saved, session }: { saved: boolean; session: Session | undefined }) {
-  const menu = useRef<HTMLDetailsElement>(null);
-  const close = () => {
-    if (menu.current) {
-      menu.current.open = false;
-    }
-  };
-  useDismiss(menu, { active: true }, close);
+  const menu = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
   return (
-    <details
-      className="account-menu"
-      ref={menu}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && menu.current?.open) {
-          event.preventDefault();
-          event.stopPropagation();
-          close();
-          menu.current.querySelector('summary')?.focus();
-        }
-      }}
-    >
-      <summary
+    <div className="account-menu">
+      <button
+        ref={menu}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
         className="studio-brand"
         aria-label="Stacki account menu"
         title="Stacki account menu"
       >
         <StackiLogo />
-      </summary>
-      <div className="account-popover">
+      </button>
+      <Popup
+        mode="popover"
+        portal={false}
+        className="account-popover"
+        open={open}
+        onClose={close}
+        anchor={menu.current ?? undefined}
+        label="Stacki account"
+      >
         <RoleMenu saved={saved} close={close} />
         <SoundToggle />
         {session?.kind === 'github' && <StudioUpdates />}
@@ -59,7 +56,7 @@ export function AccountMenu({ saved, session }: { saved: boolean; session: Sessi
           </span>
         )}
         <StoragePanel refresh={() => window.dispatchEvent(new Event('studio:assets-changed'))} />
-      </div>
-    </details>
+      </Popup>
+    </div>
   );
 }

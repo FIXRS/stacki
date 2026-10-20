@@ -1,3 +1,4 @@
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { Peer } from '../collaboration/presence';
 import type { Session } from '../auth/useSession';
 import { AccountMenu } from '../auth/AccountMenu';
@@ -13,6 +14,8 @@ import { useComponentBack } from './useComponentBack';
 import { useEditorRole } from '../roles/useEditorRole';
 import { PreviewButton, type InteractivePreviewState } from '../preview/InteractivePreview';
 interface HeaderProps {
+  readonly defaultsMode: boolean;
+  readonly closeDefaults: () => void;
   readonly interactivePreview: InteractivePreviewState;
   readonly session: Session | undefined;
   readonly follow: (peer: Peer) => void;
@@ -34,26 +37,17 @@ export function EditorHeader({
   follow,
   session,
   interactivePreview,
+  closeDefaults,
+  defaultsMode,
 }: HeaderProps) {
   const role = useEditorRole();
   const direct = session?.kind === 'local' && session.editing === 'source';
-  const pages = project.pages.map((path) => ({
-    path,
-    name: path.replace(/^src\/pages\//, ''),
-    route: routeFor(path),
-  }));
-  const componentOpen = !file.startsWith('src/pages/') && file.endsWith('.astro');
-  const back = () => {
-    if (!document) {
-      open(previewFile);
-      return;
-    }
-    void document
-      .whenSaved()
-      .then(() => open(previewFile))
-      .catch(report);
-  };
-  useComponentBack(componentOpen && !interactivePreview.active, back);
+  const pages = headerPages(project);
+  const componentOpen = !isCanvasPage(file) && file.endsWith('.astro');
+  const back = defaultsMode
+    ? closeDefaults
+    : () => headerBack({ document, previewFile, open, report });
+  useComponentBack((componentOpen || defaultsMode) && !interactivePreview.active, back);
   const switcher = (
     <PageSwitcher
       pages={pages}
@@ -64,26 +58,20 @@ export function EditorHeader({
   return (
     <header className={`titlebar studio-titlebar ${componentOpen ? 'component-open' : ''}`}>
       <div className="studio-titlebar-start">
-        <AccountMenu saved={document?.status === 'Saved'} session={session} />
+        <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} />
         <span className="project-name">{project.name}</span>
         <span className="draft-chip">{direct ? 'Local files' : 'Draft'}</span>
         {role === 'client' && <span className="client-role-badge">Client</span>}
         {componentOpen && switcher}
       </div>
       <div className="studio-titlebar-center">
-        {componentOpen ? (
-          <button
-            className="page-switch-btn comp-back"
-            onClick={back}
-            title="Back to page"
-            aria-keyshortcuts="Escape"
-          >
-            <span>←</span>
-            <span className="page-switch-label">{file.split('/').at(-1)}</span>
-          </button>
-        ) : (
-          switcher
-        )}
+        <HeaderNavigation
+          defaultsMode={defaultsMode}
+          componentOpen={componentOpen}
+          back={back}
+          file={file}
+          switcher={switcher}
+        />
       </div>
       <div className="studio-titlebar-end">
         <Collaborators document={document} session={session} follow={follow} />
@@ -93,6 +81,30 @@ export function EditorHeader({
       </div>
     </header>
   );
+}
+
+function headerBack({
+  document,
+  previewFile,
+  open,
+  report,
+}: Pick<HeaderProps, 'document' | 'previewFile' | 'open' | 'report'>) {
+  if (!document) {
+    open(previewFile);
+    return;
+  }
+  void document
+    .whenSaved()
+    .then(() => open(previewFile))
+    .catch(report);
+}
+
+function headerPages(project: Project) {
+  return project.pages.map((path) => ({
+    path,
+    name: path.replace(/^src\/pages\//, ''),
+    route: routeFor(path),
+  }));
 }
 
 function Collaborators({
@@ -132,5 +144,48 @@ function Collaborators({
         </button>
       ))}
     </div>
+  );
+}
+
+function HeaderNavigation({
+  defaultsMode,
+  componentOpen,
+  back,
+  file,
+  switcher,
+}: {
+  readonly defaultsMode: boolean;
+  readonly componentOpen: boolean;
+  readonly back: () => void;
+  readonly file: string;
+  readonly switcher: React.ReactNode;
+}) {
+  return (
+    <>
+      {defaultsMode ? (
+        <button
+          className="page-switch-btn comp-back"
+          onClick={back}
+          title="Close defaults"
+          aria-label="Close defaults"
+          aria-keyshortcuts="Escape"
+        >
+          <span>←</span>
+          <span>Close defaults</span>
+        </button>
+      ) : componentOpen ? (
+        <button
+          className="page-switch-btn comp-back"
+          onClick={back}
+          title="Back to page"
+          aria-keyshortcuts="Escape"
+        >
+          <span>←</span>
+          <span className="page-switch-label">{file.split('/').at(-1)}</span>
+        </button>
+      ) : (
+        switcher
+      )}
+    </>
   );
 }

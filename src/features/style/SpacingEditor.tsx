@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 // The popover that edits one side of the spacing box: its draft, its live and
 // committed writes, the reset button, focus on open, arrow-key steps, and
 // closing on a press outside unless it lands in a popup of its own
@@ -35,7 +36,11 @@ export function SpacingEditor(props: SpacingEditorProps) {
   const editor = useSpacingEditor(props);
   const computed = useStyleHint(read(prop) === undefined ? prop : '');
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={editor.close}
+      onEscape={editor.abandon}
       className="embed-editor_spacing-popover"
       ref={editor.rootRef}
       // Keep the input focused when pressing anywhere in the popover other than the
@@ -96,7 +101,7 @@ export function SpacingEditor(props: SpacingEditorProps) {
         }}
       />
       <SpacingResetButton onReset={editor.reset} />
-    </div>
+    </Popup>
   );
 }
 
@@ -148,7 +153,6 @@ export function useSpacingEditor({
   clearProp,
   liveSetProp,
   onClose,
-  onSameLabelPress,
 }: SpacingEditorProps) {
   const external = spacingExternal(read(prop));
   const { draft, draftRef, setDraftValue } = useEditorDraft(external);
@@ -172,7 +176,6 @@ export function useSpacingEditor({
     commit.abandon();
     onClose();
   };
-  useOutsidePress({ rootRef, prop, onSameLabelPress, close });
   // A scrub only moves the draft: this popover's authoritative write happens when it
   // closes (see `close`), which is also what typing in it does.
   const scrub = useScrub({
@@ -194,7 +197,7 @@ export function useSpacingEditor({
     clearProp,
     onClose,
   });
-  return { draft, rootRef, inputRef, scrub, ...handlers };
+  return { draft, rootRef, inputRef, scrub, close, abandon, ...handlers };
 }
 
 // The editor's event handlers, over the state `useSpacingEditor` owns.
@@ -388,54 +391,6 @@ export function useSpacingCommit({
       return 'none';
     },
   };
-}
-
-// Any pointerdown outside the popover closes it — pointerdown (not mousedown/
-// click) so it fires even when the target preventDefaults its press and thereby
-// suppresses the compat mousedown + blur (e.g. the drag bands).
-export function useOutsidePress({
-  rootRef,
-  prop,
-  onSameLabelPress,
-  close,
-}: {
-  rootRef: React.RefObject<HTMLDivElement>;
-  prop: string;
-  onSameLabelPress: () => void;
-  close: () => void;
-}): void {
-  // The listener is registered once, for the life of the popover; this keeps
-  // it calling the current handlers.
-  const latest = useRef({ prop, onSameLabelPress, close });
-  latest.current = { prop, onSameLabelPress, close };
-  useEffect(() => {
-    const onDocumentDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-      if (rootRef.current?.contains(target)) {
-        return;
-      }
-      // The variable picker opens from the dot in this popover but portals to the
-      // body, so a press in it is a press in here — see lib/popup-layer.
-      if (inOwnedPopup(target, rootRef.current ?? undefined)) {
-        return;
-      }
-      // Pressing this side's own label should net to a close (not reopen): flag it
-      // so the label's click doesn't re-open the popover we're about to close.
-      const labelProp =
-        target instanceof Element
-          ? target.closest('.embed-editor_spacing-label')?.getAttribute('data-prop')
-          : undefined;
-      if (labelProp === latest.current.prop) {
-        latest.current.onSameLabelPress();
-      }
-      latest.current.close();
-    };
-    document.addEventListener('pointerdown', onDocumentDown);
-    return () => document.removeEventListener('pointerdown', onDocumentDown);
-  }, [rootRef]);
 }
 
 // Opened to be typed in: focus the field it actually shows. With a variable in the

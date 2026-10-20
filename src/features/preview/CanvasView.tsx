@@ -1,4 +1,5 @@
 import React from 'react';
+import { usePreviewSource } from './usePreviewSource';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 
 const BREAKPOINTS = [
@@ -33,10 +34,16 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-export default function CanvasView({ url, refreshKey, onPreviewLoaded }: CanvasViewProps) {
+export default function CanvasView({
+  url: renderURL,
+  refreshKey,
+  onPreviewLoaded,
+}: CanvasViewProps) {
   const startDrag = usePointerDrag();
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const iframesRef = React.useRef<FrameElements>({});
+  const source = useCanvasSource(renderURL, iframesRef);
+  const url = source.url ?? renderURL;
   const [view, setView] = React.useState<ViewState | undefined>(undefined);
   const [panning, setPanning] = React.useState(false);
   const [heights, setHeights] = React.useState<FrameHeights>({});
@@ -76,7 +83,10 @@ export default function CanvasView({ url, refreshKey, onPreviewLoaded }: CanvasV
           url={url}
           refreshKey={refreshKey}
           iframesRef={iframesRef}
-          {...(onPreviewLoaded === undefined ? {} : { onPreviewLoaded })}
+          onPreviewLoaded={() => {
+            source.loaded();
+            onPreviewLoaded?.();
+          }}
         />
       )}
       {view && (
@@ -418,4 +428,13 @@ function useStudioPatches(frames: React.MutableRefObject<FrameElements>, url: st
       window.removeEventListener('message', receive);
     };
   }, [frames, url]);
+}
+
+function useCanvasSource(url: string, frames: React.MutableRefObject<FrameElements>) {
+  return usePreviewSource(url, (message) => {
+    // Exactly the three breakpoint frames share this render source.
+    for (const frame of Object.values(frames.current)) {
+      frame?.contentWindow?.postMessage(message, new URL(url).origin);
+    }
+  });
 }

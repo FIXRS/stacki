@@ -1,3 +1,5 @@
+import { registerPublishHandlers } from './handlers/publishHandlers';
+import { registerProjectMetadataHandlers } from './handlers/projectMetadataHandlers';
 import { registerImageConversionHandler } from './handlers/imageConversionHandler';
 import { registerGitRepositoryHandlers } from './handlers/gitRepositoryHandlers';
 import { listenForPreviewFailures } from './preview/previewFailure';
@@ -909,6 +911,8 @@ registerImageConversionHandler(host);
 registerPageHandlers(host);
 registerPreviewHandlers(host);
 registerProjectHandlers(host);
+registerProjectMetadataHandlers(host);
+registerPublishHandlers(host);
 registerStudioHandlers(
   host,
   app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() },

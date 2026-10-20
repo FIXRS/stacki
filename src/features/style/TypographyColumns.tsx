@@ -1,8 +1,9 @@
+import Popup from '../../ui/Popup';
 // Text columns and their advanced options: count and width, the rule's style,
 // width and colour, the gap and span, in the popover the row opens
 // (TypographySection.tsx).
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
@@ -352,7 +353,6 @@ export function MorePopover({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  useMorePopoverDismiss({ open, rootRef, setOpen });
   return (
     <div ref={rootRef} className="embed-editor_more">
       <button
@@ -367,7 +367,14 @@ export function MorePopover({
         <MoreIcon />
       </button>
       {open ? (
-        <div className="embed-editor_more-popover" role="dialog" aria-label={title}>
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={() => setOpen(false)}
+          className="embed-editor_more-popover"
+          role="dialog"
+          label={title}
+        >
           <div className="embed-editor_more-head">
             <span className="embed-editor_more-title">{title}</span>
             <button
@@ -380,7 +387,7 @@ export function MorePopover({
             </button>
           </div>
           {children}
-        </div>
+        </Popup>
       ) : undefined}
     </div>
   );
@@ -388,49 +395,6 @@ export function MorePopover({
 
 // While the popover is open, a press outside it (other than in the provenance
 // popover one of its labels opened) or Escape closes it.
-export function useMorePopoverDismiss({
-  open,
-  rootRef,
-  setOpen,
-}: {
-  open: boolean;
-  rootRef: React.RefObject<HTMLDivElement>;
-  setOpen: (open: boolean) => void;
-}): void {
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onDown = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        setOpen(false);
-        return;
-      }
-      if (rootRef.current?.contains(target)) {
-        return;
-      }
-      // A label inside the popover can open the provenance popover, which is portaled
-      // to <body> (outside this wrapper) — clicks there must not close the popover.
-      if (target.closest('.embed-editor_provenance')) {
-        return;
-      }
-      setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, rootRef, setOpen]);
-}
-
 // The advanced-columns popover body: multi-column Gap, the column-rule divider
 // (style / width / color), and the child column-span. Every field reads/writes
 // through the same resolved model as the rest of the panel; unset props read empty.

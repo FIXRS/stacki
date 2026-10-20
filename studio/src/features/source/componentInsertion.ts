@@ -1,10 +1,15 @@
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
-import { defaultInstance } from './instanceDefaults';
+import { defaultInstance, type InsertionDefaults } from './instanceDefaults';
 import { relativeImport, resolveImport } from './imports';
 import { insertFragment, parsePage, type Edit, type TreeAction } from './source';
 
 type Insert = Extract<TreeAction, { kind: 'insert' }>;
-export function componentInsertionEdits(source: string, action: Insert, file: string): Edit[] {
+export function componentInsertionEdits(
+  source: string,
+  action: Insert,
+  file: string,
+  settings?: InsertionDefaults,
+): Edit[] {
   if (!/^[A-Z][\w]*$/.test(action.name) || !/^[\w./@-]+\.astro$/.test(action.importPath)) {
     throw new Error('Invalid component');
   }
@@ -15,7 +20,7 @@ export function componentInsertionEdits(source: string, action: Insert, file: st
   const imports = insertionImports(parsed.model.imports, file);
   const resolved = resolveImport(file, action.importPath);
   const rootName = imports.resolve(resolved, action.name, action.importPath);
-  const node = defaultInstance(resolved, (child, name) =>
+  const node = defaultInstance(resolved, settings, (child, name) =>
     imports.resolve(child, name, relativeImport(file, child)),
   );
   const fragment = node

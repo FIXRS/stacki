@@ -1,3 +1,4 @@
+// Verify subscription boundaries and bounded render coalescing with explicit client inputs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout } from 'node:timers/promises';
@@ -18,6 +19,10 @@ test('preview subscriptions reject external and internal URLs', () => {
     assert.equal(renderPath({ path }), undefined);
   }
   assert.equal(renderPath({ path: '/blog?tag=astro' }), '/blog?tag=astro');
+  const canvas = '/__avb/preview?defaults=12345678-1234-1234-1234-123456789012';
+  assert.equal(renderPath({ path: canvas }), canvas);
+  assert.equal(renderPath({ path: canvas + '&extra=1' }), undefined);
+  assert.equal(renderPath({ path: '/__avb/preview?defaults=../../etc' }), undefined);
 });
 
 test('push renders coalesce hovers and share one render across subscribers', async () => {

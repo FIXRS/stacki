@@ -53,7 +53,7 @@ import {
 } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { prunedAfterRemoval } from '../model/pageQueries';
-import { componentInstance, componentInstancePlacement } from '../model/componentInstances';
+import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import {
@@ -128,13 +128,15 @@ export function useAddComponent(
   // target: {parentId: string | undefined, index: number} | undefined (append at end)
   const addComponent = useCallback(
     async (componentName: string, target: InsertTarget | undefined) => {
-      const comp = insertables.find((component) => component.name === componentName);
+      const comp =
+        insertables.find((component) => component.path === componentName) ??
+        insertables.find((component) => component.name === componentName);
       const page = pageStateRef.current.currentPage;
-      if (!comp || !page) {
+      const projectPath = projectRef.current?.path;
+      if (!comp || !page || !projectPath) {
         return;
       }
-      const projectPath = projectRef.current?.path;
-      const instance = componentInstance(comp, insertables);
+      const instance = await loadComponentInstance(comp, insertables, projectPath);
       const resolved = await Promise.all(
         instance.components.map(async (component) => ({
           component,

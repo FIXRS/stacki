@@ -572,3 +572,13 @@ ESLint, production builds, contract tests, and the complete regression suite.
       methodology
 - [ ] New dependencies carry a written justification
 - [ ] `npm run check:changed` passes (`tsc`, ESLint, Prettier, policy scan)
+
+## Project editor metadata
+
+Project insertion defaults live in `.stacki/components.json`; column guide preferences
+live in `.stacki/guide.json`. These are tracked project files shared by Desktop and Studio.
+When moving or renaming an Astro component, update both its recipe key and every nested
+`component` reference in `.stacki/components.json`. Do not put Stacki markup in Astro files.
+Run `astro-studio check-project <project-directory>` against the installed Studio CLI after
+refactors; missing paths, invalid slots and cyclic insertion recipes must be fixed together.
+Ignore generated `.stacki/preview/` only, never the whole `.stacki/` directory.

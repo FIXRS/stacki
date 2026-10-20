@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useMemo, useState } from 'react';
 import type {
   Conflict,
@@ -26,43 +27,36 @@ export default function MergeConflictModal(props: MergeConflictProps) {
   const model = useConflict(props);
   const { working, conflict, busy, onCancel, onResolve, picks } = model;
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          if (!working) {
-            onCancel();
-          }
-        }
-      }}
-    >
-      <div className="modal conflict-modal">
-        <div className="modal-header">Both branches changed the same thing</div>
-        <ConflictIntro conflict={conflict} />
-        <div className="conflict-split">
-          <ConflictFiles model={model} />
-          <ConflictDetail model={model} />
-        </div>
-        {working && (
-          <div className="publish-progress" style={{ padding: '0 16px 8px' }}>
-            <span className="mini-spinner" />
-            <span>{busy}</span>
+    <Popup className="modal conflict-modal" onClose={onCancel} dismissible={!working}>
+      {({ close }) => (
+        <>
+          <div className="modal-header">Both branches changed the same thing</div>
+          <ConflictIntro conflict={conflict} />
+          <div className="conflict-split">
+            <ConflictFiles model={model} />
+            <ConflictDetail model={model} />
           </div>
-        )}
-        <div className="modal-footer">
-          <button onClick={onCancel} disabled={working}>
-            Cancel
-          </button>
-          <button
-            className="primary"
-            disabled={working}
-            onClick={() => onResolve(choicesForSend(conflict, picks))}
-          >
-            Merge with these choices
-          </button>
-        </div>
-      </div>
-    </div>
+          {working && (
+            <div className="publish-progress" style={{ padding: '0 16px 8px' }}>
+              <span className="mini-spinner" />
+              <span>{busy}</span>
+            </div>
+          )}
+          <div className="modal-footer">
+            <button onClick={close} disabled={working}>
+              Cancel
+            </button>
+            <button
+              className="primary"
+              disabled={working}
+              onClick={() => onResolve(choicesForSend(conflict, picks))}
+            >
+              Merge with these choices
+            </button>
+          </div>
+        </>
+      )}
+    </Popup>
   );
 }
 function useConflict(props: MergeConflictProps) {

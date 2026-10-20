@@ -6,20 +6,13 @@ import type { ComponentCreationSource, UsageAnchor, UsagePopup } from './Palette
 import { cleanError } from '../../lib/cleanError';
 import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { rankInsertItems } from './insertRank';
-import {
-  componentPreviewURL,
-  groupPaletteComponents,
-  parseComponentPreviewMessage,
-  parseComponentUsage,
-  prettyComponentName,
-} from './paletteModel';
+import { ComponentPreviewPopup } from './ComponentPreviewPopup';
+import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
 import { ComponentPlusIcon, ElementComponentIcon, LayoutIcon } from '../../ui/Icons';
-import useDismiss from '../../ui/useDismiss';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 
 const TOOLTIP_DELAY_MS = 500;
-const PREVIEW_DELAY_MS = 450;
 
 interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
@@ -49,7 +42,6 @@ export default function PalettePanel(props: PalettePanelProps) {
   const preview = useComponentPreview();
   const usage = useUsagePopup(props.onUsage, preview.cancel);
   const usageRef = useRef<HTMLDivElement>(null);
-  useDismiss(usageRef, { active: usage.value !== undefined }, usage.close);
   useCreateRequest(props.createRequest ?? 0, props.createFrom, setCreating);
   const list = useMemo(() => rankInsertItems(props.components, query), [props.components, query]);
   const groups = useMemo(() => groupPaletteComponents(list), [list]);
@@ -118,20 +110,16 @@ function useComponentPreview() {
   const [value, setValue] = useState<(Point & { readonly component: ScanComponent }) | undefined>(
     undefined,
   );
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const schedule = useCallback((component: ScanComponent, anchor: HTMLElement): void => {
-    clearTimeout(timer.current);
+  const show = useCallback((component: ScanComponent, anchor: HTMLElement): void => {
     const rect = anchor.getBoundingClientRect();
     const left = rect.right + 10;
     const top = Math.max(8, Math.min(rect.top, window.innerHeight - 260));
-    timer.current = setTimeout(() => setValue({ component, left, top }), PREVIEW_DELAY_MS);
+    setValue({ component, left, top });
   }, []);
   const cancel = useCallback((): void => {
-    clearTimeout(timer.current);
     setValue(undefined);
   }, []);
-  return { value, schedule, cancel };
+  return { value, show, cancel };
 }
 
 function useUsagePopup(onUsage: PalettePanelProps['onUsage'], cancelPreview: () => void) {
@@ -273,11 +261,10 @@ function PaletteItem({
       className="palette-item"
       draggable
       title="Drag into the Navigator, or double-click to add to the page"
-      onMouseEnter={(event) => props.preview.schedule(component, event.currentTarget)}
-      onMouseLeave={props.preview.cancel}
+      onMouseEnter={(event) => props.preview.show(component, event.currentTarget)}
       onDragStart={(event) => startComponentDrag(event, component, props)}
       onDragEnd={clearDrag}
-      onDoubleClick={() => props.onInsert(component.name)}
+      onDoubleClick={() => props.onInsert(component.path)}
     >
       <span className="icon">
         {component.isLayout ? <LayoutIcon size={14} /> : <ElementComponentIcon size={14} />}
@@ -313,6 +300,7 @@ function startComponentDrag(
 ): void {
   props.preview.cancel();
   event.dataTransfer.setData('avb/component', component.name);
+  event.dataTransfer.setData('avb/component-path', component.path);
   allowDragEffect(event.dataTransfer, 'copy');
   setDrag({ kind: 'component', name: component.name });
   if (props.onDragBegin) {
@@ -381,7 +369,6 @@ function PalettePopups({
       )}
       {preview && props.devUrl && (
         <ComponentPreviewPopup
-          key={preview.component.path}
           preview={preview}
           devURL={props.devUrl}
           trailingSlash={props.trailingSlash}
@@ -390,89 +377,4 @@ function PalettePopups({
       )}
     </>
   );
-}
-
-function ComponentPreviewPopup({
-  preview,
-  devURL,
-  trailingSlash,
-  resolvePreviewURL,
-}: {
-  readonly preview: NonNullable<ReturnType<typeof useComponentPreview>['value']>;
-  readonly devURL: string;
-  readonly trailingSlash: TrailingSlash;
-  readonly resolvePreviewURL?: (url: string) => Promise<string>;
-}) {
-  const frameRef = useRef<HTMLIFrameElement>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'empty'>('loading');
-  const directURL = componentPreviewURL(devURL, preview.component, trailingSlash);
-  const resolvedURL = useResolvedPreviewURL(directURL, setStatus, resolvePreviewURL);
-  const visible = status === 'ready' || (!!resolvePreviewURL && status === 'loading');
-  useEffect(() => {
-    const receive = (event: MessageEvent<unknown>): void => {
-      if (event.source !== frameRef.current?.contentWindow) {
-        return;
-      }
-      const message = parseComponentPreviewMessage(event.data);
-      if (message) {
-        setStatus(message.status);
-      }
-    };
-    window.addEventListener('message', receive);
-    return () => window.removeEventListener('message', receive);
-  }, []);
-  return (
-    <div
-      className="comp-preview"
-      style={{
-        left: preview.left,
-        top: preview.top,
-        visibility: visible ? 'visible' : 'hidden',
-      }}
-      aria-hidden={status === 'empty'}
-      data-loading={status === 'loading'}
-    >
-      <div className="comp-preview-title">{prettyComponentName(preview.component.name)}</div>
-      {status === 'loading' && (
-        <div className="comp-preview-loading" role="status">
-          Loading preview…
-        </div>
-      )}
-      <iframe
-        ref={frameRef}
-        src={resolvePreviewURL ? resolvedURL : directURL}
-        title={`${preview.component.name} preview`}
-      />
-    </div>
-  );
-}
-
-function useResolvedPreviewURL(
-  directURL: string,
-  setStatus: (status: 'loading' | 'ready' | 'empty') => void,
-  resolvePreviewURL?: (url: string) => Promise<string>,
-) {
-  const [resolvedURL, setResolvedURL] = useState<string>();
-  useEffect(() => {
-    if (!resolvePreviewURL) {
-      return;
-    }
-    let active = true;
-    void resolvePreviewURL(directURL)
-      .then((url) => {
-        if (active) {
-          setResolvedURL(url);
-        }
-      })
-      .catch(() => {
-        // An expired draft session cannot display a component preview.
-        if (active) {
-          setStatus('empty');
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [directURL, resolvePreviewURL, setStatus]);
-  return resolvedURL;
 }

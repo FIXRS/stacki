@@ -41,11 +41,6 @@ export interface AppHistory {
 }
 
 export type ToastKind = 'info' | 'success' | 'error';
-export interface ToastMessage {
-  readonly msg: string;
-  readonly kind: ToastKind;
-}
-
 export type LeftTab =
   | 'pages'
   | 'navigator'

@@ -1,3 +1,4 @@
+import { componentReference } from '../model/componentReference';
 // What the shell is drawn from: the scope context, an instance's props, tag
 // options, the code window, a symbol's file, the canvas gate, notices,
 // breadcrumbs and marks, the selection's paths, the overlay, and composing
@@ -87,7 +88,7 @@ export function useScopeContext(
 ) {
   const { model } = shortcuts;
   const { currentLayoutName, selectedAncestors, selectedNode, tree } = pageOps;
-  const { currentPage, editStack, insertables, scan, selectedId } = coreState;
+  const { currentPage, editStack, insertables, scan, selectedId, project } = coreState;
 
   // Slots offered by the selected node's parent (the component or layout the
   // node is slotted into) — turns the `slot` attribute into a dropdown.
@@ -99,8 +100,13 @@ export function useScopeContext(
         slotOptions =
           scan.layouts.find((layout) => layout.name === currentLayoutName)?.slots || undefined;
       } else if (parent.kind === 'component') {
-        slotOptions =
-          insertables.find((component) => component.name === parent.name)?.slots || undefined;
+        slotOptions = componentReference({
+          name: parent.name,
+          project: project?.path,
+          file: currentPage?.path,
+          imports: model.imports,
+          components: insertables,
+        })?.slots;
       }
     }
   }

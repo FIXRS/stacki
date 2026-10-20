@@ -38,6 +38,7 @@ import {
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
+import { useWrapNode } from './appWrapNode';
 import {
   useHistory,
   useAddComponent,
@@ -61,6 +62,7 @@ export function useNodeEdits(
   const componentQueries = useComponentQueries(coreState);
   const createComponent = useCreateComponent(coreState, componentQueries, lifecycle, history);
   const moveNodeScope = useMoveNode(coreState, history, lifecycle);
+  const wrapNodeScope = useWrapNode(coreState, history);
   const removeNodeScope = useRemoveNode(coreState, lifecycle, history);
   const copyNodeScope = useCopyNode(coreState, removeNodeScope, lifecycle, history);
   const pasteNodeScope = usePasteNode(
@@ -77,6 +79,7 @@ export function useNodeEdits(
     ...componentQueries,
     ...createComponent,
     ...moveNodeScope,
+    ...wrapNodeScope,
     ...removeNodeScope,
     ...copyNodeScope,
     ...pasteNodeScope,
@@ -116,7 +119,7 @@ export function useInsertItem(
       const target = insertTargetFor(state.model, selectedIdRef.current, item);
 
       if (item.type === 'component') {
-        void addComponent(item.name, target).catch(reportFailure);
+        void addComponent(item.path ?? item.name, target).catch(reportFailure);
         return;
       }
 
@@ -433,7 +436,7 @@ export function useEscapeKeys(
       if (
         target instanceof HTMLElement &&
         (target.closest('input, textarea, select, [contenteditable="true"]') ||
-          target.closest('.modal-overlay, .dd-popup, .insert-overlay, .code-window'))
+          target.closest('.popup-surface, .dd-popup, .insert-overlay, .code-window'))
       ) {
         return;
       }

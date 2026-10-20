@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import RepositoryPicker from '../../ui/RepositoryPicker';
 import { parseGitHubRepository } from '../../../shared/ipc/githubRepository';
 import { useEffect, useRef, useState } from 'react';
@@ -90,34 +91,27 @@ function PublishDialog(props: Props) {
   const form = usePublishForm(props);
   const publishing = form.state.kind === 'publishing';
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          if (!publishing) {
-            props.onClose();
-          }
-        }
-      }}
-    >
-      <div className="modal">
-        <div className="modal-header">
-          {form.state.kind === 'done' ? 'Published to GitHub' : 'Publish to GitHub'}
-        </div>
-        {form.state.kind === 'done' ? (
-          <PublishDone {...props} name={form.name} url={form.state.url} />
-        ) : (
-          <>
-            <div className="modal-body">
-              <PublishFields form={form} />
-              <PublishPreflight preflight={form.preflight} />
-              <PublishProgress form={form} branch={props.branch} />
-            </div>
-            <PublishFooter form={form} onClose={props.onClose} />
-          </>
-        )}
-      </div>
-    </div>
+    <Popup className="modal" onClose={props.onClose} dismissible={!publishing}>
+      {({ close }) => (
+        <>
+          <div className="modal-header">
+            {form.state.kind === 'done' ? 'Published to GitHub' : 'Publish to GitHub'}
+          </div>
+          {form.state.kind === 'done' ? (
+            <PublishDone {...props} onClose={close} name={form.name} url={form.state.url} />
+          ) : (
+            <>
+              <div className="modal-body">
+                <PublishFields form={form} />
+                <PublishPreflight preflight={form.preflight} />
+                <PublishProgress form={form} branch={props.branch} />
+              </div>
+              <PublishFooter form={form} onClose={close} />
+            </>
+          )}
+        </>
+      )}
+    </Popup>
   );
 }
 function PublishDone({

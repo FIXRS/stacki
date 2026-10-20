@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 // The fields and editors a bound prop is edited with: the source button, an
 // expression or condition, the bind handle and the data picker, and the code
 // editors a value opens — its own code and its variable's source — each
@@ -296,45 +297,12 @@ export function FieldDataPicker({
 }: FieldDataPickerProps) {
   const pick = (path: string, query: PickerNode['query'] | undefined) =>
     onPick(resolvePick(path, query ?? undefined, bindContext ?? undefined));
-  useEffect(() => {
-    const close = (event: MouseEvent) => {
-      // The thing that opened it is not "outside": letting the mousedown close
-      // it would leave the click that follows to open it straight back up.
-      //
-      // A chip is in that list because it opens the picker ON MOUSEDOWN — the
-      // caret must not land inside a name — and React flushes this effect
-      // synchronously for a discrete event, so the listener below is live
-      // while the very mousedown that opened the picker is still on its way up
-      // to document. Without the chip here, pressing it opened the picker and
-      // closed it again before the button came back up, which looked like a
-      // chip that did nothing at all. Clicking it again still closes, through
-      // the same toggle that opened it.
-      if (eventElement(event.target)?.closest('.bind-menu, .bind-handle, .dd-source, .cm-chip')) {
-        return;
-      }
-      onClose();
-    };
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
-    const onScroll = (event: Event) => {
-      if (eventElement(event.target)?.closest('.bind-menu')) {
-        return;
-      }
-      onClose();
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onClose);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onClose);
-    };
-  }, [onClose]);
 
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={onClose}
       className={`dd-popup bind-menu${sourceInspection ? ' loop-source-menu' : ''}`}
       style={{ left: position.left, top: position.top, width: position.width }}
     >
@@ -350,7 +318,7 @@ export function FieldDataPicker({
         {...definedFields({ onWrite })}
         footer={!!onWrite}
       />
-    </div>
+    </Popup>
   );
 }
 

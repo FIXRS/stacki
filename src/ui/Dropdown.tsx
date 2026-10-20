@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import Popup from './Popup';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, MutableRefObject, ReactNode, RefObject } from 'react';
 import { endDragNotes, hoverNote } from './sound';
 import { useSoundHere } from './soundScope';
@@ -31,6 +32,8 @@ export interface DropdownOption<T = string> {
   readonly value: T;
   readonly label: string;
   readonly hint?: string;
+  readonly group?: string;
+  readonly description?: string;
   readonly icon?: ReactNode;
   readonly dim?: boolean;
 }
@@ -88,7 +91,6 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
   const actions = useDropdownActions(props, state);
   const control = { ...state, ...actions };
   const position = useDropdownPosition(state, { searchable: props.searchable ?? false });
-  useDropdownDismiss(state, actions.close);
   useDropdownSound(state);
   useDropdownFocus(state, { searchable: props.searchable ?? false });
   useEffect(() => {
@@ -119,7 +121,7 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
           <ChevronDownIcon size={11} />
         </span>
       </button>
-      {state.open && position && (
+      {position && (
         <DropdownPopup control={control} props={props} position={position} onKey={onKey} />
       )}
     </>
@@ -141,7 +143,9 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
   const visible =
     props.searchable && queryText
       ? props.options.filter((option) =>
-          `${option.label} ${option.hint || ''}`.toLowerCase().includes(queryText),
+          `${option.label} ${option.hint || ''} ${option.group || ''}`
+            .toLowerCase()
+            .includes(queryText),
         )
       : props.options;
   return {
@@ -281,7 +285,9 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
     // React aborts the render loop, so derive its intrinsic height from the
     // dimensions this component owns instead.
     const wanted =
-      visible.length * OPTION_HEIGHT + POPUP_PADDING_HEIGHT + (searchable ? SEARCH_HEIGHT : 0);
+      (visible.length + dropdownGroupCount(visible)) * OPTION_HEIGHT +
+      POPUP_PADDING_HEIGHT +
+      (searchable ? SEARCH_HEIGHT : 0);
     const next = {
       left: rectangle.left,
       width: rectangle.width,
@@ -297,47 +303,8 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
         ? previous
         : next,
     );
-  }, [open, triggerRef, visible.length, searchable]);
+  }, [open, triggerRef, visible, searchable]);
   return position;
-}
-
-function useDropdownDismiss<T>(state: Selection<T>, close: () => void): void {
-  const { open, popupRef, triggerRef } = state;
-  useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    const down = (event: MouseEvent): void => {
-      if (!(event.target instanceof Node)) {
-        return;
-      }
-      if (
-        popupRef.current &&
-        !popupRef.current.contains(event.target) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(event.target)
-      ) {
-        close();
-      }
-    };
-    const scroll = (event: Event): void => {
-      if (event.target instanceof Node && popupRef.current?.contains(event.target)) {
-        return;
-      }
-      close();
-    };
-    document.addEventListener('mousedown', down);
-    window.addEventListener('scroll', scroll, true);
-    window.addEventListener('resize', close);
-    // A click inside the canvas iframe blurs this window without a document mousedown.
-    window.addEventListener('blur', close);
-    return () => {
-      document.removeEventListener('mousedown', down);
-      window.removeEventListener('scroll', scroll, true);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('blur', close);
-    };
-  }, [open, popupRef, triggerRef, close]);
 }
 
 function useDropdownSound<T>({ open, highlight, visible }: Selection<T>): void {
@@ -371,9 +338,14 @@ function useDropdownFocus<T>(state: Selection<T>, options: { readonly searchable
     if (!open || highlight < 0) {
       return;
     }
-    (listRef.current || popupRef.current)?.children[highlight]?.scrollIntoView({
-      block: 'nearest',
-    });
+    const timer = window.setTimeout(() => {
+      (listRef.current || popupRef.current)
+        ?.querySelectorAll('.dd-option')
+        [highlight]?.scrollIntoView({
+          block: 'nearest',
+        });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, highlight, listRef, popupRef]);
   useEffect(() => {
     if (!open || !searchable) {
@@ -442,7 +414,11 @@ interface PopupProps<T> {
 }
 function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
   return (
-    <div
+    <Popup
+      mode="popover"
+      open={control.open}
+      anchor={control.triggerRef.current ?? undefined}
+      onClose={control.close}
       ref={control.popupRef}
       className={`dd-popup ${props.searchable ? 'dd-searchable' : ''} ${props.menuClassName || ''}`}
       style={position}
@@ -463,16 +439,16 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
       )}
       <div className="dd-list" ref={control.listRef}>
         {control.visible.map((option, index) => (
-          <DropdownRow
-            key={`${String(option.value)}-${index}`}
-            option={option}
-            index={index}
-            control={control}
-          />
+          <Fragment key={`${String(option.value)}-${index}`}>
+            {option.group && option.group !== control.visible[index - 1]?.group && (
+              <div className="dd-group-label">{option.group}</div>
+            )}
+            <DropdownRow option={option} index={index} control={control} />
+          </Fragment>
         ))}
         {!control.visible.length && <div className="dd-empty">Nothing matches</div>}
       </div>
-    </div>
+    </Popup>
   );
 }
 function DropdownRow<T>({
@@ -504,6 +480,13 @@ function DropdownRow<T>({
       </span>
       {option.icon && <span className="dd-icon">{option.icon}</span>}
       <span className="dd-option-label">{option.label}</span>
+      {option.description && <span className="dd-description">{option.description}</span>}
     </div>
   );
+}
+
+function dropdownGroupCount<T>(options: readonly DropdownOption<T>[]): number {
+  return options.filter(
+    (option, index) => option.group && option.group !== options[index - 1]?.group,
+  ).length;
 }

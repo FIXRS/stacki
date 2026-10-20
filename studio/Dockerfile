@@ -26,4 +26,5 @@ USER node
 EXPOSE 4350
 ENV ASTRO_TELEMETRY_DISABLED=1
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV PATH="/opt/studio/node_modules/.bin:${PATH}"
 CMD ["node", "dist/container.mjs"]

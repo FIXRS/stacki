@@ -3044,12 +3044,30 @@ body > .embed-editor_provenance {
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
+.comp-preview-content {
+  position: relative;
+  height: 200px;
+}
 .comp-preview iframe {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 200px;
   border: none;
   background: #f2f2f2;
+}
+.comp-preview[data-loading='true'] iframe {
+  opacity: 0;
+}
+.comp-preview-loading {
+  position: absolute;
+  inset: auto 0 0;
+  height: 200px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: 12px;
 }
 
 /* Structure tree — flat Framer-style layer rows */
@@ -3603,6 +3621,12 @@ body > .embed-editor_provenance {
   border-radius: 10px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   padding: 5px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+/* The menu owns initial focus; arrow navigation highlights individual actions. */
+.ctx-menu:focus {
+  outline: none;
 }
 .ctx-menu-item {
   display: flex;
@@ -3616,17 +3640,27 @@ body > .embed-editor_provenance {
   font-size: 12px;
   color: #ddd;
   white-space: nowrap;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  font-weight: 400;
 }
-.ctx-menu-item:hover:not(.disabled) {
+.ctx-menu-item:hover:not(:disabled),
+.ctx-menu-item:focus-visible {
   background: var(--accent);
   color: white;
 }
-.ctx-menu-item:hover:not(.disabled) .ctx-shortcut {
+.ctx-menu-item:hover:not(:disabled) .ctx-shortcut {
   color: rgba(255, 255, 255, 0.7);
 }
-.ctx-menu-item.disabled {
+.ctx-menu-item:disabled {
   color: var(--text-faint);
   cursor: default;
+}
+.ctx-submenu {
+  width: 180px;
 }
 .ctx-shortcut {
   color: var(--text-faint);
@@ -4165,36 +4199,6 @@ body > .embed-editor_provenance {
 /* Git bar                                                             */
 /* ------------------------------------------------------------------ */
 
-.git-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border: none;
-  border-radius: 99px;
-  background: var(--bg-input);
-  cursor: pointer;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-dim);
-  height: 26px;
-}
-.git-chip:hover {
-  background: var(--bg-active);
-  color: var(--text);
-}
-.git-chip .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--green);
-}
-.git-chip .dot.dirty {
-  background: var(--amber);
-}
-
-/* Why a typed branch name can't be used. Not an error box — nothing has failed
-   yet, and nothing will: the field simply won't act on Enter until it reads. */
 .git-hint {
   padding: 2px 10px 6px;
   font-size: 11px;
@@ -4203,9 +4207,6 @@ body > .embed-editor_provenance {
 }
 /* While an action runs the chip states it, so there's feedback even with the
    dropdown closed (publishing can take a while). */
-.git-chip.busy {
-  color: var(--text);
-}
 
 .mini-spinner {
   width: 11px;
@@ -4800,31 +4801,6 @@ body > .embed-editor_provenance {
   to {
     transform: rotate(360deg);
   }
-}
-
-.toast {
-  position: fixed;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #232323;
-  border: 1px solid var(--border-strong);
-  border-radius: 99px;
-  padding: 8px 18px;
-  font-size: 12px;
-  font-weight: 500;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  z-index: 300;
-  max-width: 70vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.toast.error {
-  color: var(--red);
-}
-.toast.success {
-  color: var(--green);
 }
 
 /* A refused save (plan §7): above the toast, never modal, never auto-hiding. */
@@ -5936,6 +5912,9 @@ body > .embed-editor_provenance {
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   transition: transform 0.25s cubic-bezier(0.3, 0.7, 0.3, 1);
 }
+.bool-seg.is-unset::before {
+  opacity: 0;
+}
 .bool-seg.is-second::before {
   transform: translateX(calc(100% + 2px));
 }
@@ -6375,10 +6354,8 @@ body > .embed-editor_provenance {
 .vars-view .cms-detail {
   width: 100%;
 }
-/* One column geometry for the whole sheet: every table lays its columns on the
-   same tracks, so names and values line up from the top of the group to the
-   bottom whatever each block holds. Wide sets scroll (the body's overflow-y
-   makes the x axis scrollable too) rather than squeezing the columns. */
+/* Shared column bounds keep each group's headings and values aligned. Values
+   shrink from their preferred width before wide sets need horizontal scroll. */
 .vars-body {
   padding-bottom: 40px;
   /* The sheet's own left/right inset. It lives INSIDE the rows (the first grid
@@ -6389,6 +6366,7 @@ body > .embed-editor_provenance {
   padding-right: 0;
   --vars-inset: 24px;
   --vars-name-col: 200px;
+  --vars-col-min: 180px;
   --vars-col: 260px;
   /* One group at a time scrolls sideways (each table's value stack is its own
      scroller), so the sheet itself never does — otherwise a single wide group
@@ -6610,9 +6588,8 @@ body > .embed-editor_provenance {
 .vars-menu-item.is-danger:hover > svg {
   color: #ff9b9b;
 }
-/* A row is a grid of its own — a label row in the fixed stack, a value row in
-   the scrolling one — with fixed tracks, so the two stacks line up with each
-   other and every group's columns start at the same x. */
+/* Each row owns its grid: labels stay fixed, while value tracks share the same
+   width bounds so headings and cells resize together. */
 .vars-row {
   display: grid;
   align-items: center;
@@ -6766,6 +6743,13 @@ body > .embed-editor_provenance {
 .var-cell .embed-editor_varconnect {
   flex: 1;
   min-width: 0;
+}
+/* Trackpad gestures belong to the table, even over a long token value. Hidden
+   overflow still lets the caret reveal text while editing; long values also
+   have the expanded editor for reading and editing the whole expression. */
+.vars-scroll-rows .embed-editor_varconnect.is-token > .embed-editor_varconnect-editor {
+  overflow-x: hidden;
+  overscroll-behavior-x: auto;
 }
 /* A field with a box around it, on every row, is a wall of boxes — and the
    value is the thing to read, not the input holding it. So the field is
@@ -7065,51 +7049,154 @@ body > .embed-editor_provenance {
   border-radius: 999px;
 }
 
-/* A date is a heading over the commits under it, not a row of its own — it
-   should read as a label on the group and never be mistaken for something
-   clickable. */
-.history-day {
+.history-graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 10px;
+  color: var(--text-dim);
+}
+.history-graph-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+}
+.history-graph-filter > span {
+  flex-shrink: 0;
   color: var(--text-faint);
-  padding: 10px 4px 4px;
+}
+.history-graph-toolbar select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+.history-graph-refresh {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 .history-commit {
-  border-radius: 6px;
+  display: grid;
+  position: relative;
+  border-radius: 4px;
+}
+.history-commit.open {
+  background: var(--bg-hover);
 }
 .history-commit.previewing {
   background: var(--accent-soft);
 }
+.history-graph-lane {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.history-graph-drawing {
+  flex-shrink: 0;
+}
+.history-graph-extension {
+  position: absolute;
+}
+.history-graph-lane path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5px;
+}
+.history-graph-node {
+  fill: var(--bg);
+  stroke: currentColor;
+  stroke-width: 2px;
+}
+.history-head-dot {
+  fill: var(--text);
+}
+.history-graph-color-0 {
+  color: #6aa9f0;
+}
+.history-graph-color-1 {
+  color: #c49af5;
+}
+.history-graph-color-2 {
+  color: #68c8a0;
+}
+.history-graph-color-3 {
+  color: #e5b86a;
+}
+.history-graph-color-4 {
+  color: #e58ba7;
+}
+.history-graph-color-5 {
+  color: #69c9d5;
+}
 .history-commit-head {
+  grid-column: 2;
   display: flex;
   align-items: flex-start;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px 6px 6px;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   text-align: left;
 }
 .history-commit-head:hover {
   background: var(--bg-hover);
 }
-/* The dot is the timeline: one per commit, in a column, so the eye has a line
-   to run down rather than a list of paragraphs. */
-.history-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-faint);
-  flex-shrink: 0;
-  margin-top: 5px;
+.history-commit-head:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
-.history-commit.previewing .history-dot {
-  background: var(--accent);
+.history-row-hash {
+  color: var(--text-faint);
+  font-family: monospace;
+  font-size: 9px;
+}
+.history-subject-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.history-refs {
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+  min-height: 14px;
+  max-width: 60%;
+  flex-shrink: 0;
+}
+.history-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font-size: 9px;
+  line-height: 14px;
+  flex-shrink: 0;
+}
+.history-ref.current {
+  color: var(--accent);
 }
 .history-commit-main {
   display: flex;
@@ -7120,6 +7207,7 @@ body > .embed-editor_provenance {
 }
 .history-subject {
   font-size: 12px;
+  line-height: 17px;
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
@@ -7128,6 +7216,7 @@ body > .embed-editor_provenance {
 }
 .history-meta {
   font-size: 10.5px;
+  line-height: 13px;
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7135,7 +7224,8 @@ body > .embed-editor_provenance {
 }
 
 .history-commit-body {
-  padding: 2px 8px 10px 23px;
+  grid-column: 2;
+  padding: 2px 8px 12px 6px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -7143,6 +7233,90 @@ body > .embed-editor_provenance {
 .history-files {
   display: flex;
   flex-direction: column;
+}
+.history-file-summary {
+  display: flex;
+  gap: 6px;
+  font: 12px var(--mono, ui-monospace, monospace);
+}
+.history-count-added {
+  color: var(--green);
+}
+.history-count-deleted {
+  color: var(--red);
+}
+.history-count-updated {
+  color: var(--accent);
+}
+.history-view-files-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+}
+.history-view-files {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  font-size: 11px;
+}
+.history-files-dialog {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: min(620px, calc(100vh - 48px));
+  padding: 0;
+  margin: auto;
+  color: var(--text);
+}
+.popup-surface.history-files-dialog {
+  display: flex;
+  flex-direction: column;
+}
+.history-files-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+.history-files-dialog .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.history-files-dialog h2 {
+  font-size: 13px;
+}
+.history-files-commit {
+  margin: 0;
+  padding: 8px 16px 12px;
+  color: var(--text-faint);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.history-files-dialog .history-files {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border);
+}
+.history-files-dialog .history-file {
+  padding: 8px 4px;
+  flex-shrink: 0;
+}
+.history-files-dialog .history-file-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.history-file-path {
+  color: var(--text-faint);
+  font-size: 10px;
 }
 .history-file {
   display: flex;
@@ -7155,10 +7329,6 @@ body > .embed-editor_provenance {
 }
 .history-file:hover {
   background: var(--bg-hover);
-}
-.history-file.muted {
-  color: var(--text-faint);
-  font-style: italic;
 }
 .history-file-label {
   flex: 1;
@@ -7204,19 +7374,24 @@ body > .embed-editor_provenance {
 
 .history-commit-actions {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
 }
-.history-commit-actions button {
+.history-commit-actions .history-preview-action {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 100%;
-  padding: 5px 8px;
-  font-size: 11.5px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.history-commit-actions .more-menu-button {
+  opacity: 1;
 }
 .history-hash {
+  margin-left: auto;
   font-size: 10px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -7248,6 +7423,178 @@ body > .embed-editor_provenance {
   line-height: 1.5;
   color: var(--red);
   padding: 4px;
+}
+
+.history-branches {
+  border-top: none;
+  padding-bottom: 8px;
+}
+.history-branches-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px;
+}
+.history-branches-heading h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.history-branches-heading > span,
+.history-branches > p {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.history-branch-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+  padding-right: 3px;
+}
+.history-branch-row.active {
+  background: var(--accent-soft);
+}
+.history-branch-switch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 1;
+  min-width: 0;
+  gap: 7px;
+  padding: 7px 5px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 11px;
+}
+.history-branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-branch-current {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 9px;
+}
+.history-branch-row.active .history-branch-switch:disabled {
+  opacity: 1;
+  color: var(--text);
+}
+.history-branch-row .row-action {
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.history-branch-row .row-action:disabled {
+  opacity: 0.2;
+}
+.history-file-open {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+}
+.history-file-open > svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+.history-files-dialog.with-diff {
+  width: 960px;
+  height: min(720px, calc(100vh - 48px));
+  max-height: min(720px, calc(100vh - 48px));
+}
+.history-diff {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+}
+.history-diff-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.history-diff-toolbar button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  font-size: 11px;
+}
+.history-diff-path {
+  flex: 1;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.history-diff-comparison {
+  padding: 0 12px 10px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.history-diff-error {
+  padding: 12px;
+  font-size: 12px;
+}
+.history-diff-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--border);
+  user-select: text;
+}
+.history-diff-lines {
+  width: max-content;
+  min-width: 100%;
+  font: 12px / 20px var(--mono, ui-monospace, monospace);
+  tab-size: 2;
+}
+.history-diff-line {
+  display: grid;
+  grid-template-columns: 44px 44px 22px 1fr;
+  min-height: 20px;
+  white-space: pre;
+}
+.history-diff-heading {
+  grid-column: 1 / -1;
+  padding: 0 12px;
+  color: var(--text-faint);
+}
+.history-diff-line.hunk {
+  background: var(--accent-soft);
+}
+.history-diff-line.added {
+  background: rgba(48, 193, 88, 0.12);
+}
+.history-diff-line.deleted {
+  background: rgba(255, 69, 58, 0.12);
+}
+.history-diff-number {
+  padding-right: 10px;
+  text-align: right;
+  color: var(--text-faint);
+  user-select: none;
+}
+.history-diff-sign {
+  user-select: none;
+}
+.history-diff-line.added .history-diff-sign {
+  color: var(--green);
+}
+.history-diff-line.deleted .history-diff-sign {
+  color: var(--red);
+}
+.history-diff-code {
+  padding-right: 16px;
 }
 
 /* Branch rows keep their actions visible. Hover-revealed icons meant that
@@ -8116,4 +8463,128 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .panel-header .asset-select-link:hover:not(:disabled) {
   background: transparent;
   opacity: 1;
+}
+
+/* Git actions share the panel's scroll area instead of a title-bar popover. */
+.git-panel-controls {
+  min-width: 0;
+  padding-bottom: 8px;
+}
+.git-panel-controls h3 {
+  margin: 0;
+  padding: 8px 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.git-panel-controls .history-branches-heading h3 {
+  padding: 0;
+}
+.git-panel-controls .divider {
+  height: 1px;
+  margin: 10px 0 2px;
+  background: var(--border);
+}
+.git-panel-controls .dropdown-row {
+  padding: 4px;
+}
+.git-panel-controls input:not([type='checkbox']) {
+  min-width: 0;
+  width: 100%;
+  padding: 7px 8px;
+  font-size: 11px;
+}
+.git-panel-controls button {
+  font-size: 11px;
+}
+.git-create-branch input {
+  flex: 1;
+}
+.git-create-branch button {
+  padding: 5px 9px;
+}
+.git-panel-controls .git-pick {
+  width: 100%;
+}
+.git-initialize {
+  width: 100%;
+  margin: 8px 0;
+}
+
+.git-selection-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.git-selection-controls .git-pick-toggle {
+  flex: 1;
+  min-width: 0;
+}
+.git-selection-controls > .ghost {
+  flex-shrink: 0;
+  padding: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.git-commit-files-dialog {
+  width: 600px;
+  max-width: calc(100vw - 32px);
+  max-height: min(700px, calc(100vh - 48px));
+  padding: 0;
+  margin: auto;
+  color: var(--text);
+}
+.popup-surface.git-commit-files-dialog {
+  display: flex;
+  flex-direction: column;
+}
+.git-commit-files-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+.git-commit-files-dialog .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.git-commit-files-dialog h2 {
+  font-size: 13px;
+}
+.git-commit-files-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.git-commit-files-content .file-browser {
+  min-height: 0;
+}
+.git-commit-files-content .fb-list {
+  max-height: min(440px, calc(100vh - 240px));
+  overflow-y: auto;
+}
+.git-commit-files-dialog .modal-footer {
+  flex-shrink: 0;
+}
+
+/* Keep the main action prominent while file selection stays within the same row. */
+.git-commit-action-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+.git-commit-action-row > .primary {
+  flex: 1;
+  min-width: 0;
+}
+.git-commit-action-row > .git-pick-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  flex: none;
 }

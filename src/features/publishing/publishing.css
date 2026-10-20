@@ -1,0 +1,322 @@
+.stacki-publish-control {
+  position: relative;
+}
+.stacki-publish-split {
+  display: flex;
+  gap: 0;
+}
+.stacki-publish-split > button {
+  height: 24px;
+  padding-block: 0;
+  line-height: 1;
+}
+.stacki-publish-split > button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.stacki-publish-split > .stacki-publish-arrow {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 65%, black);
+  width: 20px;
+  min-width: 20px;
+  padding-inline: 0;
+}
+.stacki-publish-arrow > svg {
+  /* Lower the top-heavy triangle so its visual weight sits at the button's center. */
+  transform: translateY(0.5px);
+}
+.stacki-publish-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  min-width: 240px;
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  background: var(--panel, #242424);
+  box-shadow: 0 8px 24px #0004;
+}
+.stacki-publish-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+.stacki-publish-menu button > svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.stacki-publish-menu hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border, #444);
+}
+.modal.publish-settings {
+  position: relative;
+  width: min(440px, calc(100vw - 32px));
+  /* Reserve the form before metadata arrives; long content scrolls inside this frame. */
+  height: min(460px, 90dvh);
+  max-height: min(720px, 90dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.publish-settings .modal-header {
+  padding: 20px 20px 0;
+  font-size: 14px;
+}
+.publish-settings .publish-fields {
+  flex: 1;
+  align-content: start;
+  border: 0;
+  margin: 0;
+  padding: 20px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 18px;
+}
+.publish-settings .publish-fields label,
+.publish-settings .publish-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.publish-settings input,
+.publish-settings .dd-trigger {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  margin: 0;
+}
+.publish-settings .publish-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.publish-settings .publish-refresh {
+  padding: 0;
+  min-height: 0;
+  width: auto;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.publish-settings .publish-refresh:hover {
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+}
+.publish-settings .publish-fields p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.publish-settings .publish-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.publish-settings summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.publish-settings .publish-advanced-fields {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+}
+.publish-settings .publish-connection-help summary {
+  font-size: 11px;
+}
+.publish-settings .publish-connection-help p {
+  padding-top: 8px;
+}
+.publish-settings .modal-footer {
+  flex-shrink: 0;
+  padding: 12px 20px;
+}
+.desktop-publish-status {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 90;
+  width: 300px;
+  padding: 12px;
+  border: 1px solid var(--border, #444);
+  background: var(--panel, #242424);
+  border-radius: 8px;
+  white-space: normal;
+}
+
+.publish-settings .publish-connections {
+  display: grid;
+  gap: 16px;
+}
+
+.publish-settings .publish-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 14px;
+}
+.publish-settings .dd-trigger {
+  padding: 6px 10px;
+  gap: 8px;
+  height: 34px;
+}
+.publish-settings [aria-busy='true'] .dd-trigger {
+  position: relative;
+}
+.publish-settings [aria-busy='true'] .dd-trigger > * {
+  visibility: hidden;
+}
+.publish-settings [aria-busy='true'] .dd-trigger::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 56%;
+  height: 12px;
+  transform: translateY(-50%);
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    color-mix(in srgb, var(--text-dim) 45%, var(--border)) 50%,
+    var(--border) 75%
+  );
+  background-size: 200% 100%;
+  animation: publish-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes publish-skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .publish-settings [aria-busy='true'] .dd-trigger::after {
+    animation: none;
+  }
+}
+.publish-settings .dd-icon,
+.publish-dropdown .dd-icon {
+  width: 20px;
+  height: 20px;
+}
+.publish-dropdown .dd-option {
+  gap: 8px;
+  padding-inline: 8px;
+}
+.publish-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text);
+  font-size: 11px;
+}
+.publish-avatar img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.publish-provider-icon {
+  color: var(--text);
+}
+
+.publish-avatar img[data-state='loading'] {
+  opacity: 0;
+}
+
+.publish-dropdown .dd-check {
+  order: 1;
+  margin-left: auto;
+}
+
+.publish-field-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.publish-new-repository {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.publish-settings-loading {
+  position: absolute;
+  top: 22px;
+  right: 20px;
+  visibility: hidden;
+  animation: none;
+}
+.publish-settings:has([aria-busy='true']) > .publish-settings-loading {
+  visibility: visible;
+  animation: spin 0.7s linear infinite;
+}
+
+.publish-settings .publish-label-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+}
+.publish-settings .publish-refresh-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 20px;
+  margin: -3px 0;
+}
+
+.publish-dropdown .dd-search {
+  margin: 8px 8px 4px;
+  width: calc(100% - 16px);
+}
+
+.publish-dropdown .dd-group-label {
+  padding: 8px 8px 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+}
+.publish-dropdown .dd-group-label:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.publish-dropdown .dd-description {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.publish-dropdown .dd-description + .dd-check {
+  margin-left: 0;
+}

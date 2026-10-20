@@ -40,6 +40,7 @@ test('component properties lifecycle and controls', async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', {
     pretendToBeVisual: true,
   });
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   for (const key of [
     'window',
     'document',

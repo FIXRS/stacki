@@ -1,7 +1,7 @@
 import { access, copyFile, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { record, string } from '../src/shared/validation';
+import { record, string } from '../src/shared/primitiveValidation';
 
 // A project release contains this generated tree. In the Stacki repository it
 // is rebuilt from the canonical editor before every check, build and release.

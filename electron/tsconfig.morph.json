@@ -16,7 +16,7 @@
     "verbatimModuleSyntax": false,
 
     "outDir": "../dist/electron",
-    "rootDir": ".",
+    "rootDir": "..",
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true

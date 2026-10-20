@@ -1,5 +1,4 @@
 import PalettePanel from '../../../vendor/stacki/src/features/palette/PalettePanel';
-import './components.css';
 import { request, type Project } from '../project/projectClient';
 import { parsePreviewTarget } from '../preview/usePreview';
 import { useComponentCounts } from './useComponentCounts';

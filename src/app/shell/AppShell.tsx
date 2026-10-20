@@ -1,3 +1,7 @@
+import { desktopElementActions } from './desktopElementActions';
+import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanvasBar';
+import { DesktopPublishButton } from './DesktopPublishButton';
+import { ToastStack } from '../../features/notifications/ToastStack';
 // The app's frame: the welcome view, the shell and its overlays, the title
 // bar with its URL group and actions, and the left panel with each of its
 // tabs (App.tsx).
@@ -7,11 +11,9 @@ import WelcomeScreen from '../../features/welcome/WelcomeScreen';
 import PagesPanel from '../../features/pages/PagesPanel';
 import PalettePanel from '../../features/palette/PalettePanel';
 import StructurePanel from '../../features/structure/StructurePanel';
-import { checkoutGitBranch } from '../../features/git/gitChipBridge';
 import GitChip from '../../features/git/GitChip';
 import HistoryPanel from '../../features/history/HistoryPanel';
 import { ConfirmHost, confirmDialog } from '../../ui/ConfirmDialog';
-import { mergeBranchAction, deleteBranchAction } from '../../features/git/gitActions';
 import LeftRail from '../LeftRail';
 import PageSwitcher from '../../features/pages/PageSwitcher';
 import DynamicPicker from '../DynamicPicker';
@@ -27,11 +29,7 @@ import {
   ElementComponentIcon,
   TerminalIcon,
 } from '../../ui/Icons';
-import type {
-  HistoryCommit,
-  HistoryCommitFile,
-  HistoryFile,
-} from '../../features/history/historyBridge';
+import type { HistoryCommit, HistoryCommitFile } from '../../features/history/historyBridge';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
@@ -44,7 +42,6 @@ import {
   CodeWindowHost,
   ConflictNotice,
   BusyOverlay,
-  Toast,
 } from './AppPanes';
 import type { AppView, ShellView } from '../App';
 
@@ -59,7 +56,7 @@ export function WelcomeView({ app }: { readonly app: AppView }) {
       </div>
       <WelcomeScreen onOpen={app.onOpenProject} showToast={app.showToast} />
       {app.busy && <BusyOverlay message={app.busy} />}
-      {app.toast && <Toast toast={app.toast} />}
+      <ToastStack notices={app.notices} dismiss={app.dismissToast} />
       <ConfirmHost />
     </div>
   );
@@ -75,6 +72,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
         </div>
       )}
       <TitleBar app={app} />
+      <DefaultsCanvasBar canvas={app.defaultsCanvas} />
       <div className="main">
         <LeftRail
           active={app.leftTab}
@@ -128,7 +126,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       )}
       <ConflictNotice app={app} />
       {app.busy && <BusyOverlay message={app.busy} />}
-      {app.toast && <Toast toast={app.toast} />}
+      <ToastStack notices={app.notices} dismiss={app.dismissToast} />
       <ConfirmHost />
     </>
   );
@@ -141,7 +139,7 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
         className="app-title project-back"
         title="Back to all projects"
         aria-label="Back to all projects"
-        disabled={app.propertySave.phase === 'saving'}
+        disabled={app.propertySave.phase === 'saving' || app.defaultsCanvas.state.kind !== 'idle'}
         onClick={() => {
           void app.leaveProject().catch((error: unknown) => {
             app.showToast(`Could not return to projects: ${cleanError(error)}`, 'error');
@@ -152,7 +150,18 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
         <span>{app.project.name}</span>
       </button>
       <span className="spacer" />
-      {app.editStack.length > 1 ? (
+      {app.defaultsCanvas.state.kind !== 'idle' ? (
+        <button
+          className="page-switch-btn comp-back"
+          title="Close defaults"
+          aria-label="Close defaults"
+          disabled={app.defaultsCanvas.state.kind === 'saving'}
+          onClick={() => void app.defaultsCanvas.run('done')}
+        >
+          <ChevronLeftIcon size={13} />
+          <span>Close defaults</span>
+        </button>
+      ) : app.editStack.length > 1 ? (
         <button
           className="page-switch-btn comp-back"
           title="Back (Esc)"
@@ -176,11 +185,10 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
       <UrlGroup app={app} />
       <span className="spacer" />
       <TitleActions app={app} />
-      <GitChip
-        project={app.project}
-        showToast={app.showToast}
+      <DesktopPublishButton
+        projectPath={app.project.path}
         flushSave={app.flushSave}
-        onWorktreeChanged={app.reloadFromDisk}
+        refresh={app.refreshGit}
       />
     </div>
   );
@@ -400,18 +408,11 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
       revealTick={app.revealTick}
       onSelect={selectNavigatorNode}
       onHoverNode={app.setHoverNodeId}
-      onOpenComponent={(name, id) => {
-        void app.openComponent(name, app.pathFor(id)).catch(app.reportFailure);
-      }}
+      {...desktopElementActions(app)}
       onOpenCode={app.openCodeWindowById}
       onChangeLayout={app.onChangeLayout}
       onDropComponent={app.onDropComponent}
       onMoveNode={app.moveNode}
-      onRemoveNode={app.removeNode}
-      onCopyNode={app.copyNode}
-      onDuplicateNode={app.duplicateNode}
-      onPasteNode={app.onPasteNode}
-      hasClipboard={() => !!app.nodeClipboardRef.current}
       onCodeChange={app.onCodeChange}
       onOpenCodePanel={() => app.setLeftTab('code')}
       devLog={app.devLog}
@@ -526,8 +527,8 @@ export function HistoryTab({ app }: { readonly app: ShellView }) {
     <HistoryPanel
       project={app.project}
       gitInfo={app.gitInfo}
+      controls={<HistoryGitControls app={app} />}
       previewRef={app.previewRef}
-      onOpenFile={(file) => openHistoryFile(app, file)}
       onPreviewCommit={app.onPreviewCommit}
       onExitPreview={app.onExitCommitPreview}
       onRestoreFile={(commit, file) => {
@@ -538,30 +539,28 @@ export function HistoryTab({ app }: { readonly app: ShellView }) {
         // Restoring reports its own failures.
         void restoreHistoryProject(app, commit);
       }}
-      onSwitchBranch={(branch) => {
-        // Switching reports its own failures.
-        void switchHistoryBranch(app, branch);
-      }}
-      onMergeBranch={(branch) => {
-        void mergeHistoryBranch(app, branch).catch(app.reportFailure);
-      }}
-      onDeleteBranch={(branch) => {
-        void deleteHistoryBranch(app, branch).catch(app.reportFailure);
-      }}
     />
   );
 }
 
-// A page opens in the editor. Anything else has no canvas to show it on, so the
-// row says where it is and does nothing — better than opening an empty editor
-// onto a stylesheet.
-export function openHistoryFile(app: ShellView, file: HistoryFile): void {
-  const page = app.scan.pages.find((candidate) => candidate.path.endsWith(file.path));
-  if (page) {
-    app.onSelectPage(page);
-  } else {
-    app.showToast(`${file.path} isn’t a page — nothing to open on the canvas.`, 'info');
-  }
+function HistoryGitControls({ app }: { readonly app: ShellView }) {
+  return (
+    <GitChip
+      key={app.project.path}
+      project={app.project}
+      info={app.gitInfo}
+      refresh={app.refreshGit}
+      busy={app.busy}
+      showToast={app.showToast}
+      flushSave={app.flushSave}
+      onWorktreeChanged={async () => {
+        if (app.previewRef) {
+          await app.exitCommitPreview();
+        }
+        await app.reloadFromDisk();
+      }}
+    />
+  );
 }
 
 export async function restoreHistoryFile(
@@ -628,82 +627,4 @@ export async function restoreHistoryProject(app: ShellView, commit: HistoryCommi
   } finally {
     app.setBusy(undefined);
   }
-}
-
-// Same as the chip: try it, and only say something if git could not carry the work
-// across. Parking is what the chip's dialog offers after that, not a thing done
-// pre-emptively.
-export async function switchHistoryBranch(app: ShellView, branch: string): Promise<void> {
-  try {
-    const result = await checkoutGitBranch(app.project.path, branch, { kind: 'switch' });
-    if (!result.ok) {
-      throw new Error(result.error);
-    }
-    const checkout = result.value;
-    if (!checkout.ok) {
-      app.showToast(
-        `${app.repository?.branch ?? 'This branch'} and ${branch} ` +
-          `have different versions of ${checkout.files[0] || 'a file'} ` +
-          'you have unsaved work in — ' +
-          'switch from the branch button to decide what to do with it.',
-        'error',
-      );
-      return;
-    }
-    await app.refreshGit();
-    await app.reloadFromDisk();
-    app.showToast(
-      checkout.restored ? `Picked your changes back up on ${branch}` : `Switched to ${branch}`,
-      'success',
-    );
-  } catch (error: unknown) {
-    app.showToast(cleanError(error), 'error');
-  }
-}
-
-export function mergeHistoryBranch(app: ShellView, branch: string): Promise<void> {
-  const { repository } = app;
-  return mergeBranchAction({
-    projectPath: app.project.path,
-    branch: branch,
-    into: repository?.branch ?? '',
-    ...(repository?.trunk === undefined ? {} : { trunk: repository.trunk }),
-    run: (work) => {
-      void work()
-        .then(async () => {
-          await app.refreshGit();
-          await app.reloadFromDisk();
-        })
-        .catch((error: unknown) => app.showToast(cleanError(error), 'error'));
-    },
-    showToast: app.showToast,
-    // Both branches changed the same files. The chooser lives
-    // on the branch chip, so this points there rather than
-    // being a second, different answer to the same question.
-    onConflict: (conflict) =>
-      app.showToast(
-        `${conflict.from} and ${conflict.branch} both changed ` +
-          `${
-            conflict.files.length === 1
-              ? (conflict.files[0]?.path ?? 'a file')
-              : `${conflict.files.length} files`
-          }. ` +
-          'Open the branch button to choose which versions to keep.',
-        'info',
-      ),
-  });
-}
-
-export function deleteHistoryBranch(app: ShellView, branch: string): Promise<void> {
-  return deleteBranchAction({
-    projectPath: app.project.path,
-    branch: branch,
-    parked: (app.repository?.parked || []).includes(branch),
-    run: (work) => {
-      void work()
-        .then(app.refreshGit)
-        .catch((error: unknown) => app.showToast(cleanError(error), 'error'));
-    },
-    showToast: app.showToast,
-  });
 }

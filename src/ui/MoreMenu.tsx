@@ -2,9 +2,8 @@ import React, { useRef, useState } from 'react';
 import type { CSSProperties, RefObject } from 'react';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
-import { createPortal } from 'react-dom';
+import Popup from './Popup';
 import { MoreIcon } from './Icons';
-import useDismiss from './useDismiss';
 import { popupBox } from './Dropdown';
 
 // The `⋯` that opens a short menu of things to do to the thing beside it.
@@ -37,7 +36,6 @@ export default function MoreMenu({
   const [box, setBox] = useState<CSSProperties | undefined>(undefined);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  useDismiss(menuRef, { active: open }, () => setOpen(false));
 
   assert((items?.length ?? 0) <= LIMITS.scanEntriesMax, 'MoreMenu: item limit exceeded');
   assert(width > 0, 'MoreMenu: positive menu width');
@@ -83,8 +81,10 @@ export default function MoreMenu({
       >
         <MoreIcon size={13} />
       </button>
-      {open && box ? (
+      {box ? (
         <MenuSurface
+          open={open}
+          anchor={buttonRef.current ?? undefined}
           rows={rows}
           box={box}
           width={width}
@@ -97,39 +97,48 @@ export default function MoreMenu({
 }
 
 interface MenuSurfaceProps {
+  readonly open: boolean;
+  readonly anchor: HTMLElement | undefined;
   readonly rows: readonly MenuItem[];
   readonly box: CSSProperties;
   readonly width: number;
   readonly menuRef: RefObject<HTMLDivElement>;
   readonly close: () => void;
 }
-function MenuSurface({ rows, box, width, menuRef, close }: MenuSurfaceProps) {
-  return createPortal(
-    <div
+function MenuSurface({ rows, box, width, menuRef, close, open, anchor }: MenuSurfaceProps) {
+  return (
+    <Popup
+      mode="popover"
+      open={open}
+      anchor={anchor}
+      onClose={close}
       ref={menuRef}
       className="more-menu"
       role="menu"
       style={{ position: 'fixed', ...box, minWidth: width }}
       onMouseDown={(event) => event.stopPropagation()}
     >
-      {rows.map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          role="menuitem"
-          className={`more-menu-item ${item.danger ? 'is-danger' : ''}`}
-          disabled={item.disabled}
-          onClick={(event) => {
-            event.stopPropagation();
-            close();
-            item.onSelect?.();
-          }}
-        >
-          {item.icon}
-          {item.label}
-        </button>
-      ))}
-    </div>,
-    document.body,
+      {({ finish }) =>
+        rows.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            role="menuitem"
+            className={`more-menu-item ${item.danger ? 'is-danger' : ''}`}
+            disabled={item.disabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              finish(() => {
+                close();
+                item.onSelect?.();
+              });
+            }}
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))
+      }
+    </Popup>
   );
 }

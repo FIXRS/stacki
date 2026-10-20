@@ -26,9 +26,10 @@ import type { SharedDocument } from '../collaboration/useDocument';
 import type { ParserNode } from '../source/source';
 import type { usePreview } from './usePreview';
 interface Props {
+  readonly focusPath?: string | undefined;
   readonly dimensions: ReturnType<typeof usePreviewDimensions>;
   readonly file: string;
-  /** The project's folder name: with the site's address, the column guide's settings key. */
+  /** The folder name identifies this project's legacy local guide settings for migration. */
   readonly projectName: string;
   readonly collaborators: readonly Peer[];
   readonly collection: boolean;
@@ -45,8 +46,7 @@ interface Props {
 export function PreviewCanvas(props: Props) {
   const sizing = usePreviewSizing(props.device, props.dimensions, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
-  // The browser keeps storage per site address; the folder name keeps two
-  // projects served from the same local address apart.
+  // This key locates legacy preferences; subsequent reads and saves use .stacki/guide.json.
   const columnGuide = useColumnGuide({
     projectKey: `${location.origin} ${props.projectName}`,
     metrics: props.preview.guide,
@@ -115,8 +115,8 @@ function PreviewSurface({
         (props.device === 'canvas' ? (
           <CanvasView
             key={loading.attempt}
-            url={props.preview.url}
-            refreshKey={props.preview.url}
+            url={props.preview.renderURL ?? props.preview.url}
+            refreshKey={loading.attempt}
             onPreviewLoaded={loading.loaded}
           />
         ) : (
@@ -221,7 +221,7 @@ function CanvasOverlays({
         selOcc={props.preview.outlines.selected?.occurrence}
         hoverPath={props.preview.outlines.hovered?.id}
         hoverOcc={props.preview.outlines.hovered?.occurrence}
-        focusPath={undefined}
+        focusPath={props.focusPath}
         focusWhole={false}
         overlayInfo={(path) => outlineInfo(props.nodes, path)}
       />

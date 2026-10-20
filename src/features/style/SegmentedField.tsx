@@ -1,8 +1,9 @@
+import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import { useHighlight } from './model/computedStyle';
 import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
-import { ChevronIcon, MenuItem, useMenuDismiss } from './components/MenuParts';
+import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
 
@@ -108,7 +109,6 @@ export default function SegmentedField({
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  useMenuDismiss({ open, rootRef, setOpen });
   const { inputRef, requestFocus } = useCustomFocus({ customMode, busy });
 
   const pick = (next: string) => {
@@ -192,7 +192,13 @@ function SegmentMenu({
       </button>
 
       {open ? (
-        <div className="embed-editor_display-menu" role="menu">
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={onToggle}
+          className="embed-editor_display-menu"
+          role="menu"
+        >
           {customMode ? (
             options.map((option) => (
               <MenuItem
@@ -205,7 +211,7 @@ function SegmentMenu({
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
           )}
-        </div>
+        </Popup>
       ) : undefined}
     </>
   );

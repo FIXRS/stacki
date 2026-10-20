@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 // The size section's segmented bar: icon segments with a pill, tooltips, an
 // overflow menu and a custom value (SizeSection.tsx).
 
@@ -5,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
-import { ChevronIcon, MenuItem, tooltipArrowStyle, useMenuDismiss } from './components/MenuParts';
+import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts';
 import { useCustomFocus, useDebouncedLive } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
 import { useFollowingDraft } from './SizeKit';
@@ -111,7 +112,6 @@ export function SegmentBar(props: SegmentBarProps) {
   const customMode = !config.segments.some((segment) => segment.value === current);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  useMenuDismiss({ open, rootRef, setOpen });
   const { inputRef, requestFocus } = useCustomFocus({ customMode, busy });
   const tip = useSegmentTooltip({ rootRef, tooltips: config.tooltips });
 
@@ -267,7 +267,13 @@ export function SegmentMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <div className="embed-editor_display-menu" role="menu">
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={onToggle}
+          className="embed-editor_display-menu"
+          role="menu"
+        >
           {customMode ? (
             segments.map((segment) => (
               <MenuItem
@@ -280,7 +286,7 @@ export function SegmentMenu({
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
           )}
-        </div>
+        </Popup>
       ) : undefined}
     </>
   );

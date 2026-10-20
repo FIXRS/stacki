@@ -173,6 +173,55 @@ const commit = async (directory, subject) => {
     );
   }
 
+  // Branch graphs must include work that has not reached the current branch.
+  {
+    const directory = await repo('branches');
+    cleanup.push(directory);
+    write(directory, 'base.txt', 'base\n');
+    const base = await commit(directory, 'base');
+    await sh(directory, 'checkout', '-qb', 'feature');
+    write(directory, 'feature.txt', 'feature\n');
+    const feature = await commit(directory, 'unmerged feature');
+    await sh(directory, 'checkout', '-q', 'main');
+    write(directory, 'main.txt', 'main\n');
+    const main = await commit(directory, 'main work');
+    write(directory, 'main.txt', 'parked\n');
+    await sh(directory, 'stash', 'push', '-m', 'parked changes');
+    const stash = await sh(directory, 'rev-parse', 'refs/stash');
+    await sh(directory, 'config', 'log.decorate', 'full');
+
+    const all = await history.log(git, { projectPath: directory, withFiles: true });
+    check(
+      'all branches include an unmerged tip',
+      all.commits.some((item) => item.hash === feature),
+    );
+    check(
+      'all branches include the checkout',
+      all.commits.some((item) => item.hash === main),
+    );
+    check('stash commits are excluded', !all.commits.some((item) => item.hash === stash));
+    check(
+      'decoration format is independent of user Git configuration',
+      all.commits.find((item) => item.hash === feature).refs.includes('feature'),
+    );
+    const baseIndex = all.commits.findIndex((item) => item.hash === base);
+    check('parents follow both children', baseIndex === 2);
+    const current = await history.log(git, { projectPath: directory, ref: 'HEAD' });
+    check('current branch excludes unmerged work', current.commits.length === 2);
+    check('current branch starts at HEAD', current.commits[0].hash === main);
+    const page = await history.log(git, { projectPath: directory, limit: 1, skip: 1 });
+    check('graph pages preserve topological order', page.commits[0].hash === all.commits[1].hash);
+
+    await sh(directory, 'checkout', '--detach', feature);
+    write(directory, 'detached.txt', 'detached\n');
+    const detached = await commit(directory, 'detached work');
+    const detachedLog = await history.log(git, { projectPath: directory });
+    check(
+      'a detached checkout is included alongside branches',
+      detachedLog.commits.some((item) => item.hash === detached),
+    );
+  }
+
   // --- Merge commits: the case that fails silently -------------------------
   {
     const directory = await repo('merge');

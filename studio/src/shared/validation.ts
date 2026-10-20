@@ -1,18 +1,10 @@
-export const MAX_SOURCE = 1_000_000;
-export function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Expected object');
-  }
-  return value as Record<string, unknown>;
-}
-export function string(value: unknown, maximum = MAX_SOURCE): string {
-  if (typeof value !== 'string' || value.length > maximum) {
-    throw new Error('Invalid string');
-  }
-  return value;
-}
+import { string } from './primitiveValidation';
+export { MAX_SOURCE, record, string } from './primitiveValidation';
 export function filePath(value: unknown): string {
   const path = string(value, 500);
+  if (isDefaultsCanvas(path) || Object.values(METADATA_FILES).some((file) => file === path)) {
+    return path;
+  }
   if (
     !/^(src|public)\/[\w./ -]+$/.test(path) ||
     path.split('/').some((part) => part === '..' || part.startsWith('.'))
@@ -51,3 +43,5 @@ export function textChange(before: string, after: string) {
     insert: after.slice(start, after.length - end),
   };
 }
+import { METADATA_FILES } from '../../vendor/stacki/shared/properties/projectMetadata';
+import { isDefaultsCanvas } from '../../vendor/stacki/shared/properties/defaultsCanvas';

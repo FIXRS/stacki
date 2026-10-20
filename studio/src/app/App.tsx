@@ -1,3 +1,4 @@
+import { useAstroFileNotifications } from '../features/notifications/useAstroFileNotifications';
 import { useEditorNavigation } from '../features/project/editorNavigation';
 import { useEffect } from 'react';
 import { useProjectLoad } from '../features/project/useProjectLoad';
@@ -11,11 +12,12 @@ import { useNotifications } from '../features/notifications/useNotifications';
 export function App() {
   const view = useEditorView();
   const navigation = useEditorNavigation();
-  const { message, details, performAction, report, dismiss } = useNotifications();
+  const { notices, performAction, report, dismiss } = useNotifications();
   const { project, refresh, attempt, failure, revision } = useProjectLoad(report);
   useEffect(() => {
     document.title = project ? `Stacki - ${project.name}` : 'Stacki';
   }, [project]);
+  useAstroFileNotifications(report, refresh);
   const session = useSession(report);
   return (
     <>
@@ -39,12 +41,11 @@ export function App() {
           failure={failure}
           authenticated={!!session}
           retry={() => {
-            dismiss();
             refresh();
           }}
         />
       )}
-      <Toast message={message} details={details} performAction={performAction} dismiss={dismiss} />
+      <Toast notices={notices} performAction={performAction} dismiss={dismiss} />
     </>
   );
 }

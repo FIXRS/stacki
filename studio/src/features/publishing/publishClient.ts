@@ -1,3 +1,4 @@
+import type { PublishTarget } from '../../../vendor/stacki/shared/properties/publishConfig';
 import type { PublishState } from './publish';
 import { request } from '../project/projectClient';
 import { StudioRequestError } from '../project/responseError';
@@ -40,12 +41,16 @@ export function parsePublishState(value: unknown): PublishState {
     return { kind, id, message: string(data['message'], 20_000) };
   }
   if (kind === 'committed') {
+    if (data['github'] !== undefined && data['github'] !== 'skipped') {
+      throw new Error('Invalid GitHub publish status');
+    }
     return {
       kind,
       id,
       sha: string(data['sha'], 64),
       url: string(data['url'], 1000),
       ...(deployment ? { deployment } : {}),
+      ...(data['github'] === 'skipped' ? { github: 'skipped' as const } : {}),
       ...(data['cleanupWarning'] ? { cleanupWarning: string(data['cleanupWarning'], 2000) } : {}),
     };
   }
@@ -53,13 +58,14 @@ export function parsePublishState(value: unknown): PublishState {
 }
 export async function publishProject(
   signal: AbortSignal,
+  target: PublishTarget = 'all',
   progress?: (state: PublishState) => void,
 ): Promise<PublishState> {
   const finish = beginOperation();
   try {
     // Never automatically retry a POST: it may already have started a commit.
     const state = parsePublishState(
-      await request('/studio/api/publish', {
+      await request(`/studio/api/publish?target=${target}`, {
         method: 'POST',
         signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
       }),

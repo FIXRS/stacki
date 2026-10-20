@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
 import type { Result } from '../../../shared/core/result';
 import type {
@@ -20,11 +20,17 @@ const EMPTY_FILES: readonly VariableFile[] = [];
 
 // Files preserve the author's stylesheet boundaries; groups preserve the rules inside them.
 export default function VariablesPanel(props: VariablesPanelProps) {
+  // Project navigation starts with fresh file and default-selection state.
+  return <VariableFilesPanel key={props.project.path} {...props} />;
+}
+
+function VariableFilesPanel(props: VariablesPanelProps) {
   const { selected, onSelect, project } = props;
   const result = useVariableFiles(project.path);
   const files = result.ok ? result.value.files : EMPTY_FILES;
   const error = result.ok ? undefined : result.error;
   const [openFile, setOpenFile] = useState<string | undefined>(undefined);
+  useDefaultVariableSelection(files, selected, onSelect);
   useEffect(() => {
     if (!selected || openFile) {
       return;
@@ -86,6 +92,33 @@ export default function VariablesPanel(props: VariablesPanelProps) {
       </div>
     </div>
   );
+}
+
+function useDefaultVariableSelection(
+  files: readonly VariableFile[],
+  selected: VariableSelection | undefined,
+  onSelect: VariablesPanelProps['onSelect'],
+): void {
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (initialized.current) {
+      return;
+    }
+    if (files.length === 0) {
+      return;
+    }
+    // Default once on entry so refreshes cannot undo a deliberate back navigation.
+    initialized.current = true;
+    if (selected !== undefined) {
+      return;
+    }
+    if (files.length === 1) {
+      const file = files[0];
+      if (file?.groups.length) {
+        onSelect({ file: file.rel, index: 0 });
+      }
+    }
+  }, [files, selected, onSelect]);
 }
 
 function useVariableFiles(projectPath: string) {

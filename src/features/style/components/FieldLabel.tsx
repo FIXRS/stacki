@@ -1,3 +1,4 @@
+import Popup from '../../../ui/Popup';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode, RefObject } from 'react';
 import { useInheritedSource } from '../model/computedStyle';
@@ -75,7 +76,6 @@ function ClearableFieldLabel(props: Props) {
   // While active (the only time the menu can be open), the tooltip's anchor IS the
   // label's root: the wrapper span below.
   const rootRef = hoverTip.ref;
-  useDismissOnOutside({ open, rootRef, setOpen });
   const dropUp = useMenuPlacement({ open, rootRef, menuRef });
 
   // If the field is cleared elsewhere, drop back to the plain caption.
@@ -191,47 +191,7 @@ function DimCaption({
 }
 
 // Close on outside click / Escape while open.
-function useDismissOnOutside({
-  open,
-  rootRef,
-  setOpen,
-}: {
-  readonly open: boolean;
-  readonly rootRef: RefObject<HTMLElement>;
-  readonly setOpen: (open: boolean) => void;
-}): void {
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onDown = (event: globalThis.MouseEvent) => {
-      if (event.target instanceof Node && rootRef.current?.contains(event.target)) {
-        return;
-      }
-      setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, rootRef, setOpen]);
-}
 
-// Once open, keep the menu inside the panel. The menu is right-anchored (right:0) to
-// the label, so its natural box is [labelRight - width, labelRight]; a left-column
-// label pushes the left edge off-screen. Derive the shift from the LABEL (stable) +
-// the menu's own width — NOT the just-mounted menu's rect, which measured wrong on the
-// first open (correcting only on a later re-measure). Applied imperatively so it's in
-// place before the first paint (no visible jump). Bounds = the app's scroll container
-// (the panel can be a sub-region of a much wider Designer window). Returns whether
-// the menu opens upward.
 function useMenuPlacement({
   open,
   rootRef,
@@ -290,7 +250,10 @@ function FieldLabelMenu({
   onClose: () => void;
 }) {
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={onClose}
       id={id}
       ref={menuRef}
       className={['u-field-label-menu', dropUp ? 'is-up' : ''].filter(Boolean).join(' ')}
@@ -318,6 +281,6 @@ function FieldLabelMenu({
           {typeof menuNote === 'function' ? menuNote(onClose) : menuNote}
         </div>
       ) : undefined}
-    </div>
+    </Popup>
   );
 }

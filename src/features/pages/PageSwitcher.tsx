@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { comparePageNames, isCollectionRoute } from './pageOrder';
@@ -64,34 +65,7 @@ function usePageSwitcher<T extends Page>({ pages, currentPage, onSelect }: PageS
     setQuery('');
     setHighlight(0);
     const timer = setTimeout(() => inputRef.current?.focus(), 0);
-    const onDown = (event: MouseEvent): void => {
-      const popup = popupRef.current;
-      const button = buttonRef.current;
-      const NodeType = popup?.ownerDocument.defaultView?.Node;
-      if (!popup || !button || !NodeType || !(event.target instanceof NodeType)) {
-        return;
-      }
-      if (!popup.contains(event.target)) {
-        if (!button.contains(event.target)) {
-          setOpen(false);
-        }
-      }
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => clearTimeout(timer);
   }, [open]);
   const pick = (page: T | undefined): void => {
     setOpen(false);
@@ -165,7 +139,14 @@ function PageMenu<T extends Page>({
     }
   };
   return (
-    <div ref={state.popupRef} className="page-menu" style={state.position ?? undefined}>
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={() => state.setOpen(false)}
+      ref={state.popupRef}
+      className="page-menu"
+      style={state.position ?? undefined}
+    >
       <input
         ref={state.inputRef}
         className="page-menu-search"
@@ -192,7 +173,7 @@ function PageMenu<T extends Page>({
         ))}
         {state.filtered.length === 0 && <div className="page-menu-empty">No matching pages</div>}
       </div>
-    </div>
+    </Popup>
   );
 }
 

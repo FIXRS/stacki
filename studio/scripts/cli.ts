@@ -1,3 +1,4 @@
+import { checkProject } from './checkProject';
 import { projectScripts } from './projectScripts';
 import { record } from '../src/shared/validation';
 import { updateStudio, checkStudioUpdate } from './update';
@@ -8,7 +9,9 @@ import { startDraft } from './dev';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const command = process.argv[2];
-if (command === 'update') {
+if (command === 'check-project') {
+  await checkProject(path.resolve(process.argv[3] ?? '.'));
+} else if (command === 'update') {
   await updateStudio(process.argv.slice(3));
 } else if (command === 'check-update') {
   await checkStudioUpdate();
@@ -62,6 +65,6 @@ if (command === 'update') {
   );
 } else {
   console.log(
-    'Astro Studio\n\n  astro-studio dev [project-directory]\n  astro-studio init-cloudflare [new-directory]\n\nastro-studio check-update\n  astro-studio update <project> <exact-version-or-release.json> --replace-customizations\n\nPORT overrides 4350. STUDIO_WORKSPACE selects the draft workspace.',
+    'Astro Studio\n\n  astro-studio dev [project-directory]\n  astro-studio init-cloudflare [new-directory]\n\nastro-studio check-project [project-directory]\n  astro-studio check-update\n  astro-studio update <project> <exact-version-or-release.json> --replace-customizations\n\nPORT overrides 4350. STUDIO_WORKSPACE selects the draft workspace.',
   );
 }

@@ -31,7 +31,15 @@ export function exposeBridge(): void {
 function projectBridge() {
   return {
     platform: process.platform,
+    createDefaultsCanvas: invoke('project:createDefaultsCanvas'),
+    removeDefaultsCanvas: invoke('project:removeDefaultsCanvas'),
 
+    publishStart: invoke('publish:start'),
+    publishState: invoke('publish:state'),
+    publishingRepositories: invoke('publish:repository'),
+    discoverPublishing: invoke('publish:discover'),
+    projectMetadata: invoke('project:metadata'),
+    writeProjectMetadata: invoke('project:writeMetadata'),
     studioStatus: invoke('studio:status'),
     installStudio: invoke('studio:install'),
 
@@ -191,6 +199,7 @@ function pageBridge() {
     checkPreview: invoke('preview:check'),
     gitLog: invoke('git:log'),
     gitCommitFiles: invoke('git:commitFiles'),
+    gitCommitDiff: invoke('git:commitDiff'),
     gitAllFiles: invoke('git:allFiles'),
     gitStatus: invoke('git:status'),
     gitFileAt: invoke('git:fileAt'),

@@ -53,6 +53,7 @@ const check = (what, condition, detail) => {
     <div id="colour"><button id="hex">HEX</button></div>
     <div id="elsewhere"><button id="other">x</button></div>
   </body>`);
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   const $ = (id) => dom.window.document.getElementById(id);
 
   const offPicker = registerPopupLayer($('picker'), $('dot'));
@@ -91,7 +92,7 @@ const check = (what, condition, detail) => {
   };
   for (const [file, what] of Object.entries(files)) {
     const source = fs.readFileSync(repoPath(file), 'utf8');
-    check(`${what} asks before closing on a press`, /inOwnedPopup\(/.test(source), file);
+    check(`${what} asks before closing on a press`, /<Popup/.test(source), file);
   }
   const pickers = {
     'src/features/style/components/ColorPicker.tsx': 'the colour picker',
@@ -99,7 +100,7 @@ const check = (what, condition, detail) => {
   };
   for (const [file, what] of Object.entries(pickers)) {
     const source = fs.readFileSync(repoPath(file), 'utf8');
-    check(`${what} says where it was opened from`, /registerPopupLayer\(/.test(source), file);
+    check(`${what} says where it was opened from`, /<Popup[\s\S]*anchor=/.test(source), file);
   }
 
   // --- and the popover it all happens in stays open --------------------------

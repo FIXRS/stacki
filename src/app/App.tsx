@@ -1,3 +1,4 @@
+import { useDesktopDefaultsCanvas } from './state/useDesktopDefaultsCanvas';
 import { useCallback } from 'react';
 import Settings from './settings/Settings';
 import { type DynamicEntry, type ProjectIdentity } from './appTypes';
@@ -9,7 +10,13 @@ import { WelcomeView, AppShell } from './shell/AppShell';
 export default function App() {
   const scope = useAppScope();
   const actions = useUiActions(scope);
-  const app: AppView = { ...scope, ...actions };
+  const defaultsCanvas = useDesktopDefaultsCanvas(scope);
+  const app: AppView = {
+    ...scope,
+    ...actions,
+    defaultsCanvas,
+    setSelectedId: defaultsSelection(scope, defaultsCanvas),
+  };
   return (
     <>
       <AppContent app={app} />
@@ -35,7 +42,10 @@ function AppContent({ app }: { readonly app: AppView }) {
 }
 
 type AppScope = ReturnType<typeof useAppScope>;
-export type AppView = AppScope & ReturnType<typeof useUiActions>;
+export type AppView = AppScope &
+  ReturnType<typeof useUiActions> & {
+    readonly defaultsCanvas: ReturnType<typeof useDesktopDefaultsCanvas>;
+  };
 type CanvasRoute = ReturnType<typeof canvasRouteOf>;
 export type ShellView = AppView &
   CanvasRoute & {
@@ -105,7 +115,10 @@ function canvasRouteOf(app: AppView) {
   const pageEntry = app.editStack[0] || app.currentPage;
   const patternRoute = pageEntry?.route;
   const component = app.currentPage?.kind === 'component' ? app.currentPage : undefined;
-  const focusPath = component?.focusPath ?? undefined;
+  const focusPath =
+    app.defaultsCanvas.state.kind === 'idle'
+      ? component?.focusPath
+      : app.defaultsCanvas.state.session.targetPath;
   const focusOcc = component ? (component.focusOcc ?? 0) : 0;
   // The focus routes clicks either way; this says whether it also draws.
   const focusWhole = !!component?.focusWhole;
@@ -204,5 +217,22 @@ function entryNavOf(app: AppView, dynamicEntry: DynamicEntry | undefined) {
     count,
     label: dynamicEntry?.label || '',
     onStep: (step: number) => app.setDynamicIndex((i) => (i + step + count) % count),
+  };
+}
+
+function defaultsSelection(
+  scope: AppScope,
+  canvas: AppView['defaultsCanvas'],
+): AppScope['setSelectedId'] {
+  return (input) => {
+    const id = typeof input === 'function' ? input(scope.selectedId) : input;
+    if (canvas.isOpen && canvas.state.kind !== 'idle') {
+      const path = scope.pathFor(id);
+      const root = canvas.state.session.targetPath;
+      if (path !== root && !path?.startsWith(root + '.')) {
+        return;
+      }
+    }
+    scope.setSelectedId(id);
   };
 }

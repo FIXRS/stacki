@@ -105,6 +105,7 @@ const STYLESHEET = `/* =========================================================
 
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
   global.document = dom.window.document;
   global.navigator = dom.window.navigator;
@@ -784,7 +785,7 @@ const STYLESHEET = `/* =========================================================
     });
     check('picking one leaves the file alone for now', fs.readFileSync(file, 'utf8') === before);
     await act(async () => {
-      dom.window.dispatchEvent(
+      dom.window.document.dispatchEvent(
         new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
       );
       await settle(80);
@@ -827,7 +828,7 @@ const STYLESHEET = `/* =========================================================
       );
     }
     await act(async () => {
-      dom.window.dispatchEvent(
+      dom.window.document.dispatchEvent(
         new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
       );
       await settle(60);
@@ -857,7 +858,7 @@ const STYLESHEET = `/* =========================================================
       dom.window.document.querySelector('.embed-editor_ease-modal')?.textContent.slice(0, 120),
     );
     await act(async () => {
-      dom.window.dispatchEvent(
+      dom.window.document.dispatchEvent(
         new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
       );
       await settle(60);

@@ -78,9 +78,9 @@ function progressView(state: PublishState | undefined, failed: boolean) {
   const hint = error
     ? 'Check the error details before trying again.'
     : live
-      ? 'Verified on your live website.'
+      ? 'Hosting deployment completed.'
       : pending
-        ? 'Deployment is still unconfirmed. Check Cloudflare before publishing again.'
+        ? 'Deployment is still unconfirmed. Check your hosting provider before publishing again.'
         : committed
           ? 'Live deployment is not connected in this Studio.'
           : 'Progress follows completed stages. Some stages take longer.';

@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { createPortal } from 'react-dom';
+import Popup from '../../../ui/Popup';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import useScrub from '../components/useScrub';
 import { handleArrowStep } from '../model/numberStep';
@@ -283,6 +283,7 @@ export function PropertyCombobox(props: PropertyComboboxProps) {
       />
       {open && matches.length ? (
         <PropertySuggestions
+          onClose={() => setOpen(false)}
           listRef={listRef}
           position={position}
           matches={matches}
@@ -297,6 +298,7 @@ export function PropertyCombobox(props: PropertyComboboxProps) {
 
 // The suggestion list, portaled to <body>.
 export function PropertySuggestions({
+  onClose,
   listRef,
   position,
   matches,
@@ -304,6 +306,7 @@ export function PropertySuggestions({
   setActive,
   choose,
 }: {
+  readonly onClose: () => void;
   listRef: React.RefObject<HTMLDivElement>;
   position: CSSProperties;
   matches: readonly string[];
@@ -311,13 +314,15 @@ export function PropertySuggestions({
   setActive: (index: number) => void;
   choose: (prop: string) => void;
 }) {
-  return createPortal(
-    <div
+  return (
+    <Popup
+      mode="popover"
+      onClose={onClose}
       ref={listRef}
       className="embed-editor_propsuggest"
       style={position}
       role="listbox"
-      aria-label="CSS properties"
+      label="CSS properties"
     >
       {matches.map((prop, i) => (
         <button
@@ -336,8 +341,7 @@ export function PropertySuggestions({
           {prop}
         </button>
       ))}
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 

@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import { useRef, useState } from 'react';
 import {
   SegBar,
@@ -11,7 +12,6 @@ import {
 import { parseFlexShorthand } from './model/webflow';
 import { splitTopLevelSpaces } from './model/background';
 import SegmentPill from './components/SegmentPill';
-import { useMenuDismiss } from './components/MenuParts';
 import { displayOf } from './model/styleDisplay';
 
 // The Flex Child section — the controls that apply to the selected element when it
@@ -411,7 +411,6 @@ function useFlexSizing({ read, setProp, clearProp }: Props) {
   const [singleCustom, setSingleCustom] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  useMenuDismiss({ open: menuOpen, rootRef, setOpen: setMenuOpen });
 
   const showSingle = singleCustom || (!isPreset && !isTriple);
   const showPanel = !showSingle && panelOpen;
@@ -532,7 +531,13 @@ function FlexSizingMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <div className="embed-editor_display-menu" role="menu">
+        <Popup
+          mode="popover"
+          portal={false}
+          onClose={onToggle}
+          className="embed-editor_display-menu"
+          role="menu"
+        >
           {showSingle ? (
             FLEX_SEGS.map((seg) => (
               <MenuItem key={seg.value} label={seg.label} onClick={() => pickPreset(seg.value)} />
@@ -540,7 +545,7 @@ function FlexSizingMenu({
           ) : (
             <MenuItem label="Custom" onClick={enterSingleCustom} />
           )}
-        </div>
+        </Popup>
       ) : undefined}
     </>
   );

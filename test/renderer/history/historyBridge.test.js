@@ -66,9 +66,11 @@ test('history parsers reject incomplete, invalid, duplicate, and oversized data'
 });
 
 test('history readers parse replies and preserve expected transport failures', async () => {
+  const requests = [];
   global.window = {
     avb: {
       gitLog: async (payload) => {
+        requests.push(payload);
         assert.equal(payload.withFiles, true);
         return { commits: [commit], atEnd: true };
       },
@@ -79,6 +81,10 @@ test('history readers parse replies and preserve expected transport failures', a
     },
   };
   assert.equal((await history.readHistoryLog('/project', 0)).ok, true);
+  assert.equal(requests[0].ref, undefined);
+  assert.equal((await history.readHistoryLog('/project', 30, 'HEAD')).ok, true);
+  assert.equal(requests[1].ref, 'HEAD');
+  assert.equal(requests[1].skip, 30);
   assert.deepEqual(await history.readHistoryFiles('/project'), {
     ok: false,
     error: 'repository unavailable',

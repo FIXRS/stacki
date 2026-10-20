@@ -103,6 +103,9 @@ export function createPageSaver(deps: PageSaverDeps): PageSaver {
 }
 
 export function scanContainsFile(scan: ScanResult | undefined, path: string): boolean {
+  if (/\/\.stacki\/canvas\/[a-f0-9-]{36}\.astro$/.test(path.replaceAll('\\', '/'))) {
+    return true;
+  }
   return (['pages', 'components', 'layouts'] as const).some((kind) =>
     scan?.[kind]?.some((entry) => entry.path === path),
   );

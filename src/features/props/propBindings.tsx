@@ -1,3 +1,4 @@
+import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import type { BindInputHandle } from './BindInput';
@@ -18,7 +19,7 @@ import BindInput from './BindInput';
 import DataPicker from './DataPicker';
 import ExprInput from '../../ui/ExprInput';
 import { type FieldPosition, type Chip, type BindFieldProps } from './bindingTypes';
-import { referencedName, symbolTarget, VarSourceEditor, eventElement } from './BindingEditors';
+import { referencedName, symbolTarget, VarSourceEditor } from './BindingEditors';
 export {
   referencedName,
   SourceEditButton,
@@ -75,7 +76,6 @@ function ClientBindField({ value, onChange, placeholder }: BindFieldProps) {
 function EditableBindField(props: BindFieldProps) {
   const state = useBindFieldModel(props);
   const actions = useBindFieldActions(state);
-  useBindFieldDismiss(state);
   useBindFieldAPI(state);
   return <BindFieldView state={{ ...state, ...actions }} />;
 }
@@ -237,49 +237,7 @@ function useBindFieldActions(state: BindingState) {
 
   return { open, editName, editTarget, editChip, pick };
 }
-function useBindFieldDismiss({ menu, setMenu, wrapRef }: BindingState) {
-  useEffect(() => {
-    if (!menu) {
-      return undefined;
-    }
-    const close = (event: MouseEvent) => {
-      if (eventElement(event.target)?.closest('.bind-menu, .bind-pick')) {
-        return;
-      }
-      // `.cm-chip` for the same reason as the rest: a chip opens this picker on
-      // mousedown, and this listener is live before that mousedown has finished
-      // reaching document — so a chip missing from the list opens the picker and
-      // closes it in the one press. Only a chip in THIS field, though: pressing
-      // one somewhere else is how you move on, and leaving both open left two
-      // pickers over the panel, one of them about a value nobody was looking at.
-      const chip = eventElement(event.target)?.closest('.expr-chip, .cm-chip');
-      if (chip && wrapRef.current?.contains(chip)) {
-        return;
-      }
-      setMenu(undefined);
-    };
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && setMenu(undefined);
-    const onScroll = (event: Event) => {
-      // The list scrolls inside itself; the panel behind it moves the field
-      // out from under it, so that one closes it.
-      if (eventElement(event.target)?.closest('.bind-menu')) {
-        return;
-      }
-      setMenu(undefined);
-    };
-    const onResize = () => setMenu(undefined);
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onResize);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onResize);
-    };
-  }, [menu, setMenu, wrapRef]);
-}
+
 function useBindFieldAPI({ apiRef, showInput, inputRef }: BindingState) {
   // The field's handle inserts through here, so one picker serves both the
   // chip already in the field and the next one. Null while the code editor is
@@ -310,7 +268,10 @@ function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
   } = state;
   return (
     menu && (
-      <div
+      <Popup
+        mode="popover"
+        portal={false}
+        onClose={() => setMenu(undefined)}
         className="dd-popup bind-menu"
         style={{ left: menu.left, top: menu.top, width: menu.width }}
       >
@@ -333,7 +294,7 @@ function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
             setRaw(true);
           }}
         />
-      </div>
+      </Popup>
     )
   );
 }

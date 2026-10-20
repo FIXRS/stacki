@@ -181,9 +181,11 @@ export async function deleteBranchAction({
     title: `Delete the branch “${branch}”?`,
     body: `Anything saved only on ${branch} goes with it.${waiting}`,
     confirmLabel: 'Delete branch',
+    cancelLabel: 'Cancel',
     danger: true,
   });
-  if (!yes) {
+  // Deletion requires the affirmative button, never a dismissal or checkbox answer.
+  if (yes !== true) {
     return;
   }
   run(async () => {
@@ -197,7 +199,7 @@ export async function deleteBranchAction({
         confirmLabel: 'Delete anyway',
         danger: true,
       });
-      if (!anyway) {
+      if (anyway !== true) {
         return;
       }
       await gitDeleteBranch({ projectPath, branch, force: true });

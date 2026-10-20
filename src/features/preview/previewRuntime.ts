@@ -1,3 +1,4 @@
+import { frameContextPoint, type ContextPoint } from './contextPosition';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import type { OverlayInfo, RectMap, SpacingMap } from './PreviewOverlays';
@@ -35,6 +36,13 @@ export interface PreviewRuntimeProps {
   readonly refreshKey?: string | number;
   readonly device: PreviewDevice;
   readonly onSelectPath?: (path: string | undefined, info: { readonly outside: boolean }) => void;
+  readonly onContextPath?: (
+    path: string | undefined,
+    point: ContextPoint & {
+      readonly outside: boolean;
+      readonly occurrence: number;
+    },
+  ) => void;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly onSelectedClasses?: (classes: readonly string[]) => void;
   readonly onRenderedPaths?: (paths: readonly string[]) => void;
@@ -277,7 +285,7 @@ function useMessageListener(
       }
       const message = parsePreviewMessage(event.data);
       if (message) {
-        applyMessage(message, refs, settersRef.current);
+        applyMessage(message, refs, settersRef.current, iframeRef.current);
       }
     };
     window.addEventListener('message', receive);
@@ -285,7 +293,12 @@ function useMessageListener(
   }, [iframeRef, refs]);
 }
 
-function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: RuntimeSetters): void {
+function applyMessage(
+  message: PreviewMessage,
+  refs: RuntimeRefs,
+  setters: RuntimeSetters,
+  frame: HTMLIFrameElement,
+): void {
   switch (message.kind) {
     case 'rects':
       setters.setRects(message.rects);
@@ -312,6 +325,9 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       } else {
         setters.setCanvasHover(undefined);
       }
+      break;
+    case 'context-node':
+      applyContextMenu(message, refs, setters, frame);
       break;
     case 'click-node':
       gateEvent(
@@ -343,6 +359,27 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       );
       break;
   }
+}
+
+function applyContextMenu(
+  message: Extract<PreviewMessage, { readonly kind: 'context-node' }>,
+  refs: RuntimeRefs,
+  setters: RuntimeSetters,
+  frame: HTMLIFrameElement,
+): void {
+  const point = frameContextPoint(frame, message);
+  // Context actions always require current source, even outside a focused component.
+  gateEvent(message.token, refs, { kind: 'open' }, () => {
+    const { clickPending: clickPendingRef, lastClick: lastClickRef } = refs;
+    clickPendingRef.current = true;
+    lastClickRef.current = { path: message.path };
+    setters.setSelectedOccurrence(message.occurrence);
+    refs.props.current.onContextPath?.(message.path, {
+      ...point,
+      outside: message.outside,
+      occurrence: message.occurrence,
+    });
+  });
 }
 
 function announceRender(

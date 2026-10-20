@@ -1,3 +1,7 @@
+import {
+  parseAstroFileChanges,
+  type AstroFileChange,
+} from '../../shared/properties/astroFileChanges';
 import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
 import type { Data } from '../../shared/core/boundary';
 import type {
@@ -38,6 +42,7 @@ export interface PageChangeEvent {
 }
 
 export interface FileChangeEvent {
+  readonly astroChanges: readonly AstroFileChange[];
   readonly files: readonly string[];
 }
 
@@ -422,7 +427,12 @@ export function onPageMaybeChanged(callback: (event: PageChangeEvent) => void): 
 
 export function onFilesChanged(callback: (event: FileChangeEvent) => void): () => void {
   return window.avb.onFsChanged((input) => {
-    callback({ files: list(pathText)(record(input)['files']) });
+    const value = record(input);
+    callback({
+      files: list(pathText)(value['files']),
+      astroChanges:
+        value['astroChanges'] === undefined ? [] : parseAstroFileChanges(value['astroChanges']),
+    });
   });
 }
 

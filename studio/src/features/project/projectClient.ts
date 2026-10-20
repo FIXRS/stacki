@@ -105,9 +105,16 @@ function parseRenderTag(input: unknown): Pick<Component, 'renderTag'> {
   };
 }
 export function routeFor(file: string) {
+  if (isDefaultsCanvas(file)) {
+    return defaultsCanvasRoute(file);
+  }
   const relative = file
     .replace(/^src\/pages\//, '')
     .replace(/\.(astro|md|mdx)$/, '')
     .replace(/(^|\/)index$/, '');
   return '/' + relative;
 }
+import {
+  isDefaultsCanvas,
+  defaultsCanvasRoute,
+} from '../../../vendor/stacki/shared/properties/defaultsCanvas';

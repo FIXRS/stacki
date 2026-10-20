@@ -1,3 +1,5 @@
+import { PublishControl } from '../../../vendor/stacki/src/features/publishing/PublishControl';
+import type { PublishTarget } from '../../../vendor/stacki/shared/properties/publishConfig';
 import { useEffect, useRef, useState } from 'react';
 import { publishProject } from './publishClient';
 import type { PublishState } from './publish';
@@ -15,7 +17,7 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
   const active = useRef<AbortController>();
   usePublishBroadcast(shared, setState, setVisible, setFailed);
   useEffect(() => () => active.current?.abort(), []);
-  async function publish() {
+  async function publish(target: PublishTarget) {
     if (active.current && !active.current.signal.aborted) {
       return;
     }
@@ -26,13 +28,13 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
     setFailed(false);
     setVisible(true);
     try {
-      const state = await publishProject(controller.signal, setState);
+      const state = await publishProject(controller.signal, target, setState);
       report(
         state.kind === 'committed'
           ? (state.deployment === 'live'
               ? 'Published. Your changes are live.'
               : state.deployment === 'pending'
-                ? 'Saved to GitHub. Live deployment is still unconfirmed; check Cloudflare.'
+                ? 'Saved to GitHub. Live deployment is still unconfirmed; check your hosting provider.'
                 : 'Saved to GitHub. Automatic live deployment is not connected.') +
               (state.cleanupWarning ? ' ' + state.cleanupWarning : '')
           : state.kind === 'failed'
@@ -53,9 +55,7 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
   }
   return (
     <div className="publish-control">
-      <button className="primary" disabled={busy} onClick={() => void publish()}>
-        {busy ? 'Publishing…' : 'Publish'}
-      </button>
+      <PublishControl projectPath="" busy={busy} publish={(target) => void publish(target)} />
       {visible && (
         <PublishProgress
           state={state}

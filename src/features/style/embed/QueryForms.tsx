@@ -1,3 +1,4 @@
+import Popup from '../../../ui/Popup';
 // Media and container queries — picking one, adding and editing it — and the
 // style card's CSS code view (EmbedEditor.tsx).
 
@@ -73,6 +74,7 @@ export function QueryCombo(props: QueryComboProps) {
       />
       {showList ? (
         <QuerySuggestionList
+          onClose={() => setOpen(false)}
           listRef={listRef}
           filtered={filtered}
           highlight={highlight}
@@ -108,12 +110,14 @@ export function useFocusOnMount({
 }
 
 export function QuerySuggestionList({
+  onClose,
   listRef,
   filtered,
   highlight,
   setHighlight,
   submit,
 }: {
+  readonly onClose: () => void;
   listRef: React.RefObject<HTMLDivElement>;
   filtered: QuerySuggestion[];
   highlight: number;
@@ -121,11 +125,14 @@ export function QuerySuggestionList({
   submit: (text: string) => void;
 }) {
   return (
-    <div
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={onClose}
       className="embed-editor_selector-suggest"
       ref={listRef}
       role="listbox"
-      aria-label="Query suggestions"
+      label="Query suggestions"
     >
       {filtered.map((suggestion, i) => (
         <button
@@ -142,7 +149,7 @@ export function QuerySuggestionList({
           <span className="embed-editor_suggest-kind">{suggestion.kind}</span>
         </button>
       ))}
-    </div>
+    </Popup>
   );
 }
 

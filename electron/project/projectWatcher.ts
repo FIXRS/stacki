@@ -1,3 +1,4 @@
+import { createAstroFileMonitor } from './astroFileMonitor';
 import fs from 'fs';
 import path from 'path';
 
@@ -28,8 +29,12 @@ function watchProject({
 }: WatchProjectDeps): { close: () => void } {
   const watchers: fs.FSWatcher[] = [];
   const notifier = createNotifier(send);
+  const astroFiles = createAstroFileMonitor(projectPath, (astroChanges) => {
+    send('fs:changed', { files: [], astroChanges });
+  });
   const close = (): void => {
     notifier.close();
+    astroFiles.close();
     for (const watcher of watchers) {
       watcher.close();
     }
@@ -38,9 +43,12 @@ function watchProject({
   try {
     const sourceDirectory = path.join(projectPath, 'src');
     watchers.push(
-      watch(sourceDirectory, { recursive: true }, (_event, filename) => {
+      watch(sourceDirectory, { recursive: true }, (event, filename) => {
         if (notifier.isClosed()) {
           return;
+        }
+        if (event === 'rename' || !filename || /\.astro$/i.test(filename.toString())) {
+          astroFiles.request();
         }
         if (!filename) {
           // macOS can coalesce a directory change without naming the file.
@@ -72,19 +80,9 @@ function watchProject({
       }),
     );
 
-    const publicDirectory = path.join(projectPath, 'public');
-    if (fs.existsSync(publicDirectory)) {
-      watchers.push(
-        watch(publicDirectory, { recursive: true }, (_event, filename) => {
-          if (notifier.isClosed() || (filename && String(filename).startsWith('.'))) {
-            return;
-          }
-          if (filename && isSelfWrite(path.join(publicDirectory, filename.toString()))) {
-            return;
-          }
-          notifier.debounce('assets:changed');
-        }),
-      );
+    const publicWatcher = watchPublicFiles({ projectPath, isSelfWrite, watch }, notifier);
+    if (publicWatcher !== undefined) {
+      watchers.push(publicWatcher);
     }
   } catch (error: unknown) {
     close();
@@ -154,3 +152,26 @@ function createNotifier(send: WatchProjectDeps['send']): Notifier {
 }
 
 export { watchProject };
+
+function watchPublicFiles(
+  {
+    projectPath,
+    isSelfWrite,
+    watch = fs.watch,
+  }: Pick<WatchProjectDeps, 'projectPath' | 'isSelfWrite' | 'watch'>,
+  notifier: Notifier,
+): fs.FSWatcher | undefined {
+  const publicDirectory = path.join(projectPath, 'public');
+  if (!fs.existsSync(publicDirectory)) {
+    return undefined;
+  }
+  return watch(publicDirectory, { recursive: true }, (_event, filename) => {
+    if (notifier.isClosed() || (filename && String(filename).startsWith('.'))) {
+      return;
+    }
+    if (filename && isSelfWrite(path.join(publicDirectory, filename.toString()))) {
+      return;
+    }
+    notifier.debounce('assets:changed');
+  });
+}

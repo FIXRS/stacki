@@ -137,10 +137,10 @@ export function tagInlineRun(
 
 // A node still saying exactly what the file said keeps the lines it was
 // written on — the same bargain `headSource` strikes for a loop head. A text
-// node with no `source` never had lines to lose, so its value is the original.
+// node without source still needs escaping before its new line breaks are preserved.
 function textAsWritten(node: ValueNode): string | undefined {
   if (!node.source) {
-    return node.value;
+    return encodeText(node.value);
   }
   return textValue(node.source) === node.value ? node.source : undefined;
 }

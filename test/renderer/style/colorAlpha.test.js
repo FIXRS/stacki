@@ -57,6 +57,7 @@ const SIZE = 240;
 
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
   global.document = dom.window.document;
   global.Node = dom.window.Node;

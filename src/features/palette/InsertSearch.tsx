@@ -28,12 +28,13 @@ type Tab = (typeof TABS)[number]['key'];
 // Quick-insert palette (⌘F / ⌘E): fuzzy-searches components, HTML tags, and
 // special node types; Enter or click inserts at the current selection.
 interface InsertComponent {
+  readonly path?: string;
   readonly name: string;
   readonly folder?: string;
   readonly isLayout?: boolean;
 }
 export type InsertChoice =
-  | { readonly type: 'component' | 'astroAsset'; readonly name: string }
+  | { readonly type: 'component' | 'astroAsset'; readonly name: string; readonly path?: string }
   | { readonly type: 'element'; readonly tag: string }
   | {
       readonly type: 'map' | 'cond' | 'text' | 'comment' | 'expr' | 'doctype' | 'style' | 'script';
@@ -189,6 +190,7 @@ function insertItems(
 function insertComponents(components: readonly InsertComponent[]): InsertItem[] {
   return components.map((component): InsertItem => ({
     type: 'component',
+    ...(component.path === undefined ? {} : { path: component.path }),
     name: component.name,
     label: component.name,
     sub: component.folder || 'component',

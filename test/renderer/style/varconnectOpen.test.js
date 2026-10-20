@@ -68,6 +68,7 @@ const check = (what, condition, detail) => {
     url: 'http://localhost/',
     pretendToBeVisual: true,
   });
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
   global.document = dom.window.document;
   global.navigator = dom.window.navigator;
@@ -297,22 +298,16 @@ const check = (what, condition, detail) => {
     });
     check('the big editor opened', bigOpen(host));
 
-    // Stand in for the picker's portal: same class, same place in the DOM —
-    // hanging off the body rather than inside the editor's box.
-    const picker = document.createElement('div');
-    picker.className = 'embed-editor_varpicker';
-    const row = document.createElement('button');
-    picker.appendChild(row);
-    document.body.appendChild(picker);
+    // Open the real nested picker so its ownership is registered with the popup.
     await act(async () => {
-      press(row);
+      clickIt(document.querySelector('.var-custom .embed-editor_varconnect-dot'));
     });
-    check(
-      'pressing a variable in the picker leaves the editor open',
-      bigOpen(host),
-      'the editor closed on its own picker — the pick would be thrown away',
-    );
-    picker.remove();
+    const row = document.querySelector('.embed-editor_varpicker-item');
+    check('the nested picker has a variable', !!row);
+    if (row) {
+      await act(async () => press(row));
+      check('pressing a nested variable leaves the editor open', bigOpen(host));
+    }
     await done();
   }
 

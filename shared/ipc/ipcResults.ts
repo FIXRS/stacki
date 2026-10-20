@@ -1,4 +1,9 @@
+import type { RepositoryResult } from '../ipc/publishRepository';
+import type { PublishDiscovery } from '../properties/publishDiscovery';
+import type { DesktopPublishState } from '../properties/publishState';
+import type { MetadataFile } from '../properties/projectMetadata';
 import type { ConversionResult } from './assetConversion';
+import type { CommitDiffResult } from './gitCommitDiff';
 import type { StudioStatus, StudioInstallResult } from './studioSetup';
 import type { StudioInstallProgress } from './studioProgress';
 
@@ -94,6 +99,10 @@ export type WirePageEdit =
   | { readonly ok: false; readonly error: WirePageEditError };
 
 export interface IpcResults {
+  readonly 'project:createDefaultsCanvas': { readonly file: string };
+  readonly 'project:removeDefaultsCanvas': undefined;
+  readonly 'project:metadata': Result<MetadataFile>;
+  readonly 'project:writeMetadata': Result<MetadataFile>;
   readonly 'studio:status': StudioStatus;
   readonly 'studio:install': StudioInstallResult;
   readonly 'component:properties': Result<ComponentProperties>;
@@ -418,6 +427,7 @@ export interface IpcResults {
     readonly commits: ReadonlyArray<WireCommitInfo>;
     readonly atEnd: boolean;
   };
+  readonly 'git:commitDiff': CommitDiffResult;
   readonly 'git:merge': WireMergeOutcome;
   readonly 'git:park': {
     readonly ok: true;
@@ -427,6 +437,10 @@ export interface IpcResults {
   readonly 'git:repositories': readonly string[];
   readonly 'git:clone': IpcResults['project:openDialog'];
   readonly 'git:connect': IpcResults['git:publish'];
+  readonly 'publish:start': DesktopPublishState;
+  readonly 'publish:state': DesktopPublishState;
+  readonly 'publish:repository': RepositoryResult;
+  readonly 'publish:discover': PublishDiscovery;
   readonly 'git:publish': {
     readonly ok: true;
     readonly url: undefined | string;

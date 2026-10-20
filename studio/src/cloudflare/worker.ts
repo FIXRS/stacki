@@ -34,9 +34,12 @@ export class PreviewContainer extends Container<Environment> {
   override envVars = {
     STUDIO_CONTAINER_TOKEN: this.env.CONTAINER_TOKEN,
     STUDIO_BACKEND_URL: this.env.STUDIO_ORIGIN,
+    GITHUB_REPOSITORY: this.env.GITHUB_REPOSITORY,
     STUDIO_PARENT_ORIGIN: this.env.STUDIO_ORIGIN,
     STUDIO_PREVIEW_ORIGIN: this.env.PREVIEW_ORIGIN,
     STUDIO_DEPLOYMENT_URL: this.env.SITE_DEPLOYMENT_URL ?? '',
+    CLOUDFLARE_API_TOKEN: this.env.PUBLISH_CLOUDFLARE_API_TOKEN ?? '',
+    VERCEL_TOKEN: this.env.PUBLISH_VERCEL_TOKEN ?? '',
     PORT: '4350',
   };
 }

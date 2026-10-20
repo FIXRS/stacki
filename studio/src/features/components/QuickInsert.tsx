@@ -1,3 +1,4 @@
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { useEffect, useState } from 'react';
 import InsertSearch, {
   type InsertItem,
@@ -33,6 +34,7 @@ export function QuickInsert({
     <InsertSearch
       components={project.components.map((component) => ({
         name: component.name,
+        path: component.file,
         folder: component.file
           .replace(/^src\/(components|layouts)\//, '')
           .split('/')
@@ -40,7 +42,7 @@ export function QuickInsert({
           .join('/'),
         isLayout: component.file.startsWith('src/layouts/'),
       }))}
-      allowSlot={!document.file.startsWith('src/pages/')}
+      allowSlot={!isCanvasPage(document.file)}
       onInsert={(item) => {
         setOpen(false);
         void insertChoice(model, project, item).catch(report);
@@ -72,7 +74,9 @@ async function insertChoice(
   const target = dropTarget(parsed.model.nodes, location);
   let action: TreeAction;
   if (item.type === 'component') {
-    const component = project.components.find((component) => component.name === item.name);
+    const component =
+      project.components.find((component) => component.file === item.path) ??
+      project.components.find((component) => component.name === item.name);
     if (!component) {
       return;
     }
