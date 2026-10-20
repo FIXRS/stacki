@@ -33,7 +33,6 @@ const LUMOS_WIDE = {
   marginPx: 48,
   gutterPx: 32,
   widthMaxPx: 1440,
-  columns: { count: 12, variable: '--_column-count' },
   variablesPx: {},
   variableCounts: {},
 };
@@ -43,7 +42,6 @@ const NOTHING_DECLARED = {
   marginPx: undefined,
   gutterPx: undefined,
   widthMaxPx: undefined,
-  columns: undefined,
   variablesPx: {},
   variableCounts: {},
 };
@@ -167,11 +165,7 @@ test('automatic columns follow site-columns as it changes and show the binding',
 test('automatic columns fall back to 12 for missing or unusable site-columns', () => {
   assert.equal(guideColumnText(GUIDE_DEFAULTS.columns), '12');
   for (const count of [undefined, 0, 3, 25, 4.5, Number.NaN, Infinity]) {
-    const metrics = {
-      ...LUMOS_WIDE,
-      columns: { count: 8, variable: '--site-column-count' },
-      variableCounts: { '--site-columns': count },
-    };
+    const metrics = { ...LUMOS_WIDE, variableCounts: { '--site-columns': count } };
     const guide = resolveGuide(metrics, GUIDE_DEFAULTS);
     assert.equal(guide.columnCount, 12);
     assert.equal(guide.columnSource, 'stacki');
@@ -194,11 +188,7 @@ test('a connected column variable follows the page and updates with its value', 
 test('unusable column variables fall back to 12, never another project variable', () => {
   const settings = { ...GUIDE_DEFAULTS, columns: variable('--cols') };
   for (const count of [undefined, 0, 3, 25, 4.5, Number.NaN, Infinity]) {
-    const metrics = {
-      ...LUMOS_WIDE,
-      columns: { count: 8, variable: '--site-columns' },
-      variableCounts: { '--cols': count },
-    };
+    const metrics = { ...LUMOS_WIDE, variableCounts: { '--cols': count, '--site-columns': 8 } };
     assert.equal(resolveGuide(metrics, settings).columnCount, 12);
     assert.equal(resolveGuide(metrics, settings).columnSource, 'stacki');
   }

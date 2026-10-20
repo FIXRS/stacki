@@ -24,13 +24,6 @@ const GUIDE_VARIABLES = {
   gutter: '--site-gutter',
   widthMax: '--max-width-main',
 } as const;
-// A site-wide column count on :root, tried in this order. The app's parser
-// accepts exactly these names (guideModel.ts).
-const SITE_COLUMN_COUNT_VARIABLES = ['--site-column-count', '--site-columns'] as const;
-// Lumos keeps its column count on its auto grid rather than on :root, so a
-// page with no site-wide count is asked through an element of that class.
-const GRID_CLASS = 'grid-autofit';
-const GRID_COLUMN_COUNT_VARIABLE = '--_column-count';
 const COLUMN_COUNT_PATTERN = /^\d{1,3}$/;
 // The names the app may ask about: one per menu value (margin, gutter, maximum
 // width and column count), each a custom property name within the app's own
@@ -143,7 +136,6 @@ function measureGuide(body: HTMLElement) {
     counts: Object.fromEntries(
       menuVariables.map((name) => [name, countOf(rootStyle.getPropertyValue(name))]),
     ),
-    ...columnCountOf(body, rootStyle),
   };
 }
 
@@ -161,27 +153,6 @@ function lengthOf(
   try {
     const width = probe.getBoundingClientRect().width;
     return Number.isFinite(width) ? width : undefined;
-  } finally {
-    probe.remove();
-  }
-}
-
-// The site-wide count when the page declares one, else Lumos's grid count.
-function columnCountOf(body: HTMLElement, rootStyle: CSSStyleDeclaration) {
-  for (const variable of SITE_COLUMN_COUNT_VARIABLES) {
-    const site = countOf(rootStyle.getPropertyValue(variable));
-    if (site !== undefined) {
-      return { columnCount: site, columnVariable: variable };
-    }
-  }
-  const probe = appendProbe(body, '');
-  probe.className = GRID_CLASS;
-  try {
-    const grid = countOf(getComputedStyle(probe).getPropertyValue(GRID_COLUMN_COUNT_VARIABLE));
-    if (grid !== undefined) {
-      return { columnCount: grid, columnVariable: GRID_COLUMN_COUNT_VARIABLE };
-    }
-    return { columnCount: undefined, columnVariable: undefined };
   } finally {
     probe.remove();
   }

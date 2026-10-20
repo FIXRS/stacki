@@ -39,14 +39,6 @@ export const GUIDE_COLUMN_VARIABLE_DEFAULT = '--site-columns';
 /** The numbers are the column colour, this much more opaque than the column. */
 export const GUIDE_NUMBER_OPACITY = 0.5;
 
-/** The variables a project count is read from, in the order they are tried. */
-export const GUIDE_COLUMN_VARIABLES = [
-  '--site-column-count',
-  '--site-columns',
-  '--_column-count',
-] as const;
-export type GuideColumnVariable = (typeof GUIDE_COLUMN_VARIABLES)[number];
-
 export type GuideLengthUnit = 'px' | 'rem';
 export interface GuideLength {
   readonly amount: number;
@@ -85,7 +77,6 @@ export interface GuideMetrics {
   readonly marginPx: number | undefined;
   readonly gutterPx: number | undefined;
   readonly widthMaxPx: number | undefined;
-  readonly columns: { readonly count: number; readonly variable: GuideColumnVariable } | undefined;
   /** The menu's own variables, by name; a name the page does not declare is absent. */
   readonly variablesPx: Readonly<Record<string, number | undefined>>;
   /** The same names read as column counts; absent unless a whole number. */
