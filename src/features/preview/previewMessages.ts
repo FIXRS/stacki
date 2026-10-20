@@ -12,13 +12,7 @@ import {
 } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
 import { parsePreviewRender, type PreviewRender } from '../../../shared/page/previewToken';
-import {
-  GUIDE_COLUMN_VARIABLES,
-  GUIDE_LIMITS,
-  parseGuideVariableName,
-  type GuideColumnVariable,
-  type GuideMetrics,
-} from './guideModel';
+import { GUIDE_LIMITS, parseGuideVariableName, type GuideMetrics } from './guideModel';
 
 export type PreviewMessage =
   | {
@@ -209,7 +203,6 @@ function parseGuideMetrics(value: Readonly<Record<string, unknown>>): GuideMetri
     marginPx: optional(guideLength)(value['margin']),
     gutterPx: optional(guideLength)(value['gutter']),
     widthMaxPx: optional(guideLength)(value['widthMax']),
-    columns: parseGuideColumns(value['columnCount'], value['columnVariable']),
     variablesPx: Object.fromEntries(
       guideVariableEntries(value['variables']).map(([name, px]) => [
         name,
@@ -245,29 +238,10 @@ function guideLength(input: unknown): number {
   return value;
 }
 
-// The count the page found and the variable it came from; undefined when the
-// page declares none.
-function parseGuideColumns(countInput: unknown, variableInput: unknown): GuideMetrics['columns'] {
-  if (countInput === undefined) {
-    return undefined;
-  }
-  const variable = parseGuideColumnVariable(variableInput);
-  const columnCount = declaredCount(countInput);
-  return columnCount === undefined ? undefined : { count: columnCount, variable };
-}
-
 // A whole number as the page read it. Whether the guide can use it is the
 // model's to decide, so invalid variable values remain distinguishable from counts.
 function declaredCount(input: unknown): number | undefined {
   return optional(count)(input);
-}
-
-function parseGuideColumnVariable(input: unknown): GuideColumnVariable {
-  const variable = GUIDE_COLUMN_VARIABLES.find((name) => name === input);
-  if (variable === undefined) {
-    throw new Error('Preview guide: unknown column variable');
-  }
-  return variable;
 }
 
 function parseReloadReason(input: unknown): PreviewReloadReason {

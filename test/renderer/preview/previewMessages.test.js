@@ -183,8 +183,6 @@ test('guide measurements parse, absent values stay absent, and bounds hold', () 
     margin: 48,
     gutter: 32,
     widthMax: undefined,
-    columnCount: 12,
-    columnVariable: '--_column-count',
     variables: { '--pad': 40, '--missing': undefined },
     counts: { '--cols': 10, '--pad': undefined },
   };
@@ -196,7 +194,6 @@ test('guide measurements parse, absent values stay absent, and bounds hold', () 
       marginPx: 48,
       gutterPx: 32,
       widthMaxPx: undefined,
-      columns: { count: 12, variable: '--_column-count' },
       variablesPx: { '--pad': 40, '--missing': undefined },
       variableCounts: { '--cols': 10, '--pad': undefined },
     },
@@ -205,17 +202,7 @@ test('guide measurements parse, absent values stay absent, and bounds hold', () 
   for (const count of [0, 49, 140, 999]) {
     const counts = { '--cols': count };
     assert.equal(parsePreviewMessage({ ...guide, counts }).metrics.variableCounts['--cols'], count);
-    const site = { ...guide, columnCount: count };
-    assert.equal(parsePreviewMessage(site).metrics.columns.count, count);
   }
-  for (const variable of ['--site-column-count', '--site-columns', '--_column-count']) {
-    const site = { ...guide, columnCount: 10, columnVariable: variable };
-    assert.deepEqual(parsePreviewMessage(site).metrics.columns, { count: 10, variable });
-  }
-  assert.equal(
-    parsePreviewMessage({ ...guide, columnCount: undefined }).metrics.columns,
-    undefined,
-  );
   for (const bad of [
     { margin: -1 },
     { gutter: Number.NaN },
@@ -223,8 +210,6 @@ test('guide measurements parse, absent values stay absent, and bounds hold', () 
     { viewportWidth: '1440' },
     { rootFontSize: 0 },
     { rootFontSize: 1_001 },
-    { columnCount: 2.5 },
-    { columnVariable: '--anything' },
     { margin: PLATFORM_NULL },
     { variables: undefined },
     { variables: { '--pad': -1 } },
