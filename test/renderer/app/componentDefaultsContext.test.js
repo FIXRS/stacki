@@ -2,6 +2,7 @@
 // rebase module imports, capture edits to the owned subtree, and reject outside edits.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const esbuild = require('esbuild');
 const { repoPath } = require('../../helpers/sources.js');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
@@ -64,8 +65,10 @@ test('defaults keep the current ancestors and siblings while replacing instance 
   assert.match(prepared.source, /<Layout theme="dark"><section><p>Before<\/p>/);
   assert.match(prepared.source, /<p>After<\/p><\/section><\/Layout>/);
   assert.doesNotMatch(prepared.source, /variant="existing"|>Instance</);
-  assert.ok(prepared.source.includes('import "../../src/styles/global.css"'));
-  assert.ok(prepared.source.includes('import("../../src/data/items.json")'));
+  const stylePath = path.posix.relative('.stacki/canvas', 'src/styles/global.css');
+  const dataPath = path.posix.relative('.stacki/canvas', 'src/data/items.json');
+  assert.ok(prepared.source.includes(`import ${JSON.stringify(stylePath)}`));
+  assert.ok(prepared.source.includes(`import(${JSON.stringify(dataPath)})`));
   assert.match(prepared.source, /import '\.\/not-a-module'/);
   const captured = recipeFromCanvas(model(prepared.source), prepared.session);
   assert.deepEqual(captured.props, { count: 3, hidden: false });
