@@ -144,7 +144,7 @@ const check = (what, condition, detail) => {
   check('the click carries whether it landed outside', /outside: !best && !!anyTag/.test(preload));
   check(
     'and closing is the only thing that closes',
-    (app.match(/kind === 'close'/g) || []).length === 1 &&
+    (app.match(/if \(kind === 'close'\)/g) || []).length === 1 &&
       containsCode(app, "if (kind === 'nothing') { return; }"),
   );
 

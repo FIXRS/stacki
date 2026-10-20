@@ -64,8 +64,8 @@ test('defaults keep the current ancestors and siblings while replacing instance 
   assert.match(prepared.source, /<Layout theme="dark"><section><p>Before<\/p>/);
   assert.match(prepared.source, /<p>After<\/p><\/section><\/Layout>/);
   assert.doesNotMatch(prepared.source, /variant="existing"|>Instance</);
-  assert.match(prepared.source, /import "\.\.\/\.\.\/src\/styles\/global.css"/);
-  assert.match(prepared.source, /import\("\.\.\/\.\.\/src\/data\/items.json"\)/);
+  assert.ok(prepared.source.includes('import "../../src/styles/global.css"'));
+  assert.ok(prepared.source.includes('import("../../src/data/items.json")'));
   assert.match(prepared.source, /import '\.\/not-a-module'/);
   const captured = recipeFromCanvas(model(prepared.source), prepared.session);
   assert.deepEqual(captured.props, { count: 3, hidden: false });

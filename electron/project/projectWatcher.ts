@@ -88,6 +88,8 @@ function watchProject({
     close();
     throw error;
   }
+  // Catch files created while the operating system is still arming its watcher.
+  astroFiles.request();
   return { close };
 }
 

@@ -100,9 +100,9 @@ test('the Vite graph contains only entry styles and reflects edited imports', (c
   assert.equal(plugin.load(id), 'import "/src/styles/global.css";');
   const template = renderComponentPreviewPage();
   assert.match(template, /import 'virtual:stacki-component-preview-styles'/);
-  assert.doesNotMatch(
-    template,
-    /glob\('\/src\/styles/,
+  assert.equal(
+    template.includes("glob('/src/styles"),
+    false,
     'even a lazy glob makes Astro collect unlayered leaf styles',
   );
 });
