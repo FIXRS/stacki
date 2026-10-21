@@ -26,7 +26,7 @@ import { sendCode } from './codeEdits';
 import { carryHandles, seedOf } from './nodeHandles';
 import {
   recordWrite,
-  writeOutcome,
+  recordNoChange,
   sendGesture,
   type EditDrafts,
   type EditGesture,
@@ -51,7 +51,7 @@ export interface SenderDeps {
   readonly update: (path: string, change: (current: EditorPageState) => EditorPageState) => void;
   /** The file refused a write: show the conflict notice with its reason. */
   readonly conflict: (reason: RejectionReason | undefined) => void;
-  /** An edit that cannot reach disk visually, taken back: say why. */
+  /** An edit failed to apply: report the error and retain earlier successful writes. */
   readonly notice: (message: string) => void;
   /** Prompt the canvas after a discrete edit is confirmed on disk. HMR can
    * arrive later; the canvas serializes overlapping patch requests. */
@@ -179,11 +179,10 @@ async function uncertain(
 
 // --- Previewing gestures ----------------------------------------------------------
 
-/** What an .astro page's queued gestures would leave, planned and never
- * written, and how many had no form the engine can plan (saving would have
- * taken those back: see withdraw). */
+/** All queued gestures planned without writing, or the error preventing a
+ * complete review. An incomplete version must never replace the user's draft. */
 export type GesturesPreviewed =
-  | { readonly tag: 'previewed'; readonly origin: PageOrigin; readonly withdrawn: number }
+  | { readonly tag: 'previewed'; readonly origin: PageOrigin }
   | { readonly tag: 'failed'; readonly message: string };
 
 /** The page's unsaved gestures as the bytes they would write (plan §7: the
@@ -201,7 +200,6 @@ export async function previewGestures(input: {
 }): Promise<GesturesPreviewed> {
   assert(input.gestures.length <= LIMITS.intentsPendingMax, 'The queue stays inside its bound');
   let origin = input.origin; // The bytes the next request is stated against.
-  let withdrawn = 0;
   for (const gesture of input.gestures) {
     let source = origin.source; // A gesture's later requests name its earlier replies.
     const send = async (request: EditRequest): Promise<Result<PageEdited, PageEditError>> => {
@@ -219,12 +217,7 @@ export async function previewGestures(input: {
         origin = advanced(origin, sent.replies, gesture);
         continue;
       case 'refused':
-        // Nothing changes under a preview, so a refusal is the gesture's own:
-        // as a save would, it keeps any request that applied and takes the
-        // gesture back.
-        origin = advanced(origin, sent.replies, gesture);
-        withdrawn += 1;
-        continue;
+        return { tag: 'failed', message: describeRejection(sent.reason) };
       case 'retry':
       case 'uncertain':
         return { tag: 'failed', message: sent.message };
@@ -234,8 +227,7 @@ export async function previewGestures(input: {
       }
     }
   }
-  assert(withdrawn <= input.gestures.length, 'Only queued gestures are withdrawn');
-  return { tag: 'previewed', origin, withdrawn };
+  return { tag: 'previewed', origin };
 }
 
 // --- Typed code ----------------------------------------------------------------------
@@ -341,8 +333,8 @@ function refuse(
 }
 
 // A gesture the engine cannot plan, taken back: the shown model is the origin
-// with the gestures still queued applied again, and its undo step has nothing
-// to undo.
+// with the gestures still queued applied again. Earlier successful requests in
+// this gesture keep their undo information; only the failed request is settled.
 function withdraw(
   deps: SenderDeps,
   path: string,
@@ -350,8 +342,8 @@ function withdraw(
   record: EditsRecord,
   reason: RejectionReason,
 ): void {
-  writeOutcome(record, { tag: 'dropped' });
-  deps.notice(`That edit can’t be made visually: ${describeRejection(reason)}`);
+  recordNoChange(record);
+  deps.notice(`Stacki couldn’t apply this edit. ${describeRejection(reason)}`);
   const queued = deps.queue.entries(path);
   const code = queued.some((entry) => entry.tag !== 'gesture');
   deps.update(path, (current) => {

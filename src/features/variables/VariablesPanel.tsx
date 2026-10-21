@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
 import type { Result } from '../../../shared/core/result';
@@ -83,7 +84,7 @@ function VariableFilesPanel(props: VariablesPanelProps) {
               onSelect={onSelect}
             />
           ))}
-        {error && <div className="cms-error">{error}</div>}
+        {error && <ErrorToast message={error} />}
         {!files.length && !error && (
           <div className="props-empty">
             No CSS custom properties found in this project&rsquo;s stylesheets.
@@ -202,7 +203,7 @@ function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
       <FileIcon size={14} />
       <span className="cms-collection-name">{file.name}</span>
       <span className="cms-collection-count">
-        {file.error ? 'unreadable' : file.count === 1 ? '1 variable' : `${file.count} variables`}
+        {file.error ? '' : file.count === 1 ? '1 variable' : `${file.count} variables`}
       </span>
       {!onlyGroup(file) && (
         <span className="cms-collection-chevron">

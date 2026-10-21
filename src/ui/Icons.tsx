@@ -48,12 +48,12 @@ export const ComponentIcon = (props: IconProps) => (
   </I>
 );
 
-// Columns between two margins: the preview's column guide.
+// Three tall columns represent the preview's column guide.
 export const GuideIcon = (props: IconProps) => (
   <I {...props}>
-    <path d="M2.5 2.5v11M13.5 2.5v11" />
-    <rect x="4.75" y="2.5" width="2.5" height="11" rx="0.5" />
-    <rect x="8.75" y="2.5" width="2.5" height="11" rx="0.5" />
+    <rect x="1" y="2" width="2" height="12" rx="0.5" />
+    <rect x="7" y="2" width="2" height="12" rx="0.5" />
+    <rect x="13" y="2" width="2" height="12" rx="0.5" />
   </I>
 );
 

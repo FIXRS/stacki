@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 // The style editor's basics: its scan, phase and write types, value and query
 // helpers, the icons it draws, and the save indicator (EmbedEditor.tsx).
 
@@ -185,7 +186,7 @@ export function ComponentIcon() {
 }
 
 // Header save state: spinner while writing, check when everything is saved, an
-// error mark (with the reason on hover) if the last write failed, or an unsaved
+// error mark (with the reason in a toast) if the last write failed, or an unsaved
 // dot (reason on hover) when edits are deferred until you exit the component.
 // Rendered into the tool header's accessory slot (replaces the "Pro" tag).
 export function SpinnerIcon() {
@@ -242,7 +243,7 @@ export function SaveIndicator({
   const state = busy
     ? { cls: 'is-saving', tip: 'Saving…', icon: <SpinnerIcon /> }
     : error
-      ? { cls: 'is-error', tip: error, icon: <span className="embed-editor_save-mark">!</span> }
+      ? { cls: 'is-unsaved', tip: 'Unsaved changes', icon: <UnsavedIcon /> }
       : pending
         ? { cls: 'is-unsaved', tip: pending, icon: <UnsavedIcon /> }
         : { cls: 'is-saved', tip: 'All changes saved', icon: <CheckIcon /> };
@@ -254,7 +255,12 @@ export function SaveIndicator({
       </span>
     </span>
   );
-  return createPortal(node, target);
+  return (
+    <>
+      <ErrorToast message={error} />
+      {createPortal(node, target)}
+    </>
+  );
 }
 
 export const TABLET_BREAKPOINT_ICON_SECOND_PATH =

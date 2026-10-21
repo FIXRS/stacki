@@ -1,3 +1,4 @@
+import { TreeDragRow, TreeDropGap, TreeDragHandle } from '../../ui/TreeDragDrop';
 import React, { useEffect, useRef } from 'react';
 import type { PairedNode } from '../../../shared/page/pageNode';
 import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
@@ -9,12 +10,9 @@ import { hidesChildRows, noteText } from '../../editor/treeSelection';
 import { thenBranch } from '../../editor/branches';
 import {
   BranchIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   CodeIcon,
   CornerIcon,
   CustomElementIcon,
-  DragIcon,
   ElementComponentIcon,
   FileIcon,
   HideIcon,
@@ -121,26 +119,17 @@ function Gap(props: GapProps) {
     return undefined;
   }
   return (
-    <div
-      className="nav-gap"
-      data-drop-parent={parentId ?? ''}
-      data-drop-index={index}
-      style={{ marginLeft: depth * 16 }}
-      onDragOver={(event) => {
-        if (accepted && isDndPayload(event)) {
-          event.preventDefault();
-          event.stopPropagation();
-          setDropTarget({ kind: 'gap', ...location });
-        }
+    <TreeDropGap
+      depth={depth}
+      parent={parentId}
+      index={index}
+      behavior={{
+        active,
+        accepts: (event) => accepted && isDndPayload(event),
+        enter: () => setDropTarget({ kind: 'gap', ...location }),
+        drop: (event) => performDrop(event, location),
       }}
-      onDrop={(event) => {
-        if (accepted) {
-          performDrop(event, location);
-        }
-      }}
-    >
-      {active && <div className="drop-indicator" />}
-    </div>
+    />
   );
 }
 
@@ -269,13 +258,14 @@ function TreeRow(props: TreeRowProps) {
   const { node, description } = props;
   const handlers = treeRowHandlers(props);
   return (
-    <div
+    <TreeDragRow
       ref={props.rowRef}
       data-node-id={node.id}
       aria-disabled={!props.canEdit(node.id)}
       title={props.fragment ? fragmentTitle : undefined}
       className={rowClassName(props)}
-      style={rowStyle(props.depth, props.dropInto ? 'drop-into' : 'plain')}
+      style={{ paddingLeft: 6 + props.depth * 16 }}
+      dropBehavior={treeRowDropBehavior(props)}
       draggable={
         props.canEdit(node.id) &&
         node.id !== props.editRootId &&
@@ -285,11 +275,10 @@ function TreeRow(props: TreeRowProps) {
       }
       {...handlers}
     >
-      <RowHandle
-        node={node}
-        showChildren={props.showChildren}
-        collapsed={props.collapsed}
-        toggleCollapse={props.toggleCollapse}
+      <TreeDragHandle
+        {...(props.showChildren
+          ? { expansion: { collapsed: props.collapsed, toggle: () => props.toggleCollapse(node) } }
+          : {})}
       />
       <span className="icon">{description.icon}</span>
       <RowLabel node={node} label={description.label} note={props.note} />
@@ -303,7 +292,7 @@ function TreeRow(props: TreeRowProps) {
         hidden={props.hiddenNodeIds?.has(node.id) ?? false}
         inert={props.inertNodeIds?.has(node.id) ?? false}
       />
-    </div>
+    </TreeDragRow>
   );
 }
 
@@ -333,23 +322,6 @@ function treeRowHandlers(props: TreeRowProps) {
     onDragEnd: (): void => {
       clearDrag();
       props.setDropTarget(undefined);
-    },
-    onDragOver: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (
-        props.canEdit(node.id) &&
-        props.canHostChildren &&
-        acceptsDrag(node) &&
-        props.isDndPayload(event)
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        props.setDropTarget({ kind: 'into', intoId: node.id });
-      }
-    },
-    onDrop: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (props.canEdit(node.id) && props.canHostChildren && acceptsDrag(node)) {
-        props.performDrop(event, { parentId: props.host.id, index: props.children.length });
-      }
     },
     onClick: (event: React.MouseEvent<HTMLDivElement>): void => {
       event.stopPropagation();
@@ -398,36 +370,18 @@ function openComponent(event: React.MouseEvent<HTMLDivElement>, props: TreeRowPr
   props.onOpenComponent(node.name, node.id);
 }
 
-function RowHandle({
-  node,
-  showChildren,
-  collapsed,
-  toggleCollapse,
-}: {
-  readonly node: NavigatorNode;
-  readonly showChildren: boolean;
-  readonly collapsed: boolean;
-  readonly toggleCollapse: (node: NavigatorNode) => void;
-}) {
-  if (!showChildren) {
-    return (
-      <span className="drag-handle">
-        <DragIcon size={11} />
-      </span>
-    );
-  }
-  return (
-    <span
-      className="drag-handle"
-      style={{ cursor: 'pointer', opacity: 1 }}
-      onClick={(event) => {
-        event.stopPropagation();
-        toggleCollapse(node);
-      }}
-    >
-      {collapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
-    </span>
-  );
+function treeRowDropBehavior(props: TreeRowProps) {
+  return {
+    active: props.dropInto,
+    accepts: (event: React.DragEvent<HTMLDivElement>) =>
+      props.canEdit(props.node.id) &&
+      props.canHostChildren &&
+      acceptsDrag(props.node) &&
+      props.isDndPayload(event),
+    enter: () => props.setDropTarget({ kind: 'into', intoId: props.node.id }),
+    drop: (event: React.DragEvent<HTMLDivElement>) =>
+      props.performDrop(event, { parentId: props.host.id, index: props.children.length }),
+  };
 }
 
 function RowLabel({
@@ -514,15 +468,6 @@ function rowClassName(view: NodeView & { readonly node: NavigatorNode }): string
     view.layout ? 'layout-node' : '',
     view.selected ? 'selected' : '',
   ].join(' ');
-}
-
-function rowStyle(depth: number, drop: 'drop-into' | 'plain'): React.CSSProperties {
-  return {
-    paddingLeft: 6 + depth * 16,
-    ...(drop === 'drop-into'
-      ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)' }
-      : {}),
-  };
 }
 
 function describeNode(

@@ -1,3 +1,4 @@
+import { parsePageOrder } from './pageOrder';
 import { validateGuidePreferences } from './guidePreferences';
 import { parsePublishSource } from '../properties/publishConfig';
 // Only these reviewed project files are exposed through the metadata transport.
@@ -8,6 +9,7 @@ import type { Result } from '../core/result';
 export const METADATA_FILES = {
   components: '.stacki/components.json',
   guide: '.stacki/guide.json',
+  pages: '.stacki/pages.json',
   publish: '.stacki/publish.json',
 } as const;
 export type MetadataKind = keyof typeof METADATA_FILES;
@@ -15,7 +17,7 @@ export interface MetadataFile {
   readonly source?: string;
 }
 export function metadataKind(input: unknown): MetadataKind {
-  if (input === 'components' || input === 'guide' || input === 'publish') {
+  if (input === 'components' || input === 'guide' || input === 'publish' || input === 'pages') {
     return input;
   }
   throw new Error('Unknown project metadata file');
@@ -48,6 +50,10 @@ export function validateMetadata(kind: MetadataKind, source: string): void {
     return;
   }
   const input: unknown = JSON.parse(source);
+  if (kind === 'pages') {
+    parsePageOrder(input);
+    return;
+  }
   if (kind === 'components') {
     parseComponentDefaults(input);
   } else {

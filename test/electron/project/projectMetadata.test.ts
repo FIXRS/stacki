@@ -57,3 +57,18 @@ test('metadata refuses symlink directories and leaves the destination untouched'
   );
   assert.deepEqual(fs.readdirSync(outside), []);
 });
+
+test('page and folder ordering uses shared metadata and rejects stale writes', (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-page-order-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const source = JSON.stringify({
+    version: 1,
+    entries: ['about/', 'index.astro', 'about/story.astro'],
+  });
+  assert.deepEqual(readProjectMetadata(root, 'pages'), { ok: true, value: {} });
+  assert.equal(writeProjectMetadata(root, { kind: 'pages', source }).ok, true);
+  assert.deepEqual(readProjectMetadata(root, 'pages'), { ok: true, value: { source } });
+  assert.equal(fs.readFileSync(path.join(root, '.stacki/pages.json'), 'utf8'), source);
+  assert.equal(writeProjectMetadata(root, { kind: 'pages', source }).ok, false);
+  assert.equal(writeProjectMetadata(root, { kind: 'pages', source: '{}', base: source }).ok, false);
+});

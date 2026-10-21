@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
-import * as fs from 'node:fs';
+import fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { mainHarness } from '../../helpers/mainHarness.ts';
@@ -20,6 +20,8 @@ import { diffCodePatch } from '#dist/shared/engine/codePatch.js';
 import { toDigest } from '#dist/shared/core/brand.js';
 import type { PageDiskRead } from '#dist/shared/ipc/pageSave.js';
 import { toRecord } from '#dist/shared/core/record.js';
+import { ATOMIC_DIRECTORY } from '#dist/electron/documents/atomicDirectory.js';
+import { pageEditError } from '#dist/electron/documents/pageRequests.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -60,7 +62,8 @@ function fixture() {
 type Harness = ReturnType<typeof fixture>;
 
 function temporaries(directory: string): readonly string[] {
-  return fs.readdirSync(directory).filter((name) => name.startsWith('.stacki-write-'));
+  const staging = path.join(directory, ATOMIC_DIRECTORY);
+  return fs.existsSync(staging) ? fs.readdirSync(staging) : [];
 }
 
 test('Digest accepts exactly 64 lowercase hex characters', () => {
@@ -164,6 +167,39 @@ test('a read reports the checksum of the exact bytes on disk', async (context) =
   assert.equal(read.checksum, sha256(fs.readFileSync(file)));
   fs.writeFileSync(file, Buffer.from([0x3c, 0x70, 0x3e, 0xff, 0x0a]));
   await assert.rejects(harness.invoke('page:read', file), /not valid UTF-8/);
+});
+
+test('a failed replacement is retryable and reports the filesystem error', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  fs.writeFileSync(file, '<p>Before</p>\n');
+  const before = parsePageDiskRead(await harness.invoke('page:read', file));
+  const next = '<p>After</p>\n';
+  const rename = context.mock.method(fs, 'renameSync', () => {
+    throw Object.assign(new Error('EPERM: file temporarily held open'), { code: 'EPERM' });
+  });
+  const failed = await saveCode(harness, file, before, next);
+  assert.ok(!failed.ok);
+  assert.equal(failed.error.code, 'filesystem');
+  assert.match(failed.error.message, /EPERM/);
+  assert.equal(fs.readFileSync(file, 'utf8'), before.source);
+  assert.deepEqual(temporaries(path.dirname(file)), []);
+  rename.mock.restore();
+  assert.ok((await saveCode(harness, file, before, next)).ok);
+  assert.equal(fs.readFileSync(file, 'utf8'), next);
+});
+
+test('a write race crosses IPC as an uncertain save, not an unsupported gesture', () => {
+  const error = pageEditError('/page.astro', {
+    tag: 'rejected',
+    reason: 'write-race',
+    message: 'Another writer changed the file during replacement',
+    diskChecksum: toDigest('a'.repeat(64)),
+  });
+  const parsed = parsePageEditResult({ ok: false, error });
+  assert.ok(!parsed.ok);
+  assert.equal(parsed.error.code, 'write-race');
 });
 
 test('an outside edit between read and write is refused and left on disk', async (context) => {

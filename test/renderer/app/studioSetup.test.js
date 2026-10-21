@@ -1,6 +1,7 @@
 // Goal: adding Studio starts installation with one click and advances only on success.
 // Method: mount the real setup UI with deferred IPC replies to exercise progress,
 // failure and retry, and opening projects that already contain a Studio folder.
+const { toastMessages } = require('../../helpers/toastCapture');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -13,6 +14,7 @@ fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
   entryPoints: [repoPath('src/features/studioSetup/StudioSetup.tsx')],
   outfile: output,
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -127,7 +129,7 @@ test('failed installation stays on Install and supports an explicit retry', asyn
     await click(button('Add to project'));
     await state.finish({ kind: 'error', message: 'Download failed' });
     assert.match(currentStep(), /Install/);
-    assert.match(document.querySelector('[role="alert"]').textContent, /Download failed/);
+    assert.match(toastMessages(), /Download failed/);
     assert.equal(button('Close').disabled, false);
     await click(button('Retry installation'));
     assert.equal(state.calls.length, 2);
@@ -157,7 +159,7 @@ test('reviewing a blocked project never attempts installation', async () => {
   const state = await fixture({ ...missing, kind: 'blocked', message: 'Existing studio folder' });
   try {
     await click(button('Review Studio setup'));
-    assert.match(document.querySelector('[role="alert"]').textContent, /Existing studio folder/);
+    assert.match(toastMessages(), /Existing studio folder/);
     assert.equal(state.calls.length, 0);
     assert.equal(state.opened.length, 0);
     assert.equal(button('Retry installation'), undefined);

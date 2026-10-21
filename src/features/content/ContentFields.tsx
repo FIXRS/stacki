@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useRef, useState } from 'react';
 import type { Data, DataRecord } from '../../../shared/core/boundary';
 import { data } from '../../../shared/core/boundary';
@@ -692,7 +693,7 @@ export function FieldRow(props: FieldProps) {
         <FieldControl {...props} />
       )}
       {issue ? (
-        <div className="content-issue">{issue}</div>
+        <ErrorToast message={issue} />
       ) : hint ? (
         <div className="content-hint">{hint}</div>
       ) : undefined}

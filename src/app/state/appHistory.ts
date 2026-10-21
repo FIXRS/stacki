@@ -456,11 +456,6 @@ export function useScheduleSave(
           return;
         }
         source = shown.source;
-        if (shown.withdrawn > 0) {
-          const edits = shown.withdrawn === 1 ? 'One edit' : `${shown.withdrawn} edits`;
-          const verb = shown.withdrawn === 1 ? 'is' : 'are';
-          showToast(`${edits} can’t be made visually and ${verb} left out.`, 'info');
-        }
       } catch (error: unknown) {
         showToast(`Couldn’t show your version: ${cleanError(error)}`, 'error');
         return;

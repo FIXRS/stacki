@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useRef, useState } from 'react';
 import type { PublishTarget } from '../../../shared/properties/publishConfig';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
@@ -92,18 +93,25 @@ function PublishStatus({
   readonly state: DesktopPublishState;
   readonly close: () => void;
 }) {
+  if (state.kind === 'failed') {
+    return (
+      <ErrorToast
+        message={`${state.message}${state.github ? ' Saved to GitHub.' : ''}${
+          state.hosting ? ' Hosting deployment completed.' : ''
+        }`}
+      />
+    );
+  }
   const message =
     state.kind === 'running'
       ? state.step
-      : state.kind === 'failed'
-        ? state.message
-        : state.kind === 'done'
-          ? 'Publish completed.'
-          : 'Preparing…';
+      : state.kind === 'done'
+        ? 'Publish completed.'
+        : 'Preparing…';
   return (
     <section className="desktop-publish-status" role="status" aria-live="polite">
       <p>{message}</p>
-      {(state.kind === 'done' || state.kind === 'failed') && (
+      {state.kind === 'done' && (
         <>
           {state.github && <p>Saved to GitHub.</p>}
           {state.hosting && <p>Hosting deployment completed.</p>}

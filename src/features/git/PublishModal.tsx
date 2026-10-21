@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import RepositoryPicker from '../../ui/RepositoryPicker';
 import { parseGitHubRepository } from '../../../shared/ipc/githubRepository';
@@ -202,22 +203,26 @@ function PublishPreflight({ preflight }: { readonly preflight: Preflight }) {
     return <div className="hint-text">Checking GitHub CLI…</div>;
   }
   if (preflight.kind === 'error') {
-    return <div className="error-text">{preflight.error}</div>;
+    return <ErrorToast message={preflight.error} />;
   }
   if (!preflight.status.installed) {
     return (
-      <div className="error-text">
-        GitHub CLI (gh) isn’t installed. Install it from cli.github.com, then run{' '}
-        <code>gh auth login</code>.
-      </div>
+      <ErrorToast
+        message={
+          'GitHub CLI (gh) isn’t installed. Install it from cli.github.com, ' +
+          'then run gh auth login.'
+        }
+      />
     );
   }
   if (!preflight.status.authed) {
     return (
-      <div className="error-text">
-        GitHub CLI isn’t signed in. Run <code>gh auth login</code> in a terminal, then reopen this
-        dialog.
-      </div>
+      <ErrorToast
+        message={
+          'GitHub CLI isn’t signed in. Run gh auth login in a terminal, ' +
+          'then reopen this dialog.'
+        }
+      />
     );
   }
   return undefined;
@@ -233,7 +238,7 @@ function PublishProgress({ form, branch }: { readonly form: Form; readonly branc
   }
   if (form.state.kind === 'form') {
     if (form.state.error) {
-      return <div className="error-text">{form.state.error}</div>;
+      return <ErrorToast message={form.state.error} />;
     }
     if (form.preflight.kind === 'ready') {
       const status = form.preflight.status;

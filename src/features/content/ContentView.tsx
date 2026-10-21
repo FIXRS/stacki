@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Data } from '../../../shared/core/boundary';
@@ -505,7 +506,7 @@ function EntryBanners({ state }: { readonly state: ContentEntries }) {
           <span>{state.idNote}</span>
         </div>
       )}
-      {state.collection.error && <div className="cms-error">{state.collection.error}</div>}
+      {state.collection.error && <ErrorToast message={state.collection.error} />}
     </>
   );
 }
@@ -515,14 +516,11 @@ function FormIssues({ issues }: { readonly issues: readonly WireValidationIssue[
     return undefined;
   }
   return (
-    <div className="cms-error">
-      {issues.map((issue, index) => (
-        <div key={index}>
-          {issue.path.length ? `${issue.path.join(' › ')}: ` : ''}
-          {issue.message}
-        </div>
-      ))}
-    </div>
+    <ErrorToast
+      message={issues
+        .map((issue) => `${issue.path.length ? `${issue.path.join(' › ')}: ` : ''}${issue.message}`)
+        .join('\n')}
+    />
   );
 }
 
@@ -624,7 +622,7 @@ function RenameEditor(props: EntryDetailProps & { readonly entry: ContentEntry }
           Cancel
         </button>
       </div>
-      {rename.error && <div className="content-issue">{rename.error}</div>}
+      {rename.error && <ErrorToast message={rename.error} />}
       {rename.plan && <RenamePlan plan={rename.plan} onRename={execute} />}
     </div>
   );

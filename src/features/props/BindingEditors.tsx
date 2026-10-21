@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 // The fields and editors a bound prop is edited with: the source button, an
 // expression or condition, the bind handle and the data picker, and the code
@@ -580,11 +581,7 @@ export function VarSourceEditorView({ state }: { readonly state: SourceEditorSta
         }}
         onCommit={commit}
       />
-      {error ? (
-        <div className="var-src-error" role="alert">
-          {error}
-        </div>
-      ) : undefined}
+      {error ? <ErrorToast message={error} /> : undefined}
     </div>
   );
 }

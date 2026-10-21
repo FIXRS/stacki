@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { request } from '../project/projectClient';
 import { parseModels, type ModelConfiguration } from './chatContracts';
@@ -55,7 +56,11 @@ export function ChatPanel({
       )}
       {(error || !config.models.length) && (
         <div className="chat-notice">
-          {error || 'AI is not connected yet. Ask the site owner to connect a provider.'}
+          {error ? (
+            <ErrorToast message={error} recovery={[{ label: 'Retry', run: reload }]} />
+          ) : (
+            'AI is not connected yet. Ask the site owner to connect a provider.'
+          )}
           <button onClick={reload}>Retry connection</button>
         </div>
       )}

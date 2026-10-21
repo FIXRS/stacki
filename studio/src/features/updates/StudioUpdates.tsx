@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { useState } from 'react';
 import { record, string } from '../../shared/validation';
 import { isNewerRelease, releaseVersion } from './release';
@@ -8,6 +9,7 @@ type State =
   | { readonly kind: 'loading' }
   | { readonly kind: 'available'; readonly version: string }
   | { readonly kind: 'message'; readonly text: string }
+  | { readonly kind: 'error'; readonly text: string }
   | { readonly kind: 'prepared'; readonly url: string };
 
 function useStudioUpdates() {
@@ -31,7 +33,7 @@ function useStudioUpdates() {
       );
     } catch (error) {
       setState({
-        kind: 'message',
+        kind: 'error',
         text: error instanceof Error ? error.message : 'Could not check updates.',
       });
     }
@@ -58,7 +60,7 @@ function useStudioUpdates() {
       setState({ kind: 'prepared', url: url.href });
     } catch (error) {
       setState({
-        kind: 'message',
+        kind: 'error',
         text: error instanceof Error ? error.message : 'Update preparation failed.',
       });
     }
@@ -76,6 +78,7 @@ export function StudioUpdates() {
       </button>
       {state.kind === 'loading' && <p role="status">Checking Stacki…</p>}
       {state.kind === 'message' && <p role="status">{state.text}</p>}
+      {state.kind === 'error' && <ErrorToast message={state.text} />}
       {state.kind === 'available' && (
         <>
           <p>

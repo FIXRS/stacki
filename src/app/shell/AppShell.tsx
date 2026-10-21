@@ -198,47 +198,45 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
   const { liveUrl, patternRoute } = app;
   return (
     <div className="url-group">
-      <span
-        className={`status-dot ${
-          app.devStatus === 'on' ? 'on' : app.devStatus === 'starting' ? 'starting' : 'off'
-        }`}
-        title={`Dev server: ${app.devStatus}`}
-      />
-      <button
-        className="ghost"
-        title="Reload preview"
-        disabled={!liveUrl}
-        onClick={() => app.setRefreshKey((count) => count + 1)}
-      >
-        <RefreshIcon size={13} />
-      </button>
       {/* A real input, not a label: the URL is something you copy out and
           something you type a route into. Focus selects it all, so one
           click and ⌘C gets the whole thing. */}
-      <input
-        className="url"
-        spellCheck={false}
-        value={app.urlDraft ?? liveUrl ?? ''}
-        placeholder={
-          app.devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline'
-        }
-        readOnly={!liveUrl}
-        onFocus={(event) => event.currentTarget.select()}
-        onChange={(event) => app.setUrlDraft(event.target.value)}
-        onBlur={() => app.setUrlDraft(undefined)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            app.setUrlDraft(undefined);
+      <div className="url-bar">
+        <button
+          className="titlebar-btn url-reload"
+          title="Reload preview"
+          aria-label="Reload preview"
+          disabled={!liveUrl}
+          onClick={() => app.setRefreshKey((count) => count + 1)}
+        >
+          <RefreshIcon size={13} />
+        </button>
+        <input
+          className="url"
+          spellCheck={false}
+          value={app.urlDraft ?? liveUrl ?? ''}
+          placeholder={
+            app.devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline'
+          }
+          readOnly={!liveUrl}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => app.setUrlDraft(event.target.value)}
+          onBlur={() => app.setUrlDraft(undefined)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              app.setUrlDraft(undefined);
+              event.currentTarget.blur();
+              return;
+            }
+            if (event.key !== 'Enter') {
+              return;
+            }
             event.currentTarget.blur();
-            return;
-          }
-          if (event.key !== 'Enter') {
-            return;
-          }
-          event.currentTarget.blur();
-          app.goToUrl(event.currentTarget.value);
-        }}
-      />
+            app.goToUrl(event.currentTarget.value);
+          }}
+        />
+        <OpenBrowserButton liveUrl={liveUrl} />
+      </div>
       {/* Which entry of a dynamic route the canvas is showing. The template
           is what gets edited either way — this only changes the data it's
           rendered against. */}
@@ -255,9 +253,26 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
   );
 }
 
-// Both ways of viewing the site, kept together.
+function OpenBrowserButton({ liveUrl }: { readonly liveUrl: ShellView['liveUrl'] }) {
+  return (
+    <button
+      className="titlebar-btn url-open"
+      title="Open in browser"
+      aria-label="Open in browser"
+      disabled={!liveUrl}
+      onClick={() => {
+        if (liveUrl) {
+          void openExternalURL(liveUrl);
+        }
+      }}
+    >
+      <ExternalIcon size={14} />
+    </button>
+  );
+}
+
+// Terminal and interactive preview controls.
 export function TitleActions({ app }: { readonly app: ShellView }) {
-  const { liveUrl } = app;
   const terminalKey = shortcutLabel('J', 'primary', currentDesktopPlatform());
   return (
     <div className="titlebar-actions">
@@ -267,18 +282,6 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
         onClick={() => app.setTermOpen((open) => !open)}
       >
         <TerminalIcon size={14} />
-      </button>
-      <button
-        className="titlebar-btn"
-        title="Open in browser"
-        disabled={!liveUrl}
-        onClick={() => {
-          if (liveUrl) {
-            void openExternalURL(liveUrl);
-          }
-        }}
-      >
-        <ExternalIcon size={14} />
       </button>
       {/* Two things put the canvas into a state you are looking at rather
           than working in — the interactive preview, and an older version —
@@ -370,6 +373,7 @@ export function PropertiesTab({ app }: { readonly app: ShellView }) {
 export function PagesTab({ app }: { readonly app: ShellView }) {
   return (
     <PagesPanel
+      projectPath={app.project.path}
       scan={app.scan}
       currentPage={app.currentScanPage}
       injectedRoutes={app.injectedRoutes}
@@ -377,9 +381,6 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
       onSelect={app.onSelectPage}
       onCreate={app.onCreatePage}
       onDelete={app.onDeletePage}
-      onRescan={() => {
-        void app.rescan(app.project.path).catch(app.reportFailure);
-      }}
       onMovePage={app.onMovePage}
       onCreateFolder={app.createPageFolder}
       onRenameFolder={app.onRenamePageFolder}
@@ -396,6 +397,7 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
   };
   return (
     <StructurePanel
+      key={page?.path}
       pageState={app.pageState}
       currentPage={page?.kind === 'route' ? { kind: 'route', route: page.route } : page}
       layouts={app.scan.layouts}

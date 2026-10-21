@@ -1,5 +1,6 @@
 // Mount the real variables rail with deferred reads. Watcher bursts must coalesce,
 // and responses from an old project or an unmounted panel must not replace its list.
+const { toastMessages } = require('../../helpers/toastCapture');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -15,6 +16,7 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
   buildSync({
     entryPoints: [repoPath('src/features/variables/VariablesPanel.tsx')],
     outfile: output,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     platform: 'node',
     format: 'cjs',
@@ -73,7 +75,7 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
     assert.equal(reads.length, 2, 'all watcher events request one follow-up');
     assert.match(document.body.textContent, /first.css/);
     assert.doesNotMatch(document.body.textContent, /empty.css/);
-    assert.match(document.body.textContent, /broken.cssunreadable/);
+    assert.match(document.body.textContent, /broken.css/);
     await show('/second');
     assert.equal(reads.length, 3);
     assert.equal(reads[2].project, '/second');
@@ -94,7 +96,7 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
     await act(async () => {
       reads[3].reject(new Error('disk unavailable'));
     });
-    assert.match(document.querySelector('.cms-error').textContent, /disk unavailable/);
+    assert.match(toastMessages(), /disk unavailable/);
     await act(async () => {
       for (const listener of listeners) {
         listener();

@@ -11,6 +11,7 @@ const { DocumentActors } = require('#dist/electron/documents/documentActors.js')
 const { NODE_PROJECTOR, NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
 const { createDocumentTelemetry } = require('#dist/electron/documents/documentTelemetry.js');
 const { planIntent } = require('#dist/shared/engine/planner.js');
+const { ATOMIC_DIRECTORY } = require('#dist/electron/documents/atomicDirectory.js');
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -36,9 +37,10 @@ async function scratch(base, run) {
   }
 }
 
-/** Files the write protocol leaves beside a target: temporary and lock files. */
+/** Temporary and lock files left in a target directory's stable staging folder. */
 function protocolLeftovers(root) {
-  return fs.readdirSync(root).filter((name) => name.startsWith('.stacki-'));
+  const directory = path.join(root, ATOMIC_DIRECTORY);
+  return fs.existsSync(directory) ? fs.readdirSync(directory) : [];
 }
 
 /** Where Windows semantics can be tested for real: native Windows, or WSL with

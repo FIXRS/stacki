@@ -60,7 +60,7 @@ async function railAndPages(page: Page) {
   await page.getByRole('button', { name: 'Create page', exact: true }).click();
   await page.getByLabel('New file name').fill('index');
   await page.getByLabel('New file name').press('Enter');
-  await page.getByRole('dialog').getByRole('alert').waitFor();
+  await page.getByRole('dialog').locator('.toast.error').waitFor();
   await page.keyboard.press('Escape');
   await page.getByLabel('Dismiss notification').click();
   await pages.click();

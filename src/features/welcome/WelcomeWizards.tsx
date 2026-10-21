@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -92,7 +93,7 @@ export function StarterWizard({
         publishing it later publishes your site, not a fork of the starter.
       </div>
       {(running || log.text) && <CreateLog log={log.text} elementRef={log.elementRef} />}
-      {state.kind === 'error' && <div className="error-text">{state.message}</div>}
+      {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
   );
 }
@@ -153,7 +154,7 @@ export function NewProjectWizard({
       {state.kind !== 'idle' && (
         <CreateLog log={log.text || 'Starting…'} elementRef={log.elementRef} />
       )}
-      {state.kind === 'error' && <div className="error-text">{state.message}</div>}
+      {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
   );
 }

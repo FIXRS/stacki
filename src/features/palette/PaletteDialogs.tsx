@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ComponentUsageFile } from './paletteModel';
@@ -125,7 +126,7 @@ function ComponentNameField({
         }}
       />
       {error ? (
-        <div className="error-text">{error}</div>
+        <ErrorToast message={error} />
       ) : (
         <div className="hint-text">
           {source.label} becomes <code>&lt;{name || 'Name'} /&gt;</code>, saved as{' '}
@@ -300,7 +301,7 @@ function UsageFiles({
     <div className="instances-group">
       <div className="instances-label">{hasCurrent ? 'Other files with instances' : 'Used in'}</div>
       {usage.kind === 'error' ? (
-        <div className="instances-empty is-error">Couldn’t read the project — {usage.message}</div>
+        <ErrorToast message={`Couldn’t read the project — ${usage.message}`} />
       ) : usage.kind === 'loading' ? (
         <div className="instances-empty">Looking…</div>
       ) : usage.files.length === 0 ? (

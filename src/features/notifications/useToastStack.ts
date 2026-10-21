@@ -1,12 +1,6 @@
 import { useCallback, useState } from 'react';
-
-export const TOAST_LIMIT = 5;
-export type ToastKind = 'info' | 'success' | 'error';
-export interface ToastNotice {
-  readonly id: string;
-  readonly message: string;
-  readonly kind: ToastKind;
-}
+import { TOAST_LIMIT, type ToastNotice } from '../../ui/toastNotice';
+export { TOAST_LIMIT, type ToastNotice, type ToastKind } from '../../ui/toastNotice';
 
 // Keep the newest notices visible and bound both mounted cards and their timers.
 export function useToastStack<Notice extends ToastNotice>() {

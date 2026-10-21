@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { discoverPublishing } from '../../ipc/publishDiscoveryBridge';
 import { PublishRepositories } from './PublishRepositories';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
@@ -70,7 +71,7 @@ export function PublishSettings(props: Props) {
             <PublishSettingsSkeleton close={close} />
           ) : (
             <div className="modal-body publish-fields">
-              <p role="alert">{settingsErrorMessage(state.message)}</p>
+              <ErrorToast message={settingsErrorMessage(state.message)} />
               <button
                 onClick={() => {
                   setState({ kind: 'loading' });
@@ -186,11 +187,7 @@ function PublishSettingsForm({
           change={(hosting) => setConfig({ ...config, hosting })}
         />
         <AdvancedFields config={config} setConfig={setConfig} />
-        {error && (
-          <p className="error-text" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <ErrorToast message={error} />}
       </fieldset>
       <SettingsFooter busy={saving || repositoryBusy} saving={saving} close={close} save={save} />
     </>

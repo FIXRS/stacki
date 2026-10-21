@@ -1,3 +1,4 @@
+import { ErrorToast } from './ErrorToast';
 import { useEffect, useState } from 'react';
 import { readRepositories } from '../ipc/repositoryBridge';
 import Dropdown from './Dropdown';
@@ -58,9 +59,7 @@ export default function RepositoryPicker(props: {
         onChange={(event) => props.onChange(event.target.value)}
       />
       {state.kind === 'error' && (
-        <div className="error-text">
-          {state.message} Install GitHub CLI and run <code>gh auth login</code>.
-        </div>
+        <ErrorToast message={`${state.message} Install GitHub CLI and run gh auth login.`} />
       )}
     </>
   );

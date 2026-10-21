@@ -23,6 +23,7 @@ const { reconcileUncertain } = require('#dist/shared/engine/documentActor.js');
 const { NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
 const { toFilePath } = require('#dist/shared/core/brand.js');
 const { isAtomicTemporary } = require('#dist/electron/documents/atomicWrite.js');
+const { atomicDirectoryOf } = require('#dist/electron/documents/atomicDirectory.js');
 const {
   protocolLeftovers,
   realHost,
@@ -79,7 +80,7 @@ test('a failed stale-lock observation never moves a fresh replacement lock', asy
     const disk = new NodeDocumentDisk();
     const first = disk.lock(file);
     assert.equal(first.ok, true);
-    const lockFile = path.join(root, protocolLeftovers(root)[0]);
+    const lockFile = path.join(atomicDirectoryOf(file), protocolLeftovers(root)[0]);
     assert.equal(disk.unlock(first.value).ok, true);
     fs.writeFileSync(lockFile, '');
     const freshOwner = { pid: process.pid, host: os.hostname(), token: 'fresh-writer' };

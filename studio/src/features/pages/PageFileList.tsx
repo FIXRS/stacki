@@ -1,13 +1,18 @@
-import { useMemo, useState } from 'react';
+import { PageOrderGap } from '../../../vendor/stacki/src/features/pages/PageOrderGap';
+import { Fragment, useMemo, useState } from 'react';
 import {
   buildPageTree,
+  pageDisplayName,
   stripPageExtension,
   type PageTreeNode,
 } from '../../../vendor/stacki/src/features/pages/pageTree';
+import { orderedPageTree } from '../../../vendor/stacki/src/features/pages/pageTreeOrder';
+import { type PageOrderDrag } from '../../../vendor/stacki/src/features/pages/usePageOrderDrag';
+import type { PageOrder } from '../../../vendor/stacki/shared/properties/pageOrder';
+import type { ScanPage } from '../../../vendor/stacki/shared/properties/projectScan';
 import {
   comparePageNames,
   isCollectionRoute,
-  leadsFolders,
 } from '../../../vendor/stacki/src/features/pages/pageOrder';
 import {
   FileIcon,
@@ -26,6 +31,8 @@ interface Props {
   readonly peers: readonly Peer[];
   readonly open: (file: string) => void;
   readonly collection: boolean;
+  readonly order: PageOrder;
+  readonly reorder: PageOrderDrag;
 }
 export function PageFileList(props: Props) {
   const pages = useMemo(
@@ -40,14 +47,18 @@ export function PageFileList(props: Props) {
   const tree = useMemo(() => buildPageTree(pages, []), [pages]);
   const query = props.query.trim().toLowerCase();
   const results = pages
-    .filter((page) => page.name.toLowerCase().includes(query))
+    .filter((page) =>
+      [page.name, pageDisplayName(page)].some((name) => name.toLowerCase().includes(query)),
+    )
     .sort((a, b) => comparePageNames(a.name, b.name));
   return (
     <div className="panel-body studio-page-list">
       {query ? (
-        results.map((page) => <FileRow key={page.path} {...page} depth={0} props={props} />)
+        results.map((page) => (
+          <FileRow key={page.path} page={page} depth={0} props={props} siblings={[]} />
+        ))
       ) : (
-        <PageBranch tree={tree} depth={0} props={props} />
+        <PageBranch tree={tree} relative="" depth={0} props={props} />
       )}
       {query && !results.length && (
         <div className="props-empty">No matching {props.collection ? 'items' : 'pages'}</div>
@@ -58,94 +69,129 @@ export function PageFileList(props: Props) {
 
 function PageBranch({
   tree,
+  relative,
   depth,
   props,
 }: {
   readonly tree: PageTreeNode;
+  readonly relative: string;
   readonly depth: number;
   readonly props: Props;
 }) {
-  const pages = [...tree.pages].sort((a, b) => comparePageNames(a.base, b.base));
-  const render = (page: (typeof pages)[number]) => (
-    <FileRow
-      key={page.path}
-      path={page.path}
-      name={page.base}
-      route={page.route}
-      depth={depth}
-      props={props}
-    />
-  );
+  const entries = orderedPageTree(tree, relative, props.order);
+  const siblings = entries.map((entry) => entry.key);
   return (
     <>
-      {pages.filter((page) => leadsFolders(page.base)).map(render)}
-      {[...tree.directories]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, child]) => (
-          <FolderBranch key={name} name={name} tree={child} depth={depth} props={props} />
-        ))}
-      {pages.filter((page) => !leadsFolders(page.base)).map(render)}
+      {entries.map((entry, index) => (
+        <Fragment key={entry.key}>
+          {!props.collection && (
+            <PageOrderGap
+              reorder={props.reorder}
+              parent={relative}
+              depth={depth}
+              siblings={siblings}
+              index={index}
+            />
+          )}
+          {entry.kind === 'page' ? (
+            <FileRow page={entry.page} depth={depth} props={props} siblings={siblings} />
+          ) : (
+            <FolderBranch
+              name={entry.name}
+              tree={entry.node}
+              relative={entry.key.slice(0, -1)}
+              depth={depth}
+              props={props}
+            />
+          )}
+        </Fragment>
+      ))}
+      {!props.collection && (
+        <PageOrderGap
+          reorder={props.reorder}
+          parent={relative}
+          depth={depth}
+          siblings={siblings}
+          index={entries.length}
+        />
+      )}
     </>
   );
 }
+
 function FolderBranch({
   name,
   tree,
+  relative,
   depth,
   props,
 }: {
   readonly name: string;
   readonly tree: PageTreeNode;
+  readonly relative: string;
   readonly depth: number;
   readonly props: Props;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const key = relative + '/';
   return (
     <>
       <button
         className="list-item folder"
         aria-expanded={!collapsed}
+        data-order-key={key}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={() => setCollapsed(!collapsed)}
+        draggable={props.reorder.enabled}
+        onDragStart={(event) => props.reorder.start(event, key)}
+        onDragEnd={props.reorder.finish}
       >
         <span className="icon">
           {collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />}
         </span>
         <span className="label">{name}</span>
       </button>
-      {!collapsed && <PageBranch tree={tree} depth={depth + 1} props={props} />}
+      {!collapsed && <PageBranch tree={tree} relative={relative} depth={depth + 1} props={props} />}
     </>
   );
 }
+
 function FileRow({
-  path,
-  name,
-  route,
+  page,
   depth,
   props,
+  siblings,
 }: {
-  readonly path: string;
-  readonly name: string;
-  readonly route: string;
+  readonly page: ScanPage;
   readonly depth: number;
   readonly props: Props;
+  readonly siblings: readonly string[];
 }) {
-  const collection = props.collection || isCollectionRoute(path);
+  const collection = props.collection || isCollectionRoute(page.path);
+  const reorder = props.reorder;
   return (
     <button
-      data-file={path}
-      aria-label={name}
-      aria-current={props.file === path ? 'page' : undefined}
-      className={`list-item file-row ${collection ? 'collection' : ''} ${props.file === path ? 'active' : ''}`}
+      data-file={page.path}
+      data-order-key={page.name}
+      aria-label={page.name}
+      aria-current={props.file === page.path ? 'page' : undefined}
+      className={`list-item file-row ${collection ? 'collection' : ''} ${props.file === page.path ? 'active' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
-      title={props.collection ? path : route}
-      onClick={() => props.open(path)}
+      title={props.collection ? page.path : page.route}
+      onClick={() => props.open(page.path)}
+      draggable={reorder.enabled && siblings.length > 0}
+      onDragStart={(event) => reorder.start(event, page.name)}
+      onDragEnd={reorder.finish}
     >
       <span className="icon">
         {collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}
       </span>
-      <span className="label file-row-name">{stripPageExtension(name)}</span>
-      {!props.collection && <PagePresence peers={props.peers} page={path} />}
+      <span className="label file-row-name">
+        {props.collection
+          ? stripPageExtension(page.name.split('/').at(-1) ?? page.name)
+          : pageDisplayName(page)}
+      </span>
+      {!props.collection && <PagePresence peers={props.peers} page={page.path} />}
     </button>
   );
 }

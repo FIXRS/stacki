@@ -328,6 +328,21 @@ export function recordApplied(record: EditsRecord, applied: AppliedEdit): void {
   );
 }
 
+/** Settle a request that changed no bytes without erasing earlier undo information. */
+export function recordNoChange(record: EditsRecord): void {
+  const outcome = record.outcome;
+  if (outcome.tag !== 'pending') {
+    return;
+  }
+  assert(outcome.waiting > 0, 'A settled request was owed an answer');
+  writeOutcome(
+    record,
+    outcome.waiting === 1
+      ? { tag: 'applied', applied: outcome.applied }
+      : { ...outcome, waiting: outcome.waiting - 1 },
+  );
+}
+
 /** The one writer of an undo step's outcome. A step is a cell shared by the
  * queue, the saver and Undo by identity (see EditsRecord): its outcome changes
  * as answers arrive, so it is written in place here rather than rebuilt. */
@@ -457,8 +472,10 @@ async function sendReplacement(
     }
   }
   if (predicted === input.origin.model) {
-    const reason = 'unsupported-operation';
-    return { tag: 'refused', reason, diskChecksum: input.origin.checksum, replies: [] };
+    // A field can commit the value its live updates already saved. There is
+    // nothing left to write, and this must not report an editor failure.
+    recordNoChange(input.record);
+    return { tag: 'applied', replies: [] };
   }
   const page: Edit = { tag: 'replace-page', model: replacementModel(predicted) };
   return sendRequests(input, [page]);

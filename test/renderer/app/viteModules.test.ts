@@ -12,8 +12,8 @@ import { SourceTextModule } from 'node:vm';
 import { createServer, type ViteDevServer } from 'vite';
 
 // Includes publishing, project metadata, defaults-canvas, and history payload parsers.
-// The complete current renderer contract graph contains 43 modules.
-const MODULES_MAX = 43;
+// The current renderer contract graph contains 44 modules, including the page-order parser.
+const MODULES_MAX = 44;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

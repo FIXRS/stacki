@@ -460,9 +460,7 @@ function JsonCollectionList({
         broken: collection.error !== undefined,
       })}
       onClick={() => onSelect(collection.rel)}
-      title={
-        collection.error ? `src/${collection.rel} — ${collection.error}` : `src/${collection.rel}`
-      }
+      title={`src/${collection.rel}`}
     >
       <CmsIcon size={14} />
       <span className="cms-collection-name">{collection.label}</span>
@@ -490,9 +488,12 @@ function JsonCollectionList({
 function EmptyPanel({ onCreate }: { readonly onCreate: () => void }) {
   return (
     <div className="props-empty">
-      <div>No collections to show.</div>
-      <div>Create a collection to manage reusable content.</div>
-      <div style={{ marginTop: 10 }}>
+      <div className="cms-empty-icon" aria-hidden="true">
+        <CmsIcon size={24} />
+      </div>
+      <h3 className="cms-empty-title">No collections to show.</h3>
+      <p>Create a collection to manage reusable content.</p>
+      <div className="cms-empty-action">
         <button className="primary" onClick={onCreate}>
           New collection
         </button>

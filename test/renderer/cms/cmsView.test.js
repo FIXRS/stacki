@@ -1,6 +1,7 @@
 // Mount the full CMS view against deferred IPC to verify that changing the
 // selected file flushes edits to their original owner. Old reads and completed
 // saves must not replace the newly selected collection or leak subscriptions.
+const { toastMessages } = require('../../helpers/toastCapture');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -13,6 +14,7 @@ fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
   entryPoints: [repoPath('src/features/cms/CmsView.tsx')],
   outfile: output,
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -148,7 +150,7 @@ test(
         }
       });
       await act(async () => state.reads[2].reject(new Error('cannot read')));
-      assert.match(document.querySelector('.cms-error').textContent, /cannot read/);
+      assert.match(toastMessages(), /cannot read/);
       assert.ok(document.querySelector('[title="New item"]') === null);
       assert.ok(document.querySelector('.cms-items .primary') === null);
       assert.equal(state.writes.length, 0);

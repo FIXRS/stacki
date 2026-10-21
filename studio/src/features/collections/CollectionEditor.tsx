@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { useState } from 'react';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { ValueFields } from '../../shared/ui/ValueFields';
@@ -56,7 +57,8 @@ export function CollectionEditor({ document }: { document: SharedDocument }) {
         </div>
       ) : (
         <>
-          <p className="muted">{problem || 'Changes are shared live.'}</p>
+          <ErrorToast message={problem} />
+          {!problem && <p className="muted">Changes are shared live.</p>}
           <textarea
             aria-label="Collection source"
             className="source-editor"

@@ -8,7 +8,7 @@ interface Props {
   readonly failure: string;
   readonly close: () => void;
 }
-export function CreateFileDialog({ create, collection, busy, failure, close }: Props) {
+export function CreateFileDialog({ create, collection, busy, close }: Props) {
   const [name, setName] = useState('');
   return (
     <Popup
@@ -41,11 +41,6 @@ export function CreateFileDialog({ create, collection, busy, failure, close }: P
                 disabled={busy}
                 onChange={(event) => setName(event.currentTarget.value)}
               />
-              {failure && (
-                <p role="alert" className="error-text">
-                  {failure}
-                </p>
-              )}
             </div>
             <div className="modal-footer">
               <button type="button" disabled={busy} onClick={close}>

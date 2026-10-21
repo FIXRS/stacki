@@ -3,9 +3,9 @@
 // DocumentDisk over node:fs, through the primitives in atomicWrite.ts.
 //
 // - Reads are bounded by LIMITS.sourceBytesMax before and after the read.
-// - The advisory lock (§5.2 step 7) is a lock file beside the target, created
-//   exclusively and naming its owner (process, host, token). It excludes only
-//   cooperating writers — another Stacki window or process. A lock whose owner
+// - The advisory lock (§5.2 step 7) is a lock file in the target's stable hidden
+//   save directory, created exclusively and naming its owner (process, host, token).
+//   It excludes only cooperating writers — another Stacki window or process. A lock whose owner
 //   process is gone (a crash) is broken by the next writer; any lock is broken
 //   once it is older than LOCK_STALE_MS. Node has
 //   no portable flock, so a lock file is the "where available" of the plan.
@@ -64,6 +64,7 @@ import {
 } from './atomicWrite';
 import { readSourceBytes } from '../lib/mainLimits';
 import { isInstalledFile, packageOf } from '../lib/installedPackages';
+import { atomicDirectoryOf, prepareAtomicDirectory } from './atomicDirectory';
 
 /** A lock older than this whose owner cannot be asked is abandoned: no save
  * holds its lock for more than one read, one write and one read-back. */
@@ -109,6 +110,10 @@ export class NodeDocumentDisk implements DocumentDisk {
     const installed = refuseInstalled(target.value);
     if (!installed.ok) {
       return installed;
+    }
+    const directory = prepareAtomicDirectory(target.value);
+    if (!directory.ok) {
+      return err({ code: 'failed', message: directory.error.message });
     }
     const lockFile = lockFileOf(target.value);
     const first = this.#tryLock(file, lockFile);
@@ -354,7 +359,7 @@ export interface LockOwner {
  * `write-race` at worst, never a lost update. */
 function lockFileOf(target: string): string {
   const name = digestOf(foldCase(path.basename(target))).slice(0, 16);
-  return path.join(path.dirname(target), `${LOCK_PREFIX}${name}${LOCK_SUFFIX}`);
+  return path.join(atomicDirectoryOf(target), `${LOCK_PREFIX}${name}${LOCK_SUFFIX}`);
 }
 
 // A lock file is written by another process: parse it, never trust it. Its

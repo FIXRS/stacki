@@ -16,6 +16,7 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { protocolLeftovers } = require('../../helpers/platformSupport.js');
 const {
   createFileExclusive,
   digestOf,
@@ -34,7 +35,7 @@ function directory(run) {
   }
 }
 
-const leftovers = (root) => fs.readdirSync(root).filter((name) => isAtomicTemporary(name));
+const leftovers = protocolLeftovers;
 
 // Replace fs[name] for the duration of `run`, restoring it even on failure.
 function withFailure(name, replacement, run) {
@@ -134,8 +135,10 @@ test('a folder flush: EIO is not-durable, an unsupported flush is the platform',
   directory((root) => {
     const file = path.join(root, 'page.astro');
     fs.writeFileSync(file, 'authored\n');
+    let flushes = 0;
     const directoryFlush = (code) => (fsync, descriptor) => {
       if (fs.fstatSync(descriptor).isDirectory()) {
+        flushes += 1;
         throw Object.assign(new Error(`Simulated ${code}`), { code });
       }
       return fsync(descriptor);
@@ -145,6 +148,7 @@ test('a folder flush: EIO is not-durable, an unsupported flush is the platform',
       assert.equal(result.ok, false);
       assert.equal(result.error.code, 'not-durable');
     });
+    assert.equal(flushes, 2, 'both directories are flushed even when the first fails');
     assert.equal(fs.readFileSync(file, 'utf8'), 'mine\n', 'the bytes are in place');
     withFailure('fsyncSync', directoryFlush('EINVAL'), () => {
       const again = replaceFileAtomic(file, Buffer.from('again\n'));
@@ -237,4 +241,7 @@ test('only the module’s own temporary and lock names are treated as temporary'
   assert.equal(isAtomicTemporary('.stacki-write-1b2c.astro'), false);
   assert.equal(isAtomicTemporary('page.tmp'), false);
   assert.equal(isAtomicTemporary('stacki-write-1.tmp'), false);
+  assert.equal(isAtomicTemporary('/p/src/pages/.stacki-io'), true);
+  assert.equal(isAtomicTemporary('G:\\code\\src\\pages\\.stacki-io\\save.tmp'), true);
+  assert.equal(isAtomicTemporary('/p/src/pages/.stacki-io.astro'), false);
 });

@@ -2,6 +2,7 @@
 // through the validated bridge. Method: mount real controls with deterministic
 // IPC replies and drive keyboard, reorder, add, validation and failure states.
 // External events exercise fresh snapshots, races, save deferral, and cleanup.
+const { toastMessages } = require('../../helpers/toastCapture');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -29,6 +30,7 @@ test('component properties lifecycle and controls', async () => {
       loader: 'tsx',
     },
     outfile: bundle,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -280,7 +282,7 @@ test('component properties lifecycle and controls', async () => {
     (button) => button.textContent === 'Save property',
   );
   await act(async () => save.click());
-  assert.match(document.body.textContent, /Use a name/);
+  assert.match(toastMessages(), /Use a name/);
   assert.equal(edits.length, 1);
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
   await act(async () =>
@@ -294,7 +296,7 @@ test('component properties lifecycle and controls', async () => {
       .find((button) => button.textContent === 'Save property')
       .click(),
   );
-  assert.match(document.body.textContent, /Write failed/);
+  assert.match(toastMessages(), /Write failed/);
   assert.match(document.body.textContent, /Property settings/);
   assert.deepEqual(literalOptions('"One | two" | "Three"'), ['"One | two"', '"Three"']);
   assert.equal(literalOptions('string | { tag: "a" | "b" }'), undefined);
@@ -391,7 +393,7 @@ test('component properties lifecycle and controls', async () => {
     error: { code: 'missing', message: 'File missing' },
   });
   await notify();
-  assert.match(document.body.textContent, /File missing/);
+  assert.match(toastMessages(), /File missing/);
   readProperties = async () => ({ ok: true, value: data });
   await notify();
   assert.match(document.querySelector('.property-list').textContent, /afterSave/);

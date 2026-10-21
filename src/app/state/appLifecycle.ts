@@ -1,3 +1,5 @@
+import { useErrorToasts } from '../../ui/errorNotices';
+import { usePageTitles } from '../../features/pages/usePageTitles';
 import { astroChangeMessages } from '../../../shared/properties/astroFileChanges';
 // The app's lifecycle: picking assets, toasts, dev-server events, project
 // scans, starting the preview, the savers and flushing them, opening a file,
@@ -146,6 +148,7 @@ export function useAssetPick(coreState: ReturnType<typeof useCoreState>) {
 // Toasts, and failures said the way the app says any failure.
 export function useToasts() {
   const { notices, push, dismiss } = useToastStack<ToastNotice>();
+  useErrorToasts(push, dismiss);
   const showToast = useCallback(
     (message: string, kind: ToastKind = 'info') => {
       push({ id: crypto.randomUUID(), message, kind });
@@ -292,6 +295,7 @@ function subscribePreviewFailure(
 // Project scans: one in flight, at most one waiting.
 export function useScans(coreState: ReturnType<typeof useCoreState>) {
   const { setProjectClasses, setScan, setTrailingSlash } = coreState;
+  usePageTitles(coreState);
 
   // ----------------------------------------------------------------
   // Project lifecycle
@@ -373,8 +377,8 @@ export function usePreviewStart(
       } catch (error: unknown) {
         setDevStatus('off');
         setBusy(undefined);
-        showToast(`Preview failed to start — see the log in the preview area.`, 'error');
         const message = cleanError(error);
+        showToast(`Preview failed to start: ${message}`, 'error');
         devLogRef.current = message;
         setDevLog(message);
         diagnose();

@@ -170,10 +170,10 @@ const check = (what, condition, detail) => {
   const order = listed();
   check(
     'the site’s own page is the first thing in the list',
-    order[0] === 'index',
+    order[0] === 'Home',
     order.join(' · '),
   );
-  check('above every folder', order.indexOf('index') < order.indexOf('about/'), order.join(' · '));
+  check('above every folder', order.indexOf('Home') < order.indexOf('about/'), order.join(' · '));
   check(
     'the folders are still together, in order',
     order.indexOf('about/') < order.indexOf('care/'),
@@ -208,12 +208,12 @@ const check = (what, condition, detail) => {
   const closed = listed();
   check(
     'closing the folder puts its own page away too',
-    closed.filter((page) => page === 'index').length === 1,
+    closed.filter((page) => page === 'index').length === 0,
     closed.join(' · '),
   );
   check(
     'and the site’s page is still at the top',
-    closed[0] === 'index' && closed[1] === 'about/',
+    closed[0] === 'Home' && closed[1] === 'about/',
     closed.join(' · '),
   );
 

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import Popup from '../../ui/Popup';
 import type { StudioStatus } from '../../../shared/ipc/studioSetup';
@@ -97,11 +98,7 @@ function SetupDialog({
               <LocalStep installed={setup.status?.kind === 'installed'} previewURL={previewURL} />
             )}
             {step === 2 && <CloudStep status={setup.status} />}
-            {setup.activity.kind === 'error' && (
-              <p role="alert" className="error-text">
-                {setup.activity.message}
-              </p>
-            )}
+            {setup.activity.kind === 'error' && <ErrorToast message={setup.activity.message} />}
           </section>
           <SetupFooter
             busy={busy}
@@ -169,7 +166,7 @@ function InstallStep({ status, activity, install }: ReturnType<typeof useSetup>)
       <h3>{status?.kind === 'installed' ? 'Studio is installed' : 'Studio installation'}</h3>
       <p>Browser editing and collaboration, installed in /studio.</p>
       {!status && <p role="status">Checking this project…</p>}
-      {status?.kind === 'blocked' && <p role="alert">{status.message}</p>}
+      {status?.kind === 'blocked' && <ErrorToast message={status.message} />}
       {status?.kind === 'installed' && (
         <p role="status">Version {status.version}. Continue to local preview or cloud setup.</p>
       )}

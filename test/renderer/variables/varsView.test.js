@@ -7,6 +7,7 @@
 // where a value resolves to a colour — and that typing a new value into a cell
 // writes it to the file it came from and nothing else.
 
+const { toastMessages, toastNotices } = require('../../helpers/toastCapture');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -95,6 +96,7 @@ const STYLESHEET = `/* =========================================================
   await esbuild.build({
     entryPoints: [repoPath('src/features/variables/VariablesView.tsx')],
     outfile: bundlePath,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -335,14 +337,14 @@ const STYLESHEET = `/* =========================================================
       steep.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
       await settle(20);
     });
-    const tip = dom.window.document.querySelector('body > .fluid-tip');
+    const tip = { textContent: toastMessages() };
     check('and showing it outside the scroller', !!tip, 'the message is inside the column');
     check(
       'with the whole message in it',
       /reduce difference between max and min variable size/i.test(tip?.textContent || ''),
       tip?.textContent,
     );
-    check('and a way to read why', /read why/i.test(tip?.textContent || ''));
+    check('and a way to read why', toastNotices()[0]?.recovery?.[0]?.label === 'Read why');
     await act(async () => {
       steep.dispatchEvent(
         new dom.window.MouseEvent('mouseout', {

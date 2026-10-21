@@ -4,6 +4,7 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { treeBudget } from '../../editor/treeView';
 import { rowChildren, rowHost } from '../../editor/branches';
+import { hidesChildRows } from '../../editor/treeSelection';
 
 export type NavigatorNode = PageNode;
 export type NavigatorModel = Pick<PageModel, 'nodes' | 'imports'>;
@@ -68,6 +69,21 @@ export function navigatorHost(node: NavigatorNode): NavigatorNode {
 
 export function defaultCollapsed(node: NavigatorNode): boolean {
   return navigatorChildren(node).length > 0;
+}
+
+export function initialCollapseMap(nodes: readonly NavigatorNode[]): ReadonlyMap<string, boolean> {
+  assert(nodes.length <= LIMITS.treeNodesMax, 'Navigator: root node limit exceeded');
+  // Open the page's first wrapper, regardless of its name, without expanding every section.
+  const first = nodes.find((node) => {
+    const children = navigatorChildren(node);
+    if (children.length > 0) {
+      return !hidesChildRows(node, children);
+    }
+    return false;
+  });
+  const toggled = new Map<string, boolean>(first === undefined ? [] : [[first.id, false]]);
+  assert(toggled.size <= 1, 'Navigator: at most one root opens by default');
+  return toggled;
 }
 
 export function findNavigatorNode(

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useState } from 'react';
 import { STUDIO_LAUNCH_COMMAND } from '../../../shared/ipc/studioSetup';
 import { CheckIcon, CopyIcon } from '../../ui/Icons';
@@ -43,7 +44,7 @@ export default function LocalStep({
             >
               Open Studio
             </button>
-            {error && <p role="alert">{error}</p>}
+            {error && <ErrorToast message={error} />}
           </div>
         </li>
         <li>
@@ -93,7 +94,7 @@ function LaunchCommand() {
         </span>
       )}
       {clipboard.status === 'failed' && (
-        <p role="alert">Select the command above and copy it manually.</p>
+        <ErrorToast message="Could not copy. Select the command and copy it manually." />
       )}
     </section>
   );

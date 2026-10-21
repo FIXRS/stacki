@@ -1,7 +1,7 @@
 /* Cards share a bottom edge so a new notice covers, rather than moves, the older ones. */
 .toast-stack {
   position: fixed;
-  z-index: 300;
+  z-index: 11000;
   bottom: 20px;
   left: 50%;
   width: min(390px, calc(100vw - 32px));
@@ -174,4 +174,18 @@
     animation: none;
     transition: none;
   }
+}
+
+.toast-recovery {
+  display: inline-block;
+  margin: 6px 8px 0 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.toast-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 50vh;
+  overflow-y: auto;
 }

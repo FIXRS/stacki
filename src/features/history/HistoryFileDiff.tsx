@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
@@ -40,10 +41,10 @@ export default function HistoryFileDiff({
       </div>
       {state.kind === 'loading' && <p className="history-note">Loading diff…</p>}
       {state.kind === 'error' && (
-        <div className="history-diff-error" role="alert">
-          <p>{state.message}</p>
-          <button onClick={() => setRevision((value) => value + 1)}>Retry</button>
-        </div>
+        <ErrorToast
+          message={state.message}
+          recovery={[{ label: 'Retry', run: () => setRevision((value) => value + 1) }]}
+        />
       )}
       {state.kind === 'ready' && <HistoryDiffLines rows={state.rows} />}
     </div>

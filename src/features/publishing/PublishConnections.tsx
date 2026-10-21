@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { RefreshIcon } from '../../ui/Icons';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
@@ -72,9 +73,10 @@ export function PublishConnections(props: Props) {
         />
       )}
       {displayed?.kind === 'failed' && (
-        <p className="error-text" role="alert">
-          Connection unavailable. Refresh or check sign-in.
-        </p>
+        <ErrorToast
+          message="Connection unavailable. Refresh or check sign-in."
+          recovery={[{ label: 'Refresh connection', run: () => setAttempt(attempt + 1) }]}
+        />
       )}
       {displayed?.kind === 'ready' && displayed.notice && (
         <p className="hint-text">{displayed.notice}</p>

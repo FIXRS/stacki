@@ -379,7 +379,7 @@ These are user-visible. Several were found by driving the built app through real
 |---|---|---|
 | An unsaved change could overwrite an outside edit | Saves never checked the disk | `d10e9c5`, then §3 |
 | A style edit appeared on the canvas only after the *next* edit; a page's own `<style>` never updated | Astro served the previous compile; the canvas patch skipped dev stylesheets | `413e468` |
-| Editing a page's own `<style>` was refused as "can't be made visually" | `<style>` was classed with `<script>` as opaque | `855239a` |
+| Editing a page's own `<style>` reported a save error | `<style>` was classed with `<script>` as opaque | `855239a` |
 | Styling an element with no class restyled the whole page | The selector fell back to Astro's per-file `data-astro-cid-…` attribute | `f23e8b1` |
 | A successful edit showed a refusal message | Enter re-sent an unchanged value | `f23e8b1` |
 | A page's CSS could overwrite a component's `<style>` | Style blocks were identified by node id alone, which repeats across files | `7cf8f9b` |

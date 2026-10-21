@@ -284,7 +284,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     commitError = 'Commit failed';
     await click(button('Commit 1 file'));
     assert.equal(document.querySelector('[aria-label="Commit message"]').value, 'Update home');
-    assert.match(document.querySelector('.git-error').textContent, /Commit failed/);
+    assert.match(requests.filter(([kind]) => kind === 'toast').at(-1)[1], /Commit failed/);
     commitError = undefined;
     await click(button('Commit 1 file'));
     const committed = requests.filter(([kind]) => kind === 'commit').at(-1)[1];
@@ -297,7 +297,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     saveError = 'Save failed';
     await click(document.querySelector('[aria-label="Switch to main"]'));
     assert.equal(checkouts().length, beforeFailure);
-    assert.match(document.querySelector('.git-error').textContent, /Save failed/);
+    assert.match(requests.filter(([kind]) => kind === 'toast').at(-1)[1], /Save failed/);
     saveError = undefined;
     await click(button('Publish to GitHub…'));
     assert.ok(button('Close publish'));

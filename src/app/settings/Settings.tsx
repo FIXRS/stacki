@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import Popup from '../../ui/Popup';
 import StudioSetup from '../../features/studioSetup/StudioSetup';
@@ -119,7 +120,7 @@ function Preferences() {
         }
       />
       {!value && !error && <p role="status">Loading preferences…</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && <ErrorToast message={error} />}
     </section>
   );
 }

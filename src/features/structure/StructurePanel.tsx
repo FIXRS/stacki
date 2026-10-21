@@ -1,3 +1,5 @@
+import { TreeDragRow, useTreeDragCleanup } from '../../ui/TreeDragDrop';
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   NavigatorNode,
@@ -17,6 +19,7 @@ import {
   defaultCollapsed,
   findNavigatorNode,
   findVisibleNode,
+  initialCollapseMap,
   navigatorAncestors,
   navigatorChildren,
   structureProjection,
@@ -25,7 +28,7 @@ import CodeEditor from '../../ui/CodeEditor';
 import { NodeList } from './StructureTree';
 import { clearDrag } from '../../editor/dragState';
 import { parseNavigatorDrop } from './navigatorDrop';
-import { NO_LIVE_TEXT, useLiveValue, type LiveValue } from '../../ui/liveValue';
+import { type LiveValue } from '../../ui/liveValue';
 
 interface StructurePanelProps {
   readonly clientMode?: boolean;
@@ -77,9 +80,7 @@ export default function StructurePanel(props: StructurePanelProps) {
   const projection = structureProjection(props.pageState);
   if (props.clientMode && projection.tag === 'parse-error') {
     return (
-      <div className="panel-note">
-        This page needs a Designer to fix its source before it can be edited.
-      </div>
+      <ErrorToast message="This page needs a Designer to fix its source before it can be edited." />
     );
   }
   switch (projection.tag) {
@@ -117,51 +118,29 @@ function MissingPage({ currentPage }: Pick<StructurePanelProps, 'currentPage'>) 
   );
 }
 
-// A page that does not parse (plan §3.6): not an error to dismiss but a state
-// of the page. The code editor writes it — invalid text included, as a patch
-// through the page's actor — and the navigator comes back on its own once the
-// text parses. What went wrong is said twice: the parser's diagnostic here, and
-// Astro's own output, which the canvas shows as Astro's error page too.
+// Keep the source editable while syntax diagnostics use the shared notification surface.
 function ParseErrorPage({
   projection,
-  devLog,
   onCodeChange,
   onOpenCodePanel,
 }: Pick<StructurePanelProps, 'devLog' | 'onCodeChange' | 'onOpenCodePanel'> & {
   readonly projection: Extract<StructureProjection, { readonly tag: 'parse-error' }>;
 }) {
   const [diagnostic] = projection.diagnostics;
-  const output = useLiveValue(devLog ?? NO_LIVE_TEXT);
   return (
     <div className="panel-section grow">
       <div className="panel-header">
         <h2>Code</h2>
       </div>
       <div className="code-editor">
-        <div className="code-note" role="status">
-          This page doesn’t parse, so it can’t be edited visually. Fix it here or in the code panel:
-          it saves as you type, and the navigator comes back as soon as it parses.
-          {diagnostic && (
-            <div className="parse-error-diagnostic">
-              {diagnostic.message}
-              {diagnostic.near && (
-                <>
-                  {' '}
-                  Near <code>{diagnostic.near}</code>
-                </>
-              )}
-            </div>
-          )}
-          <button className="ghost parse-error-open" onClick={onOpenCodePanel}>
-            Open in the code panel
-          </button>
-        </div>
-        {output && (
-          <details className="parse-error-output">
-            <summary>Astro’s output</summary>
-            <pre>{output}</pre>
-          </details>
-        )}
+        <ErrorToast
+          message={
+            diagnostic
+              ? `${diagnostic.message}${diagnostic.near ? ` Near ${diagnostic.near}` : ''}`
+              : 'This page contains a syntax error.'
+          }
+          recovery={[{ label: 'Open code panel', run: onOpenCodePanel }]}
+        />
         <div className="code-panel-editor">
           <CodeEditor language="astro" value={projection.state.source} onChange={onCodeChange} />
         </div>
@@ -210,12 +189,15 @@ interface TreeState {
 
 function useTreeState(props: EditableProps): TreeState {
   const [dropTarget, setDropTarget] = useState<DropTarget | undefined>(undefined);
-  const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(() => new Map());
+  const [toggled, setToggled] = useState(() => initialCollapseMap(props.pageState.model.nodes));
   const [allExpanded, setAllExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextPosition | undefined>(undefined);
   const bodyRef = useRef<HTMLDivElement>(null);
   const tooltip = useHeaderTooltip();
-  useDropTargetCleanup(setDropTarget);
+  useTreeDragCleanup(() => {
+    clearDrag();
+    setDropTarget(undefined);
+  });
   useArrowNavigation(props, toggled, setToggled);
   useSelectionExpansion(props, setToggled);
   useRevealRow(bodyRef, props.revealTick ?? 0, props.selectedId);
@@ -231,29 +213,6 @@ function useTreeState(props: EditableProps): TreeState {
     bodyRef,
     ...tooltip,
   };
-}
-
-// Palette drags can end outside this panel, so cancellation belongs to the window.
-function useDropTargetCleanup(setDropTarget: TreeState['setDropTarget']): void {
-  useEffect(() => {
-    const clear = (): void => {
-      clearDrag();
-      setDropTarget(undefined);
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        clear();
-      }
-    };
-    window.addEventListener('dragend', clear);
-    window.addEventListener('drop', clear);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('dragend', clear);
-      window.removeEventListener('drop', clear);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [setDropTarget]);
 }
 
 function useHeaderTooltip(): Pick<TreeState, 'tooltip' | 'showTooltip' | 'hideTooltip'> {
@@ -604,19 +563,17 @@ function EmptyDropTarget({
     state.dropTarget.parentId === undefined &&
     state.dropTarget.index === 0;
   return (
-    <div
+    <TreeDragRow
       className={`drop-zone-empty ${active ? 'over' : ''}`}
-      onDragOver={(event) => {
-        if (isDndPayload(event)) {
-          event.preventDefault();
-          event.stopPropagation();
-          state.setDropTarget({ kind: 'gap', ...location });
-        }
+      dropBehavior={{
+        active,
+        accepts: isDndPayload,
+        enter: () => state.setDropTarget({ kind: 'gap', ...location }),
+        drop: (event) => dropOnTree(event, location, props, state),
       }}
-      onDrop={(event) => dropOnTree(event, location, props, state)}
     >
       Drag components here
-    </div>
+    </TreeDragRow>
   );
 }
 

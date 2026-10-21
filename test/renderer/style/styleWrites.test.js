@@ -4,8 +4,8 @@
 // put on the selected element, and an inline style from the props panel — and
 // each is checked where users meet it: an element of the page, a component
 // instance, an element inside a loop, and an element inside an opened
-// component. Two defects once made nearly every <style> edit show "That edit
-// can't be made visually": the projection classed a <style> as opaque code, so
+// component. Two defects once made nearly every <style> edit report a save
+// failure: the projection classed a <style> as opaque code, so
 // the planner refused every rewrite of it; and the panel's commit restates the
 // CSS its live writes already put in the model, a request that changes
 // nothing, which the planner refuses too. A third wrote a page's CSS into a
@@ -58,8 +58,8 @@ const CARD = [
   '',
 ].join('\n');
 
-const toasts = () => [...document.querySelectorAll('.toast')].map((toast) => toast.textContent);
-const refusals = () => toasts().filter((text) => text.includes('can’t be made visually'));
+const refusals = () =>
+  [...document.querySelectorAll('.toast.error')].map((toast) => toast.textContent);
 
 // A project with the page and the Card component, the app open on the page.
 async function openProject(context) {
@@ -78,7 +78,10 @@ async function openProject(context) {
     layouts: [],
     pageFolders: [],
   };
-  const bridge = { resolveImport: async () => ({ path: card }) };
+  const bridge = {
+    resolveImport: async () => ({ path: card }),
+    watchProject: async () => ({ ok: true }),
+  };
   const app = await mountApp(root, { scan }, 'style-writes', { bridge });
   context.after(app.unmount);
   return { app, page, card };
@@ -214,13 +217,27 @@ test('a typed class lands on every kind of element the panel can select', async 
   assert.deepEqual(refusals(), []);
 });
 
-test('a class written by code is reported, never guessed at', async (context) => {
+test('a computed class stays intact when the style panel adds another class', async (context) => {
   const { app, page } = await openProject(context);
   const coded = find((node) => String(node.props?.class?.value).includes('join'));
   const outcome = await addClass(app, coded.at, 'added');
+  assert.equal(outcome.tag, 'applied');
+  assert.equal(
+    fs.readFileSync(page, 'utf8'),
+    PAGE.replace('class={items.join(" ")}', 'class:list={[(items.join(" ")), "added"]}'),
+  );
+  assert.deepEqual(refusals(), []);
+});
+
+test('an invalid class name reports an error without changing the page', async (context) => {
+  const { app, page } = await openProject(context);
+  const heading = find((node) => node.name === 'h1');
+  const outcome = await addClass(app, heading.at, 'two classes');
   assert.equal(outcome.tag, 'refused');
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE);
-  assert.ok(toasts().some((text) => text.includes('Add added to this element yourself')));
+  assert.deepEqual(refusals(), [
+    'Stacki couldn’t add the class “two classes”. Check the class name and retry.',
+  ]);
 });
 
 test('a typed class lands on an element inside an opened component', async (context) => {

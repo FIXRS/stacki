@@ -183,10 +183,11 @@ test('sending a gesture: every outcome, and what the answers mean', async () => 
   const unstated = await sent([], 1, false);
   assert.deepEqual(
     unstated.outcome,
-    { tag: 'refused', reason: 'unsupported-operation', diskChecksum: sum(1), replies: [] },
-    'a gesture with no request is refused, never saved another way',
+    { tag: 'applied', replies: [] },
+    'a gesture with no request and no model change has nothing left to save',
   );
   assert.equal(unstated.sent, 0);
+  assert.deepEqual(unstated.step.outcome, { tag: 'applied', applied: [] });
 
   const refused = await sent([PAGE_OK(sum(2)), refusal('region-externally-modified', sum(9))]);
   assert.equal(refused.outcome.tag, 'refused');

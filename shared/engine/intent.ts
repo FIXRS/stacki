@@ -161,9 +161,9 @@ export function describeRejection(reason: RejectionReason): string {
     case 'region-externally-modified':
       return 'That part of the file was changed outside Stacki.';
     case 'source-invalid':
-      return 'The file does not parse; fix it in the code panel to edit visually again.';
+      return 'The page contains a syntax error that Stacki needs resolved before saving this edit.';
     case 'unsupported-operation':
-      return 'This change is not supported here; edit it in the code panel.';
+      return 'Stacki encountered an editor error while applying the change.';
     case 'resource-limit':
       return 'The change exceeds a size limit.';
     case 'write-failed':

@@ -332,14 +332,6 @@
   color: #89bfa0;
   font-size: 0.75rem;
 }
-.chat-error {
-  padding: 0.75rem;
-  border: 0.0625rem solid #9a5e51;
-  color: #ecc1b8;
-  border-radius: 0.75rem;
-  margin-bottom: 1rem;
-  font-size: 0.75rem;
-}
 .chat-working {
   display: flex;
   align-items: center;

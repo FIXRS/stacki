@@ -1,3 +1,4 @@
+import { reportErrorToast } from '../../../vendor/stacki/src/ui/errorNotices';
 import { useState } from 'react';
 import { RefreshIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request } from '../project/projectClient';
@@ -49,7 +50,7 @@ function useCleanup(refresh: () => void) {
       setReport(parseReport(await request('/studio/api/storage')));
     } catch (error) {
       setReport(undefined);
-      setMessage(error instanceof Error ? error.message : 'Storage scan failed');
+      reportErrorToast(error instanceof Error ? error.message : 'Storage scan failed');
     } finally {
       setBusy(false);
     }
@@ -73,12 +74,15 @@ function useCleanup(refresh: () => void) {
       const warning = result['warning'] ? string(result['warning']) : '';
       setReport(parseReport(result['report']));
       setMessage(
-        `Removed ${byteSize(result['removed'])} stored copies · freed ${formatBytes(byteSize(result['freedBytes']))}.${warning ? ' ' + warning : ''}`,
+        `Removed ${byteSize(result['removed'])} stored copies · freed ${formatBytes(byteSize(result['freedBytes']))}.`,
       );
+      if (warning) {
+        reportErrorToast(warning);
+      }
       refresh();
       window.dispatchEvent(new Event('studio:assets-changed'));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Cleanup failed');
+      reportErrorToast(error instanceof Error ? error.message : 'Cleanup failed');
     } finally {
       setBusy(false);
       setConfirming(false);

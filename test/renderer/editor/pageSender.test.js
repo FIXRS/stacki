@@ -21,7 +21,9 @@ const { buildEditIntent } = require('#dist/electron/documents/editRequests.js');
 const { toIntent } = require('#dist/shared/engine/intent.js');
 const { planIntent } = require('#dist/shared/engine/planner.js');
 const { applySplices, inverseEdits } = require('#dist/shared/engine/splice.js');
+const { pageEditError } = require('#dist/electron/documents/pageRequests.js');
 const { createEntrySender, previewGestures } = load('src/editor/pageSender.ts');
+const { createPageSaver } = load('src/editor/pagePersistence.ts');
 const edits = load('src/editor/pageEdits.ts');
 const editGestures = load('src/editor/editGestures.ts');
 
@@ -99,6 +101,57 @@ function harness(source, overrides = {}) {
 }
 
 const step = () => ({ outcome: { tag: 'applied', applied: [] } });
+
+test('a failed text write keeps the visible edit queued until a later save succeeds', async () => {
+  let unavailable = true;
+  const fixture = harness(PAGE, {
+    edit: async (request) => {
+      if (unavailable) {
+        const error = pageEditError(PATH, {
+          tag: 'rejected',
+          reason: 'write-failed',
+          message: 'EPERM: file temporarily held open',
+          diskChecksum: sha256(PAGE),
+        });
+        return { ok: false, error };
+      }
+      return engine(fixture.disk)(request);
+    },
+  });
+  const { box, disk, queue, send } = fixture;
+  const text = box.state.model.nodes[0].children[0].children[0];
+  const gesture = editGestures.nodeGesture(
+    text.id,
+    { ...text, value: 'Updated' },
+    {
+      coalesceKey: undefined,
+      urgency: false,
+    },
+  );
+  const record = step();
+  queue.addGesture(PATH, gesture, record);
+  box.state = { ...box.state, model: gesture.apply(box.state.model) };
+  const predicted = box.state.model;
+  const saver = createPageSaver({
+    queue,
+    currentPath: () => PATH,
+    conflicted: () => box.state.save.tag === 'conflicted',
+    send,
+  });
+  await assert.rejects(saver.flush(), /EPERM/);
+  assert.equal(disk.text, PAGE);
+  assert.deepEqual(box.state.model, predicted, 'the typed text remains visible');
+  assert.equal(box.state.save.tag, 'dirty');
+  assert.equal(queue.entries(PATH).length, 1);
+  assert.equal(record.outcome.tag, 'pending', 'the undo record is retained');
+  assert.deepEqual(box.notices, [], 'a write failure is not an unsupported visual edit');
+  unavailable = false;
+  assert.equal(await saver.flush(), 'settled');
+  assert.equal(disk.text, PAGE.replace('Title', 'Updated'));
+  assert.equal(queue.entries(PATH).length, 0);
+  assert.equal(box.state.save.tag, 'clean');
+  assert.equal(record.outcome.applied.length, 1, 'the edit is committed once');
+});
 
 test('an applied gesture: the page is the reply, clean, with every handle carried', async () => {
   const { disk, box, queue, send } = harness(PAGE);
@@ -208,24 +261,74 @@ test('edits queued during a move keep the moved element and child selected', asy
   assert.deepEqual(box.conflicts, []);
 });
 
-test('a gesture the engine cannot plan is taken back and said, never saved otherwise', async () => {
+test('a gesture with no remaining change completes without a write or error', async () => {
   const { disk, box, queue, send } = harness(PAGE);
   const record = step();
-  const unplannable = {
+  const unchanged = {
     coalesceKey: undefined,
     urgency: true,
     stream: undefined,
     request: () => undefined, // No request and no model change: nothing to state.
     apply: (model) => model,
   };
-  queue.addGesture(PATH, unplannable, record);
-  box.state = { ...box.state, model: unplannable.apply(box.state.model) };
+  queue.addGesture(PATH, unchanged, record);
+  box.state = { ...box.state, model: unchanged.apply(box.state.model) };
   assert.deepEqual(await send(PATH, queue.shift(PATH)), { tag: 'sent' });
   assert.equal(disk.text, PAGE, 'nothing written');
-  assert.deepEqual(record.outcome, { tag: 'dropped' });
-  assert.equal(box.notices.length, 1);
+  assert.deepEqual(record.outcome, { tag: 'applied', applied: [] });
+  assert.deepEqual(box.notices, []);
   assert.equal(box.state.model.nodes.length, 1, 'the shown model is the origin again');
   assert.deepEqual(box.state.save, { tag: 'clean', checksum: sha256(PAGE) });
+});
+
+test('a failed request preserves undo for earlier writes in the same gesture', async () => {
+  let requests = 0;
+  const fixture = harness(PAGE, {
+    edit: async (request) => {
+      requests += 1;
+      if (requests === 1) {
+        return engine(fixture.disk)(request);
+      }
+      return {
+        ok: false,
+        error: {
+          code: 'rejected',
+          reason: 'unsupported-operation',
+          message: 'planner failure',
+          diskChecksum: sha256(fixture.disk.text),
+        },
+      };
+    },
+  });
+  const { disk, box, queue, send } = fixture;
+  const [heading, paragraph] = box.state.model.nodes[0].children;
+  const options = { coalesceKey: undefined, urgency: true };
+  const first = editGestures.propsGesture(heading.id, titled('a'), options);
+  const second = editGestures.propsGesture(paragraph.id, titled('b'), options);
+  const gesture = {
+    ...options,
+    stream: undefined,
+    request: (refOf) => [...first.request(refOf), ...second.request(refOf)],
+    apply: (model) => second.apply(first.apply(model)),
+  };
+  const record = step();
+  queue.addGesture(PATH, gesture, record);
+  box.state = { ...box.state, model: gesture.apply(box.state.model) };
+  assert.deepEqual(await send(PATH, queue.shift(PATH)), { tag: 'sent' });
+  assert.equal(disk.text, HEADING_TITLED);
+  assert.equal(record.outcome.tag, 'applied');
+  assert.equal(record.outcome.applied.length, 1, 'the saved part still has an undo');
+  const [{ inverse }] = record.outcome.applied;
+  const undone = await engine(disk)({
+    authoredChecksum: sha256(disk.text),
+    edit: { tag: 'revert', hunks: inverse },
+  });
+  assert.ok(undone.ok);
+  assert.equal(disk.text, PAGE, 'undo restores the bytes before the partial save');
+  assert.deepEqual(box.notices, [
+    'Stacki couldn’t apply this edit. ' +
+      'Stacki encountered an editor error while applying the change.',
+  ]);
 });
 
 test('refused over changed bytes: the conflict notice with the reason', async () => {
@@ -268,7 +371,7 @@ test('a preview plans every queued gesture as splices, chained, and writes nothi
   const origin = pageState(PAGE).origin;
   const [heading, paragraph] = origin.model.nodes[0].children;
   const options = { coalesceKey: undefined, urgency: true };
-  const unplannable = {
+  const unchanged = {
     ...options,
     stream: undefined,
     request: () => undefined,
@@ -276,7 +379,7 @@ test('a preview plans every queued gesture as splices, chained, and writes nothi
   };
   const queued = [
     editGestures.propsGesture(heading.id, titled('a'), options),
-    unplannable,
+    unchanged,
     editGestures.propsGesture(paragraph.id, titled('b'), options),
   ];
   const planned = [];
@@ -287,10 +390,42 @@ test('a preview plans every queued gesture as splices, chained, and writes nothi
   };
   const shown = await previewGestures({ path: PATH, origin, gestures: queued, preview });
   assert.equal(shown.tag, 'previewed');
-  assert.equal(shown.withdrawn, 1, 'the gesture a save would take back is left out');
   assert.equal(shown.origin.source, BOTH_TITLED);
   assert.equal(shown.origin.checksum, sha256(BOTH_TITLED));
   assert.deepEqual(planned, [sha256(PAGE), sha256(HEADING_TITLED)]);
   assert.equal(disk.text, PAGE.replace('One', 'Outside'), 'nothing written');
   assert.equal(shown.origin.model.nodes[0].children[1].id, paragraph.id, 'handles carried');
+});
+
+test('a failed preview never presents a version with a queued edit missing', async () => {
+  const origin = pageState(PAGE).origin;
+  const heading = origin.model.nodes[0].children[0];
+  const gesture = editGestures.propsGesture(heading.id, titled('a'), {
+    coalesceKey: undefined,
+    urgency: true,
+  });
+  const previews = [];
+  const shown = await previewGestures({
+    path: PATH,
+    origin,
+    gestures: [gesture],
+    preview: async (request) => {
+      previews.push(request.edit.tag);
+      return {
+        ok: false,
+        error: {
+          code: 'rejected',
+          reason: 'unsupported-operation',
+          message: 'planner failure',
+          diskChecksum: origin.checksum,
+        },
+      };
+    },
+  });
+  assert.deepEqual(shown, {
+    tag: 'failed',
+    message: 'Stacki encountered an editor error while applying the change.',
+  });
+  assert.deepEqual(previews, ['set-attribute', 'replace-node', 'replace-page']);
+  assert.equal(origin.source, PAGE, 'review cannot mutate the baseline');
 });

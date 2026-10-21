@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { useRef, useState } from 'react';
 import { ChatIcon } from './ChatIcon';
 import { useChatAttachments } from './useChatAttachments';
@@ -63,13 +64,13 @@ export function ChatComposer({ chat, file, config }: ComposerProps) {
           attach={attach}
         />
       </form>
+      <ErrorToast message={voice.error} />
       <div className="chat-composer-hint" role="status">
-        {voice.error ||
-          (voice.listening
-            ? voice.interim || 'Listening… click the microphone to finish'
-            : loading
-              ? 'Preparing images…'
-              : 'Enter to send · Shift + Enter for a new line')}
+        {voice.listening
+          ? voice.interim || 'Listening… click the microphone to finish'
+          : loading
+            ? 'Preparing images…'
+            : 'Enter to send · Shift + Enter for a new line'}
       </div>
     </div>
   );

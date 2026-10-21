@@ -17,6 +17,7 @@
 // error unless Button's import travels with it — re-aimed, because a relative
 // path was written from the page's folder and the new file is somewhere else.
 
+const { toastMessages } = require('../../helpers/toastCapture');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -41,6 +42,7 @@ const check = (what, condition, detail) => {
   await esbuild.build({
     entryPoints: [repoPath('src/features/palette/componentName.ts')],
     outfile: namesBundle,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -96,6 +98,7 @@ const check = (what, condition, detail) => {
   await esbuild.build({
     entryPoints: [repoPath('src/editor/extractProps.ts')],
     outfile: propsBundle,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -638,6 +641,7 @@ const check = (what, condition, detail) => {
     await esbuild.build({
       entryPoints: [repoPath('src/features/palette/PalettePanel.tsx')],
       outfile: panelBundle,
+      inject: [repoPath('test/helpers/toastCaptureEntry.js')],
       bundle: true,
       format: 'cjs',
       platform: 'node',
@@ -768,11 +772,7 @@ const check = (what, condition, detail) => {
       createButton()?.disabled === true,
       String(createButton()?.disabled),
     );
-    check(
-      'and says so',
-      /already/i.test(dom.window.document.querySelector('.modal .error-text')?.textContent || ''),
-      dom.window.document.querySelector('.modal .error-text')?.textContent,
-    );
+    check('and says so', /already/i.test(toastMessages()), toastMessages());
 
     const type = async (value) => {
       const element = field();
@@ -1086,7 +1086,7 @@ const check = (what, condition, detail) => {
     });
     check(
       'a failed look says it failed',
-      /couldn’t read the project/i.test(popup()?.textContent || ''),
+      /couldn’t read the project/i.test(toastMessages()),
       popup()?.textContent,
     );
     check(

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import type { ActionableNotice } from '../notifications/notice';
 
 export function LockedSettings({
@@ -13,17 +14,19 @@ export function LockedSettings({
       <div className="panel-header">
         <h2>Settings</h2>
       </div>
-      <div className="props-empty">
-        <p>{notice.message}</p>
-        {action && (
-          <button
-            type="button"
-            onClick={() => void Promise.resolve().then(action.run).catch(report)}
-          >
-            {action.label}
-          </button>
-        )}
-      </div>
+      <ErrorToast
+        message={notice.message}
+        recovery={
+          action
+            ? [
+                {
+                  label: action.label,
+                  run: () => Promise.resolve().then(action.run).catch(report),
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }

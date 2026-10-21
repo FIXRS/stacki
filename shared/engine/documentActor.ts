@@ -432,8 +432,8 @@ function staleWithoutBytes(intent: Intent): RejectionReason {
 // comments inside two tags, which the parser reads leniently as attributes, and
 // an attribute appended where the planner saw a tag end cut one of them open —
 // the candidate still parsed, but the loop around the target now read as code.
-// Outside bytes are input, not invariants, so this is a refusal: the edit is
-// not one this file can take visually (the renderer saves it whole instead).
+// Outside bytes are input, not invariants, so reject a candidate that changes
+// the target's syntax kind. The renderer can then try a bounded rewrite.
 function postKindsHold(candidate: Snapshot, plan: Plan): boolean {
   const projection = candidate.projection;
   assert(projection.tag === 'valid', 'Post-kinds are checked on a parsing candidate');

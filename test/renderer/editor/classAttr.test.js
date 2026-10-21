@@ -10,8 +10,7 @@
 //
 // The second half is what is checked here, against the shapes real components
 // use: a list, a list broken over lines, a template literal, a plain string,
-// and an expression that means something only the code knows — that one is
-// refused out loud rather than guessed at.
+// and a computed expression, whose source remains intact beside the new class:list.
 
 const fs = require('fs');
 const os = require('os');
@@ -113,8 +112,11 @@ const stringValue = (value) => ({ type: 'string', value });
   );
   check('a hole is not read as a name', !hasClass({ class: expr('`card ${size}`') }, 'size'));
   check(
-    'an expression nobody can read is refused',
-    withClass({ class: expr('cx(base, extra)') }, 'hero') === undefined,
+    'class:list keeps the computed expression and adds the name',
+    withClass({ class: expr('cx(base, extra)') }, 'hero').key === 'class:list' &&
+      withClass({ class: expr('cx(base, extra)') }, 'hero').value.value ===
+        '[(cx(base, extra)), "hero"]' &&
+      withClass({ class: expr('cx(base, extra)') }, 'hero').remove === 'class',
   );
   check('a name with a space in it is refused', withClass({}, 'a b') === undefined);
 
@@ -184,11 +186,7 @@ const { class: className } = Astro.props;
     'onAddClass is on some other panel, so typing a class reaches nothing',
   );
   check('the app adds classes through this rule', /withClass\(node\.props, clean\)/.test(app));
-  check(
-    'and says so when it cannot',
-    /if \(!edit\) \{\s*showToast/.test(app),
-    'an element whose class is code fails silently again',
-  );
+  // Error feedback is exercised through the mounted app in styleWrites.test.js.
 
   // Step 6 (plan §3.3): the class is a page edit, the rule a stylesheet edit
   // that depends on it — written only after the page edit applied, and never

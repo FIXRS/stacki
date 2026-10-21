@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useState } from 'react';
 import type { StudioStatus } from '../../../shared/ipc/studioSetup';
 import { openExternalURL } from '../../ipc/appBridge';
@@ -64,7 +65,9 @@ function AgentHandoff({ text }: { readonly text: string }) {
             Setup instructions copied.
           </span>
         )}
-        {clipboard.status === 'failed' && <p role="alert">Copy the instructions below manually.</p>}
+        {clipboard.status === 'failed' && (
+          <ErrorToast message="Could not copy. Copy the instructions manually." />
+        )}
       </section>
       <details className="studio-setup-details" open={clipboard.status === 'failed' || undefined}>
         <summary>View instructions &amp; guides</summary>
@@ -100,7 +103,7 @@ function DocumentationLink({ url, label }: { readonly url: string; readonly labe
   return (
     <>
       <button onClick={() => void openExternalURL(url).catch(() => setError(url))}>{label}</button>
-      {error && <p role="alert">Open this address in your browser: {error}</p>}
+      {error && <ErrorToast message={`Could not open the browser. Open this address: ${error}`} />}
     </>
   );
 }

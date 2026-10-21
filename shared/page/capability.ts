@@ -73,19 +73,19 @@ export function capabilityAcceptsNodeRewrite(capability: Capability): boolean {
   }
 }
 
-/** The visible reason shown beside a node the editor will not change. */
+/** The source context shown beside a node, or an editor error if it is unrecognized. */
 export function describeCapability(capability: Capability): string {
   switch (capability) {
     case 'editable':
       return 'Editable';
     case 'read-only-opaque':
-      return 'Code — edit it in the code panel';
+      return 'Code';
     case 'repeated-source-node':
       return 'Repeated by a loop — an edit here changes every item';
     case 'runtime-aggregate':
       return 'Assembled from several files — edit each source file';
     case 'unsupported':
-      return 'Not supported by the visual editor yet';
+      return 'Stacki encountered an error identifying this element';
     default: {
       const exhaustive: never = capability;
       return exhaustive;

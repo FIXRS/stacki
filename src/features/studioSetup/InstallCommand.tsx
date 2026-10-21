@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { CheckIcon, CopyIcon } from '../../ui/Icons';
 
@@ -46,7 +47,7 @@ export default function InstallCommand() {
         {status === 'copied' ? 'Command copied to clipboard.' : ''}
       </span>
       {status === 'failed' && (
-        <p role="alert">Could not copy. Select the command and copy it manually.</p>
+        <ErrorToast message="Could not copy. Select the command and copy it manually." />
       )}
     </div>
   );

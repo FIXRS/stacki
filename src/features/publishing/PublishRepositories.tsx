@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
@@ -55,11 +56,7 @@ export function PublishRepositories(props: Props) {
         </div>
       </div>
       <RepositoryChoice {...props} state={displayed} />
-      {displayed?.kind === 'failed' && (
-        <p className="error-text" role="alert">
-          {displayed.message}
-        </p>
-      )}
+      {displayed?.kind === 'failed' && <ErrorToast message={displayed.message} />}
       {ready?.notice && <p className="hint-text">{ready.notice}</p>}
       {adding && (
         <NewRepository
@@ -145,11 +142,7 @@ function NewRepository(props: NewRepositoryProps) {
         disabled={state === 'creating'}
       />
       <p className="hint-text">Creates an empty repo. Connect it by saving these settings.</p>
-      {error && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <ErrorToast message={error} />}
       <div className="publish-field-actions">
         <button type="button" disabled={state === 'creating'} onClick={props.close}>
           Cancel

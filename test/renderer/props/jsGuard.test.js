@@ -20,6 +20,7 @@
 // only knows JavaScript would reject `const x: string = ''` — correct code,
 // refused, with no way to save it.
 
+const { toastMessages } = require('../../helpers/toastCapture');
 const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
@@ -48,6 +49,7 @@ const check = (what, condition, detail) => {
     await esbuild.build({
       entryPoints: [repoPath('src/features/props/jsCheck.ts')],
       outfile: out,
+      inject: [repoPath('test/helpers/toastCaptureEntry.js')],
       bundle: true,
       format: 'cjs',
       platform: 'node',
@@ -119,6 +121,7 @@ const check = (what, condition, detail) => {
   await esbuild.build({
     entryPoints: [entry],
     outfile: bundle,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -251,7 +254,7 @@ const check = (what, condition, detail) => {
   await leaveField();
   check('leaving a broken statement writes nothing', writes.length === 0, JSON.stringify(writes));
   check('the field goes red', isRed(), cm()?.className);
-  check('and says what to fix', message().length > 0, JSON.stringify(message()));
+  check('and says what to fix in a toast', toastMessages().length > 0, toastMessages());
   check(
     'the editor stays open to be fixed',
     !!document.querySelector('.var-src'),

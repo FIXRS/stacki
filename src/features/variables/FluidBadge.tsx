@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import type { RefCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -148,7 +149,26 @@ export default function FluidBadge({ fluid }: FluidBadgeProps) {
           {icon}
         </span>
       )}
-      {anchor && <Tip anchor={anchor} error={error} message={message} link={fluid.link} />}
+      {anchor &&
+        (error ? (
+          <ErrorToast
+            message={message}
+            recovery={
+              fluid.link
+                ? [
+                    {
+                      label: 'Read why',
+                      run: () => {
+                        window.open(fluid.link, '_blank', 'noopener,noreferrer');
+                      },
+                    },
+                  ]
+                : []
+            }
+          />
+        ) : (
+          <Tip anchor={anchor} error={error} message={message} link={fluid.link} />
+        ))}
     </>
   );
 }

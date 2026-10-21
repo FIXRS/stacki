@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import type { GuidePersistence } from './guidePersistence';
 import { useCallback, useRef, useState, type ReactElement } from 'react';
 import { GuideIcon } from '../../ui/Icons';
@@ -94,12 +95,19 @@ function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideM
   return (
     <div className="guide-menu style-panel-surface">
       {persistence?.message && (
-        <div role="status">
-          <p>{persistence.message}</p>
-          {!persistence.loading && (
-            <button onClick={persistence.reload}>Reload project settings</button>
-          )}
-        </div>
+        <ErrorToast
+          message={persistence.message}
+          recovery={
+            persistence.loading
+              ? []
+              : [
+                  {
+                    label: 'Reload project settings',
+                    run: persistence.reload,
+                  },
+                ]
+          }
+        />
       )}
       <SwitchRow
         label="Guide"
@@ -349,14 +357,13 @@ function GuideMenuNotes({
   return (
     <>
       {missing.map((name) => (
-        <p key={name} className="embed-editor_more-note guide-note-error">
-          {name} is not declared on this page, so its default is used.
-        </p>
+        <ErrorToast
+          key={name}
+          message={`${name} is not declared on this page, so its default is used.`}
+        />
       ))}
       {countNotes.map((note) => (
-        <p key={note} className="embed-editor_more-note guide-note-error">
-          {note}
-        </p>
+        <ErrorToast key={note} message={note} />
       ))}
     </>
   );

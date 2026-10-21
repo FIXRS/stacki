@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { reportErrorToast } from '../../ui/errorNotices';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import { NO_LIVE_TEXT, useLiveValue, type LiveValue } from '../../ui/liveValue';
 
@@ -14,13 +15,14 @@ export function DevOffline({
   readonly devDiag?: DevDiagnosis | undefined;
   readonly onRestart?: () => void;
 }) {
-  const [showLog, setShowLog] = useState(false);
   const log = useLiveValue(devLog ?? NO_LIVE_TEXT);
   const message = offlineMessage(devDiag);
   return (
     <>
-      <div className={message.known ? 'offline-title' : undefined}>{message.title}</div>
-      {message.detail && <p className="offline-detail">{message.detail}</p>}
+      <div>Preview is offline.</div>
+      <ErrorToast
+        message={message.known ? `${message.title} ${message.detail ?? ''}` : undefined}
+      />
       <div className="offline-actions">
         <button onClick={onRestart}>Start dev server</button>
         <OfflineAction action={message.action} />
@@ -31,15 +33,9 @@ export function DevOffline({
         </div>
       )}
       {log && (
-        <>
-          <button
-            className="ghost offline-log-toggle"
-            onClick={() => setShowLog((value) => !value)}
-          >
-            {showLog ? 'Hide log' : 'Show log'}
-          </button>
-          {showLog && <pre className="offline-log">{log}</pre>}
-        </>
+        <button className="ghost" onClick={() => reportErrorToast(log)}>
+          Show diagnostics
+        </button>
       )}
     </>
   );
@@ -92,7 +88,7 @@ function offlineMessage(diagnosis: DevDiagnosis | undefined): OfflineMessage {
       title: "This project's dependencies aren't installed.",
       detail:
         'Astro was not found in node_modules. Starting the server installs them automatically — ' +
-        'if that keeps failing, the log below has the reason.',
+        'if that keeps failing, use Show diagnostics for details.',
       action: undefined,
     };
   }

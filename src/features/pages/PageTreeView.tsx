@@ -1,8 +1,19 @@
+import { TreeDragRow } from '../../ui/TreeDragDrop';
+import { PageOrderGap } from './PageOrderGap';
+import type { PageOrder } from '../../../shared/properties/pageOrder';
+import { orderedPageTree } from './pageTreeOrder';
+import { type PageOrderDrag } from './usePageOrderDrag';
 import React from 'react';
 import type { ScanPage } from '../../../shared/properties/projectScan';
 import type { PageTreeNode, PageTreePage } from './pageTree';
-import { comparePageNames, isCollectionRoute, leadsFolders } from './pageOrder';
-import { countTreePages, pageDirectory, pageExtension, stripPageExtension } from './pageTree';
+import { isCollectionRoute } from './pageOrder';
+import {
+  countTreePages,
+  pageDisplayName,
+  pageDirectory,
+  pageExtension,
+  stripPageExtension,
+} from './pageTree';
 import {
   CloseIcon,
   CollectionIcon,
@@ -33,6 +44,8 @@ export interface PageTreeActions {
 }
 
 interface PageTreeViewProps {
+  readonly order: PageOrder;
+  readonly reorder: PageOrderDrag;
   readonly node: PageTreeNode;
   readonly rel: string;
   readonly depth: number;
@@ -44,26 +57,38 @@ interface PageTreeViewProps {
 }
 
 export function PageTreeView(props: PageTreeViewProps) {
-  const pages = [...props.node.pages].sort((left, right) =>
-    comparePageNames(left.base, right.base),
-  );
-  const lead = pages.filter((page) => leadsFolders(page.base));
-  const rest = pages.filter((page) => !leadsFolders(page.base));
-  const directories = [...props.node.directories.entries()].sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
+  const entries = orderedPageTree(props.node, props.rel, props.order);
+  const siblings = entries.map((entry) => entry.key);
   return (
     <>
-      {lead.map((page) => (
-        <PageRow key={page.path} page={page} props={props} />
+      {entries.map((entry, index) => (
+        <React.Fragment key={entry.key}>
+          <PageOrderGap
+            reorder={props.reorder}
+            parent={props.rel}
+            depth={props.depth}
+            siblings={siblings}
+            index={index}
+          />
+          {entry.kind === 'page' ? (
+            <PageRow page={entry.page} props={props} />
+          ) : (
+            <FolderRows
+              name={entry.name}
+              node={entry.node}
+              rel={entry.key.slice(0, -1)}
+              props={props}
+            />
+          )}
+        </React.Fragment>
       ))}
-      {directories.map(([name, child]) => {
-        const rel = props.rel ? `${props.rel}/${name}` : name;
-        return <FolderRows key={rel} name={name} node={child} rel={rel} props={props} />;
-      })}
-      {rest.map((page) => (
-        <PageRow key={page.path} page={page} props={props} />
-      ))}
+      <PageOrderGap
+        reorder={props.reorder}
+        parent={props.rel}
+        depth={props.depth}
+        siblings={siblings}
+        index={entries.length}
+      />
     </>
   );
 }
@@ -78,14 +103,19 @@ function PageRow({
   const editing = props.editing.kind === 'page' && props.editing.key === page.path;
   const collection = isCollectionRoute(page.name);
   return (
-    <div
-      className={`list-item ${collection ? 'collection' : ''} ${
-        props.currentPage?.path === page.path ? 'active' : ''
-      }`}
+    <TreeDragRow
+      className={`list-item ${
+        collection ? 'collection' : ''
+      } ${props.currentPage?.path === page.path ? 'active' : ''}`}
       style={{ paddingLeft: 8 + props.depth * 14 }}
+      data-order-key={page.name}
       title={page.route}
-      draggable={!editing}
-      onDragStart={(event) => startPageDrag(event, page)}
+      draggable={!editing && props.reorder.enabled}
+      onDragStart={(event) => {
+        startPageDrag(event, page);
+        props.reorder.start(event, page.name);
+      }}
+      onDragEnd={props.reorder.finish}
       onClick={() => {
         if (!editing) {
           props.actions.select(page);
@@ -105,7 +135,7 @@ function PageRow({
           onCommit={(text) => commitPageRename(page, text, props.actions)}
         />
       ) : (
-        <span className="label">{stripPageExtension(page.base)}</span>
+        <span className="label">{pageDisplayName(page)}</span>
       )}
       <button
         className="row-action"
@@ -117,7 +147,7 @@ function PageRow({
       >
         <CloseIcon size={11} />
       </button>
-    </div>
+    </TreeDragRow>
   );
 }
 
@@ -166,8 +196,8 @@ function FolderRow({
   readonly props: PageTreeViewProps;
 }) {
   return (
-    <div
-      className={`list-item folder ${props.dropDirectory === rel ? 'drop' : ''}`}
+    <TreeDragRow
+      className="list-item folder"
       style={{ paddingLeft: 8 + props.depth * 14 }}
       onClick={() => {
         if (!editing) {
@@ -178,8 +208,11 @@ function FolderRow({
         event.stopPropagation();
         props.actions.setEditing({ kind: 'folder', key: rel });
       }}
-      onDragOver={(event) => props.actions.dragOver(event, rel)}
-      onDrop={(event) => props.actions.drop(event, rel)}
+      draggable={!editing && props.reorder.enabled}
+      onDragStart={(event) => props.reorder.start(event, rel + '/')}
+      onDragEnd={props.reorder.finish}
+      data-order-key={rel + '/'}
+      dropBehavior={folderDropBehavior(props, rel)}
     >
       <span className="icon">
         {collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />}
@@ -207,7 +240,7 @@ function FolderRow({
       >
         <TrashIcon size={12} />
       </button>
-    </div>
+    </TreeDragRow>
   );
 }
 
@@ -234,4 +267,20 @@ function commitFolderRename(rel: string, text: string, actions: PageTreeActions)
     return;
   }
   actions.renameFolder(rel, [...parts.slice(0, -1), name].join('/'));
+}
+
+function folderDropBehavior(props: PageTreeViewProps, rel: string) {
+  return {
+    active: props.dropDirectory === rel && props.reorder.target === undefined,
+    accepts: (event: React.DragEvent<HTMLDivElement>) =>
+      event.dataTransfer.types.includes('avb/page'),
+    enter: (event: React.DragEvent<HTMLDivElement>) => {
+      props.reorder.clearTarget();
+      props.actions.dragOver(event, rel);
+    },
+    drop: (event: React.DragEvent<HTMLDivElement>) => {
+      props.reorder.finish();
+      props.actions.drop(event, rel);
+    },
+  };
 }

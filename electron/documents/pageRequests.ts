@@ -76,6 +76,14 @@ export function pageEditError(
   if (report.tag === 'rejected') {
     const { reason, diskChecksum } = report;
     const message = report.message === '' ? describeRejection(reason) : report.message;
+    // A disk failure says nothing about whether the gesture is supported. Keep
+    // it queued for the next save instead of withdrawing the user's text.
+    if (reason === 'write-failed') {
+      return { code: 'filesystem', message };
+    }
+    if (reason === 'write-race') {
+      return { code: 'write-race', message };
+    }
     return { code: 'rejected', reason, message, diskChecksum };
   }
   return pageWriteFailure(file, report);

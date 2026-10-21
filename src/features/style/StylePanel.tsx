@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useRef } from 'react';
 import { useStyleFiles } from './useStyleFiles';
 import type { HostState } from './model/host';
@@ -53,18 +54,9 @@ export default function StylePanel(props: StylePanelProps) {
         onClick={playButtonNote}
       >
         {files.error || astroFiles.error ? (
-          <div className="props-empty" role="alert">
-            Could not load stylesheet sources. {files.error || astroFiles.error}
-            <button
-              type="button"
-              onClick={() => {
-                files.retry();
-                astroFiles.retry();
-              }}
-            >
-              Retry stylesheet loading
-            </button>
-          </div>
+          <ErrorToast
+            message={`Could not load stylesheet sources. ${files.error || astroFiles.error}`}
+          />
         ) : undefined}
         {props.node ? (
           <EmbedEditor />

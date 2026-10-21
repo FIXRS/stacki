@@ -87,6 +87,14 @@ export function parsePageDragText(input: string): PageDragPayload | undefined {
   }
 }
 
+export function pageDisplayName(page: ScanPage): string {
+  if (/^index\.(astro|mdx?)$/i.test(page.name)) {
+    return 'Home';
+  }
+  const title = page.title?.trim();
+  return title || stripPageExtension(page.name.split('/').at(-1) ?? page.name);
+}
+
 export function stripPageExtension(base: string): string {
   return base.replace(/\.(astro|mdx?)$/i, '');
 }

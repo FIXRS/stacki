@@ -145,3 +145,14 @@ test('bounds: entry counts fail at LIMITS', () => {
     /exceeds \d+ entries/,
   );
 });
+
+test('page titles are optional bounded strings, never unchecked display data', () => {
+  const page = { path: '/site/src/pages/about.astro', name: 'about.astro', route: '/about' };
+  const scan = (title: unknown) => parseScanResult({ ...goodScan, pages: [{ ...page, title }] });
+  assert.equal(scan('About us').pages[0]?.title, 'About us');
+  assert.equal(scan(undefined).pages[0]?.title, undefined);
+  for (const value of [jsonNull, 42, {}, []]) {
+    assert.throws(() => scan(value), /title: expected string/);
+  }
+  assert.throws(() => scan('x'.repeat(LIMITS.ipcFieldCharsMax + 1)), /title: exceeds/);
+});

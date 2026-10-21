@@ -1,3 +1,4 @@
+import { useErrorToasts } from '../../../vendor/stacki/src/ui/errorNotices';
 import { useCallback } from 'react';
 import {
   useToastStack,
@@ -9,6 +10,7 @@ export type StudioNotice = ToastNotice & NoticeDetails;
 
 export function useNotifications() {
   const { notices, push, dismiss } = useToastStack<StudioNotice>();
+  useErrorToasts(push, dismiss);
   const report = useCallback(
     (problem: unknown) => {
       const message = problem instanceof Error ? problem.message : String(problem);

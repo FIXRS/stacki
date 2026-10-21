@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
@@ -74,7 +75,7 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
         </button>
       </div>
       {timeline.state.kind === 'loading' && <p className="history-empty">Reading history…</p>}
-      {timeline.state.kind === 'error' && <p className="history-error">{timeline.state.message}</p>}
+      {timeline.state.kind === 'error' && <ErrorToast message={timeline.state.message} />}
       {timeline.state.kind === 'ready' && timeline.state.commits.length === 0 && (
         <p className="history-empty">
           Nothing saved yet. Once you save your first version it shows up here, and you can come

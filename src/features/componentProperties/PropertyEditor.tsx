@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import PropertyReadOnlyFields from './PropertyReadOnlyFields';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
 import { TrashIcon } from '../../ui/Icons';
@@ -188,11 +189,7 @@ function PropertyEditorFields({
           onChange={(event) => update('description', event.target.value)}
         />
       </label>
-      {error && (
-        <p role="alert" className="property-error">
-          {error}
-        </p>
-      )}
+      {error && <ErrorToast message={error} />}
       <PropertyActions
         originalName={originalName}
         removable={!inherited}

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import { useRef, useState } from 'react';
 import RepositoryPicker from '../../ui/RepositoryPicker';
@@ -51,9 +52,7 @@ export default function CloneRepositoryModal(props: {
             <p className="hint-text">
               Choose a folder next. Stacki downloads a new local copy with its Git history.
             </p>
-            {state.kind === 'ready' && state.error && (
-              <div className="error-text">{state.error}</div>
-            )}
+            {state.kind === 'ready' && state.error && <ErrorToast message={state.error} />}
             {busy && <div role="status">Downloading repository…</div>}
           </div>
           <div className="modal-footer">

@@ -3,6 +3,7 @@ type ClassProps = Readonly<Record<string, Attr>>;
 interface ClassEdit {
   readonly key: string;
   readonly value: Attr;
+  readonly remove?: 'class';
 }
 
 // Putting a class on an element whose classes are not a plain string.
@@ -19,12 +20,12 @@ interface ClassEdit {
 //
 // A class:list is a list, so a class is appended to it — the same edit a person
 // would make, in the same place. A `class` written as a template literal grows
-// by one word inside the quotes. Anything else is a value whose meaning this
-// cannot know (`class={cx(a, b)}`), and it says so rather than guessing.
+// by one word inside the quotes. Other class expressions stay untouched:
+// A class:list combines their result with the new name without changing the expression.
 
 const LIST = 'class:list';
 
-const quoted = (name: string): string => `"${name}"`;
+const quoted = (name: string): string => JSON.stringify(name);
 
 /** Every class name the attribute mentions literally. */
 export function namesIn(prop: Attr | undefined): readonly string[] {
@@ -59,9 +60,8 @@ export function hasClass(props: ClassProps | undefined, name: unknown): boolean 
 }
 
 /**
- * The single prop to write so the element carries `name`, as
- * `{ key, value }` — or undefined when its classes are code that cannot be
- * extended without guessing at what it means.
+ * The prop to write so the element carries `name`, plus the old prop to remove
+ * when migrating to class:list. Undefined means an invalid name or attribute shape.
  *
  * Returns undefined for "already there" as well: the caller has `hasClass` for
  * telling those apart, and neither is an edit.
@@ -125,8 +125,20 @@ export function withClass(props: ClassProps | undefined, name: unknown): ClassEd
     if (text.startsWith('`') && text.endsWith('`') && text.length > 1) {
       return { key: 'class', value: { type: 'expr', value: `${text.slice(0, -1)} ${clean}\`` } };
     }
+    return withClassExpression(text, clean);
   }
   return undefined;
+}
+
+function withClassExpression(text: string, name: string): ClassEdit {
+  // One attribute works across Astro versions. Parentheses preserve comma
+  // expressions; a newline keeps trailing line comments out of the added syntax.
+  const expression = text.includes('//') ? `${text}\n` : text;
+  return {
+    key: LIST,
+    value: { type: 'expr', value: `[(${expression}), ${quoted(name)}]` },
+    remove: 'class',
+  };
 }
 
 export default withClass;

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { ChatText } from './ChatText';
 import { useEffect, useRef, useState } from 'react';
 import { applyProposal, discardProposal } from './chatActions';
@@ -47,11 +48,7 @@ export function ChatMessages({
             : 'Applying changes to the draft…'}
         </div>
       )}
-      {chat.error && (
-        <div className="chat-error" role="alert">
-          {chat.error}
-        </div>
-      )}
+      {chat.error && <ErrorToast message={chat.error} />}
       {unread && (
         <button
           className="chat-latest"

@@ -140,3 +140,19 @@ test('guide settings are shared files; malformed values and arbitrary metadata p
     await setup.close();
   }
 });
+
+test('page and folder ordering survives Studio reopen and rejects stale or invalid writes', async () => {
+  const setup = await fixture();
+  try {
+    const source = JSON.stringify({ version: 1, entries: ['about/', 'index.astro'] });
+    assert.deepEqual(await setup.get('pages'), {});
+    assert.equal((await setup.post({ kind: 'pages', source })).status, 200);
+    assert.equal((await setup.get('pages'))['source'], source);
+    assert.equal(await readFile(path.join(setup.root, '.stacki/pages.json'), 'utf8'), source);
+    assert.equal((await setup.post({ kind: 'pages', source })).status, 400);
+    assert.equal((await setup.post({ kind: 'pages', source: '{}', base: source })).status, 400);
+    assert.equal(filePath('.stacki/pages.json'), '.stacki/pages.json');
+  } finally {
+    await setup.close();
+  }
+});

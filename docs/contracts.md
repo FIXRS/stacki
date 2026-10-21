@@ -41,6 +41,18 @@ read without narrowing its kind). Nothing edits a tree in place: a gesture's
 effect builds a new model, and the file changes only through intents (step 9;
 `scripts/gate/adapterSurface.ts` holds the in-place edit count at zero).
 
+## Page display names
+
+Project scan pages may carry a bounded `title` read from the literal `title` attribute
+of the parsed layout wrapper. The Pages panel and its search show that label, falling
+back to the filename for missing, blank, expression-based, or unreadable titles.
+The root `index.astro`, `index.md`, or `index.mdx` page always displays as `Home`;
+nested index pages use the normal title/filename rule.
+The `name`, `path`, and `route` fields retain their file identities for sorting, folders,
+renames, and drag operations. Open-page edits update the label from the live model;
+external changes update it through the normal project rescan. Scanning never executes
+project expressions to obtain a label.
+
 ## IPC
 
 `shared/ipc/ipcPayloads.ts` is the channel-to-payload inventory and
@@ -98,12 +110,26 @@ refusal against other bytes into `conflicted`: autosave stops, the edits stay,
 and only "Reload from disk" or a reviewed "Save this version" leaves that
 state.
 
+Every edit offered by the visual editor is expected to save through that editor.
+An `unsupported-operation` remaining after the node and page rewrite fallbacks is
+an editor defect, not a product limitation or a reason to send the user to code.
+Report the failed operation as an error, preserve undo for earlier successful writes,
+and cover each discovered defect with a regression test. Conflict review must include
+every queued edit or fail without replacing the draft; it must never omit failed edits.
+
 Since step 5 every write of project text — page, chunk, style re-write,
 stylesheet, code window, CMS and asset edits, component-property batches — is
 an intent to the file's document actor (see Document actors below), which
-writes through `electron/documents/atomicWrite.ts`: a same-directory temporary file
-(`wx`, the target's mode and owner, fsync), one rename, a directory fsync, then
+writes through `electron/documents/atomicWrite.ts`: a temporary file in a stable
+`.stacki-io` child directory on the target filesystem (`wx`, the target's mode and
+owner, fsync), one rename, an fsync of both changed directories, then
 the actor's own read-back, which reports another writer as `write-race`.
+The hidden staging directory stays in place between saves: Astro stats directory
+entries before ignoring dotfiles, so deleting save files directly beside a page
+can crash route discovery. Staging links and mount points on other devices are refused.
+Write failures cross `page:edit` as `filesystem` and stay queued for the next save;
+write races use `write-race` and reconcile against disk before another attempt.
+Neither is an unsupported visual gesture that should be withdrawn.
 Encoding: files are UTF-8; page reads decode strictly (invalid
 UTF-8 is an error, never a lossy replacement); line endings round-trip
 untouched; a leading byte-order mark is read past by the parsers and, since
@@ -423,8 +449,8 @@ announces the new stylesheet (`avbRecompile`, `electron/preview/markerConfig.ts`
 chunk file has its own actor; `component:editProperties`
 leases its files' actors in sorted canonical order and witnesses each by its
 `before` checksum, with the checked rollback as intents too.
-`documentDisk.ts` is the real disk: bounded reads, a lock file beside the
-target (dead or old owners broken), the atomic replace, exclusive creation,
+`documentDisk.ts` is the real disk: bounded reads, a lock file inside the target's
+stable `.stacki-io` directory (dead or old owners broken), the atomic replace, exclusive creation,
 and canonical keys (directory identity plus the name, case-folded where a probe
 shows the directory ignores case). Bounds: `documentActorsMax`,
 `documentBytesRetainedMax`, `intentsPendingMax`, `parseTasksInFlightMax`,
@@ -535,12 +561,20 @@ against shared bounds before storage and consumption. Browser storage is consult
 when the project file is absent, for migration. Changes use a single pending value and
 serialized writes; conflicts stop saving until the user reloads the project settings.
 
+`.stacki/pages.json` contains `{ version: 1, entries: [...] }`. Entries are relative to
+`src/pages`; folder keys end in `/`. Desktop and Studio apply the same order to sibling pages
+and folders. Reordering through gaps does not rename files or change routes. Unknown/new entries retain the
+default relative order after saved entries. Writes are witnessed and serialized; stale saves
+restore the previous order and offer a reload in a toast. Reads and drag payloads use the shared
+bounded parser. Desktop retains move-into-folder drops on folder rows. Pages and Navigator
+use `src/ui/TreeDragDrop` for gap targets, row feedback, and drag cancellation.
+
 `project:metadata` and `project:writeMetadata` accept only registered metadata kinds.
 Desktop confines them to the open project and writes through the document actors against
 the supplied base. Studio exposes the same records through `/studio/api/metadata`, its
 serialized document rooms and durable draft storage. Neither endpoint permits arbitrary
 metadata paths. Settings writes reject stale bases rather than overwriting newer edits.
-Both files participate in Studio publishing and GitHub sync. The legacy local `.stacki/`
+These files participate in Studio publishing and GitHub sync. The legacy local `.stacki/`
 Git exclusion is narrowed to `.stacki/preview/` and `.stacki/canvas/`; user-authored ignore rules are untouched.
 
 Component defaults are opened from the last component context-menu action, “Set component
@@ -619,3 +653,12 @@ Cloudflare Workers have their own `cloudflare-workers` hosting variant. Discover
 `linked` to inspect local Wrangler/Vercel destinations before settings exist. A discovered Worker
 may have an empty account ID when its local name is known but its account is unresolved; the saved
 publish-config parser rejects that incomplete value. This prevents assigning an unrelated account.
+
+## Error notifications
+
+Desktop and Studio report application errors through the shared toast stack. `src/ui/ErrorToast`
+bridges component error states without adding inline messages; `reportErrorToast` handles action
+boundaries. The internal handoff and visible stack keep at most five messages, deduplicated by
+text. Recovery actions stay available until dismissal, and use the latest component callbacks.
+The stack follows the top native dialog so modal validation and retry controls stay accessible.
+Normal progress, empty states, and successful receipts remain part of their feature UI.

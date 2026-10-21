@@ -10,6 +10,7 @@ import { aliasMap } from '../content/cmsRefs';
 import { instancesIn } from '../properties/componentUsage';
 import { toPosix, capture } from '../lib/mainHelpers';
 import { listAstroFiles, routeForPage } from '../project/projectFiles';
+import { scanPageTitles } from '../properties/pageTitles';
 import { safeSchema } from '../properties/propDefaults';
 import type { MainHost } from './mainHost';
 
@@ -97,7 +98,7 @@ function registerProjectScanHandler({
     }
 
     return {
-      pages,
+      pages: scanPageTitles(pages, allSources),
       layouts,
       components,
       pageFolders,

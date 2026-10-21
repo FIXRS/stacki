@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import type { PublishStage, PublishState } from './publish';
 
 const stages: Readonly<Record<PublishStage, { readonly done: number; readonly label: string }>> = {
@@ -20,6 +21,15 @@ export function PublishProgress({
   readonly dismiss: () => void;
 }) {
   const { error, done, total, label, title, hint } = progressView(state, failed);
+  if (error) {
+    return (
+      <ErrorToast
+        message={
+          state?.kind === 'failed' ? state.message : 'Publishing did not finish. Please try again.'
+        }
+      />
+    );
+  }
   return (
     <section className="studio-publish-progress" aria-label="Publish progress" aria-busy={busy}>
       <div className="studio-publish-progress-heading">

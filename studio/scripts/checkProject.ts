@@ -15,8 +15,12 @@ export async function checkProject(root: string): Promise<void> {
   if (publishing.source !== undefined) {
     validateMetadata('publish', publishing.source);
   }
+  const pages = await readMetadataSource(root, 'pages');
+  if (pages.source !== undefined) {
+    validateMetadata('pages', pages.source);
+  }
   if (issues.length > 0) {
     throw new Error(issues.join('\n'));
   }
-  console.log('Project component defaults, guide, and publish settings are valid.');
+  console.log('Project component defaults, guide, page order, and publish settings are valid.');
 }

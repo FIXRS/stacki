@@ -1,3 +1,6 @@
+import { useProjectPageOrder } from '../../../vendor/stacki/src/features/pages/pageOrderPersistence';
+import { usePageOrderDrag } from '../../../vendor/stacki/src/features/pages/usePageOrderDrag';
+import { PageOrderNotice } from '../../../vendor/stacki/src/features/pages/PageOrderNotice';
 import { useState } from 'react';
 import type { Peer } from '../collaboration/presence';
 import { PageFileList } from './PageFileList';
@@ -24,6 +27,12 @@ export function PagesPanel({
   error,
   collection = false,
 }: Props) {
+  const ordering = useProjectPageOrder(collection ? undefined : project.name);
+  const reorder = usePageOrderDrag({
+    order: ordering.state.order,
+    enabled: !collection && ordering.state.kind === 'ready',
+    save: ordering.save,
+  });
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const { busy, create, failure } = useCreateFile({ file, collection, refresh, open, error }, () =>
@@ -54,7 +63,10 @@ export function PagesPanel({
           close={() => setCreating(false)}
         />
       )}
+      <PageOrderNotice state={ordering.state} reload={ordering.reload} />
       <PageFileList
+        order={ordering.state.order}
+        reorder={reorder}
         items={items}
         query={query}
         file={file}
@@ -162,14 +174,16 @@ function PagesHeader({
     <div className="panel-header">
       <h2>{collection ? 'Collections' : 'Pages'}</h2>
       <div className="studio-panel-actions">
-        <button
-          className="ghost"
-          title="Refresh files"
-          aria-label="Refresh files"
-          onClick={refresh}
-        >
-          <RefreshIcon size={14} />
-        </button>
+        {collection && (
+          <button
+            className="ghost"
+            title="Refresh files"
+            aria-label="Refresh files"
+            onClick={refresh}
+          >
+            <RefreshIcon size={14} />
+          </button>
+        )}
         <button
           className="ghost"
           aria-label={collection ? 'Create item' : 'Create page'}

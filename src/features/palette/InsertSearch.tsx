@@ -89,7 +89,7 @@ export default function InsertSearch(props: InsertSearchProps) {
         <div className="insert-results" ref={listRef}>
           {results.map((item, i) => (
             <div
-              key={`${item.type}-${item.label}`}
+              key={insertItemKey(item)}
               className={`insert-item ${i === highlight ? 'highlight' : ''}`}
               onMouseEnter={() => setHighlight(i)}
               onClick={() => onInsert(item)}
@@ -104,6 +104,14 @@ export default function InsertSearch(props: InsertSearchProps) {
       </div>
     </div>
   );
+}
+
+function insertItemKey(item: InsertItem): string {
+  // Component names can repeat across folders; their files identify distinct insertion targets.
+  if (item.type === 'component') {
+    return JSON.stringify([item.type, item.path ?? item.sub, item.name]);
+  }
+  return JSON.stringify([item.type, item.label]);
 }
 
 function useInsertSearch({ components, allowSlot }: InsertSearchProps) {

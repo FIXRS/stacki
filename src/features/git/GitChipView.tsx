@@ -4,7 +4,7 @@ import { branchNameError, sanitizeBranchName } from './branchName';
 import BranchActions from './BranchActions';
 import type FileBrowser from './FileBrowser';
 import CommitFilePicker from './CommitFilePicker';
-import { BranchIcon, CheckIcon, CloseIcon, ExternalIcon } from '../../ui/Icons';
+import { BranchIcon, CheckIcon, ExternalIcon } from '../../ui/Icons';
 import { repoSlug, webUrl } from './gitPublish';
 import Tooltip from '../../ui/Tooltip';
 
@@ -280,14 +280,7 @@ export default function GitChipView(props: GitChipViewProps) {
           {props.busy}
         </p>
       )}
-      {props.error && (
-        <div className="git-error">
-          {props.error}
-          <button className="ghost" title="Dismiss" onClick={props.onDismissError}>
-            <CloseIcon size={11} />
-          </button>
-        </div>
-      )}
+
       <Branches
         info={props.info}
         working={working}

@@ -129,7 +129,7 @@ async function checkNavigator(StructurePanel) {
     );
     await settle(20);
   });
-  // Everything starts collapsed; the header button opens it all.
+  // Open every remaining branch so each code row can be exercised.
   await act(async () => {
     container.querySelector('.panel-header button').click();
     await settle(20);

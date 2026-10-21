@@ -1,6 +1,7 @@
 // Validate GitHub preflight replies, then mount the actual publish dialog with
 // deferred IPC. The project path must reach the contract, and an obsolete project
 // or unmounted dialog must never receive a stale authentication result.
+const { toastMessages } = require('../../helpers/toastCapture');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -71,6 +72,7 @@ test('publish dialog passes its project to preflight and ignores old replies', a
       resolveDir: ROOT,
     },
     outfile: output,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -121,7 +123,7 @@ test('publish dialog passes its project to preflight and ignores old replies', a
     assert.equal(document.querySelector('.modal-footer .primary').disabled, false);
     await show('/third');
     await act(async () => reads[2].reject(new Error('cannot inspect CLI')));
-    assert.match(document.querySelector('.error-text').textContent, /cannot inspect CLI/);
+    assert.match(toastMessages(), /cannot inspect CLI/);
     assert.equal(document.querySelector('.modal-footer .primary').disabled, true);
     await show('/fourth');
     await act(async () => root.unmount());

@@ -1,3 +1,6 @@
+import { createPortal } from 'react-dom';
+import { useToastHost } from './useToastHost';
+import { runToastRecovery } from '../../ui/errorNotices';
 import type { CSSProperties, ReactNode } from 'react';
 import { useToastInteraction } from './useToastInteraction';
 import { TOAST_LIMIT, type ToastNotice } from './useToastStack';
@@ -13,11 +16,12 @@ interface ToastStackProps<Notice extends ToastNotice> {
 }
 
 export function ToastStack<Notice extends ToastNotice>(props: ToastStackProps<Notice>) {
+  const host = useToastHost();
   const layout = useToastLayout(props.notices);
   const style: CSSProperties & Record<string, string> = {
     '--toast-front-height': `${layout.positions[0]?.height ?? 0}px`,
   };
-  return (
+  return createPortal(
     <section
       ref={layout.ref}
       className="toast-stack"
@@ -53,7 +57,7 @@ export function ToastStack<Notice extends ToastNotice>(props: ToastStackProps<No
                 index,
                 offset: layout.positions[index]?.offset ?? 0,
                 hidden: layout.expanded && index >= layout.visibleCount,
-                paused: layout.expanded,
+                paused: layout.expanded || (notice.recovery?.length ?? 0) > 0,
               }}
               dismiss={() => props.dismiss(notice.id)}
               className={props.className ?? ''}
@@ -63,7 +67,8 @@ export function ToastStack<Notice extends ToastNotice>(props: ToastStackProps<No
           ))}
         </div>
       </div>
-    </section>
+    </section>,
+    host,
   );
 }
 
@@ -128,6 +133,7 @@ function ToastCard({
         <div className="toast-content">
           <span className="toast-message">{notice.message}</span>
           {action}
+          <ToastRecoveryActions notice={notice} close={close} />
         </div>
         <ToastClose close={close} />
       </div>
@@ -172,5 +178,30 @@ function ToastIcon({ kind }: { readonly kind: ToastNotice['kind'] }) {
         )}
       </svg>
     </span>
+  );
+}
+
+function ToastRecoveryActions({
+  notice,
+  close,
+}: {
+  readonly notice: ToastNotice;
+  readonly close: () => void;
+}) {
+  return (
+    <>
+      {notice.recovery?.map((item) => (
+        <button
+          key={item.label}
+          className="toast-recovery"
+          onClick={() => {
+            close();
+            void runToastRecovery(item);
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </>
   );
 }

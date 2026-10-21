@@ -10,6 +10,8 @@ export interface ScanPage {
   /** POSIX path relative to src/pages — the route's file identity. */
   readonly name: string;
   readonly route: string;
+  /** Literal layout title for display; name remains the route file identity. */
+  readonly title?: string | undefined;
 }
 
 export interface RenderTag {
@@ -92,6 +94,9 @@ function parsePage(input: unknown, where: string): ScanPage {
     path: asString(record['path'], `${where}.path`),
     name: asString(record['name'], `${where}.name`),
     route: asString(record['route'], `${where}.route`),
+    ...(record['title'] === undefined
+      ? {}
+      : { title: asString(record['title'], `${where}.title`) }),
   };
 }
 

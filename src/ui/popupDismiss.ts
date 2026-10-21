@@ -20,6 +20,7 @@ export function usePopupDismiss(
     let outsidePress = false;
     const outside = (target: Event['target']): boolean =>
       target instanceof window.Node &&
+      !(target instanceof window.Element && target.closest('.toast-stack')) &&
       !surface.current?.contains(target) &&
       !inOwnedPopup(target, surface.current ?? undefined) &&
       !anchor?.contains(target);

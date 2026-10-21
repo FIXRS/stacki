@@ -38,7 +38,7 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
                 : 'Saved to GitHub. Automatic live deployment is not connected.') +
               (state.cleanupWarning ? ' ' + state.cleanupWarning : '')
           : state.kind === 'failed'
-            ? state.message
+            ? new Error(state.message)
             : 'Publish started',
       );
     } catch (error) {

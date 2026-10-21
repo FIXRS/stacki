@@ -5,13 +5,13 @@
 //
 // Why atomic: a plain writeFileSync truncates the target first, so a crash, a
 // full disk or a concurrent reader can observe a half-written page. Here the
-// bytes go to a temporary file in the target's own directory (same filesystem,
+// bytes go to a temporary file in a stable hidden child directory (same filesystem,
 // so the rename is atomic), are flushed, and replace the target in one rename.
 // The target holds the old bytes or the new ones, never a mixture.
 //
 // The OS-facing contract, pinned by the platform suite (test/electron/documents/):
 // - Flush: `fsync` on the temporary file before the rename, then `fsync` on the
-//   directory after it, so the rename itself survives a power loss. On Windows
+//   source and target directories after it, so the rename survives a power loss. On Windows
 //   Node cannot open a directory for flushing; NTFS journals the rename, and
 //   that is the platform's whole promise. Where a filesystem refuses to flush a
 //   directory (EINVAL and friends), the same applies. On macOS `fsync` reaches
@@ -44,6 +44,7 @@ import { assert } from '../../shared/core/assert';
 import { toDigest, type Digest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
+import { ATOMIC_DIRECTORY, prepareAtomicDirectory } from './atomicDirectory';
 
 /** Why a write did not happen, or did without a durability promise. */
 export type AtomicWriteError =
@@ -70,6 +71,9 @@ export function digestOf(bytes: Uint8Array | string): Digest {
 /** True for the temporary and lock files the write protocol creates, so the
  * project watcher can ignore them instead of reporting an outside edit. */
 export function isAtomicTemporary(name: string): boolean {
+  if (name.split(/[\\/]/).includes(ATOMIC_DIRECTORY)) {
+    return true;
+  }
   const base = path.basename(name);
   if (base.startsWith(TEMPORARY_PREFIX)) {
     return base.endsWith(TEMPORARY_SUFFIX);
@@ -127,8 +131,12 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
         `save it: saving would leave the other copy with the old text.`,
     });
   }
+  const directory = prepareAtomicDirectory(target.value);
+  if (!directory.ok) {
+    return directory;
+  }
   const temporary = path.join(
-    path.dirname(target.value),
+    directory.value,
     `${TEMPORARY_PREFIX}${randomUUID()}${TEMPORARY_SUFFIX}`,
   );
   const staged = stageTemporary(temporary, bytes, stats);
@@ -142,7 +150,10 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
   } catch (error: unknown) {
     return discardTemporary(temporary, file, errorMessage(error));
   }
-  return flushDirectory(path.dirname(target.value), file);
+  // The rename changes two directories. Flush both, even if the first fails.
+  const sourceFlush = flushDirectory(directory.value, file);
+  const targetFlush = flushDirectory(path.dirname(target.value), file);
+  return targetFlush.ok ? sourceFlush : targetFlush;
 }
 
 /** Create `file` with `bytes`, failing with `exists` if anything is there: a

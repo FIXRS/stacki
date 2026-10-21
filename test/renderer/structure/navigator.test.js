@@ -12,6 +12,7 @@
 // The model keeps its branch either way: it is still where a drop lands, still
 // what the file writes out. This is only which rows the tree draws.
 
+const { toastMessages, toastNotices } = require('../../helpers/toastCapture');
 const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
@@ -82,6 +83,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
   await esbuild.build({
     entryPoints: [repoPath('src/editor/branches.ts')],
     outfile: rulePath,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -133,6 +135,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
   await esbuild.build({
     entryPoints: [repoPath('src/features/structure/StructurePanel.tsx')],
     outfile: bundlePath,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -172,10 +175,11 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
 
   const selected = [];
   const dropped = [];
-  const render = (nodes) =>
+  const render = (nodes, pageKey) =>
     act(async () => {
       reactRoot.render(
         React.createElement(StructurePanel, {
+          key: pageKey,
           pageState: { editable: true, model: { nodes, imports: [] } },
           layouts: [],
           currentLayoutName: '',
@@ -197,12 +201,36 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
       );
       await settle(20);
     });
-  // Everything starts collapsed; the header button opens it all.
+  // The header expands the remaining branches beyond the initially open root.
   const expandAll = async () =>
     act(async () => {
       container.querySelector('.panel-header button').click();
       await settle(20);
     });
+
+  const defaultSection = elementNode('default-section', 'section', [
+    elementNode('default-content', 'div'),
+  ]);
+  const defaultLayout = {
+    ...elementNode('default-layout', 'BaseLayout', [defaultSection]),
+    kind: 'component',
+  };
+  const defaultSibling = {
+    ...elementNode('default-sibling', 'Sidebar', [elementNode('sidebar-content', 'div')]),
+    kind: 'component',
+  };
+  await render([defaultLayout, defaultSibling], '/first.astro');
+  check('the first component opens on initial load', !!rowFor('default-section'));
+  check('nested branches start collapsed', !rowFor('default-content'));
+  check('other root components start collapsed', !rowFor('sidebar-content'));
+  await act(async () => rowFor('default-layout').querySelector('.drag-handle').click());
+  check('the initial root can be collapsed manually', !rowFor('default-section'));
+  await render([{ ...defaultLayout }, defaultSibling], '/first.astro');
+  check('editing the current file preserves manual collapse', !rowFor('default-section'));
+  await render([defaultLayout, defaultSibling], '/second.astro');
+  check('switching pages opens the root even when node ids match', !!rowFor('default-section'));
+  await render([defaultLayout, defaultSibling], '/first.astro');
+  check('returning to a page restores its opening default', !!rowFor('default-section'));
 
   await render([elementNode('section', 'section', [AND, TERNARY, VALUE_ELSE, WORDS])]);
   await expandAll();
@@ -528,19 +556,20 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
       );
       await settle(20);
     });
-    const note = container.querySelector('.code-note')?.textContent ?? '';
-    check('the parse error says so', /doesn’t parse/.test(note), note);
+    const note = toastMessages();
+    check('no inline error is appended', !container.querySelector('.code-note'));
     check('with the parser’s diagnostic', /Unclosed tag/.test(note), note);
     check('and where it stopped', /Near <div/.test(note), note);
     check('no tree is drawn', rows().length === 0);
     const output = container.querySelector('.parse-error-output pre')?.textContent;
-    const astro = '[astro] Unable to render index.astro';
-    check('Astro’s own output is offered', output === astro, output);
+    check('Astro’s output is not appended', output === undefined);
     const held = container.querySelector('.cm-content')?.textContent ?? '';
     check('the code editor is there, holding the text', /<main>/.test(held), held);
     check('no raw textarea is left', !container.querySelector('textarea'));
     await act(async () => {
-      container.querySelector('.parse-error-open').click();
+      toastNotices()[0]
+        .recovery.find((action) => action.label === 'Open code panel')
+        .run();
     });
     check('the code panel is one click away', opened.length === 1);
   }

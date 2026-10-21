@@ -1,7 +1,8 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import type { useDefaultsCanvas } from './useDefaultsCanvas';
 import './componentDefaults.css';
 
-// Errors remain visible and recoverable without bringing back a second editing toolbar.
+// Keep a failed defaults save recoverable without adding another editing toolbar.
 export function DefaultsCanvasBar({
   canvas,
 }: {
@@ -12,14 +13,16 @@ export function DefaultsCanvasBar({
     return undefined;
   }
   return (
-    <div className="defaults-canvas-bar" role="alert">
-      <span>{state.message}</span>
-      {!canvas.isOpen && (
-        <button onClick={() => void canvas.run('resume')}>Return to defaults</button>
-      )}
-      <button disabled={state.kind === 'saving'} onClick={() => void canvas.run('discard')}>
-        Discard changes
-      </button>
-    </div>
+    <ErrorToast
+      message={state.message}
+      recovery={[
+        ...(!canvas.isOpen
+          ? [{ label: 'Return to defaults', run: () => canvas.run('resume') }]
+          : []),
+        ...(state.kind !== 'saving'
+          ? [{ label: 'Discard changes', run: () => canvas.run('discard') }]
+          : []),
+      ]}
+    />
   );
 }

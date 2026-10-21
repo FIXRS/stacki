@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { PickedAsset } from '../../ui/AssetField';
@@ -410,7 +411,7 @@ function CmsDetailBody({ model, snapshot }: ContentProps) {
   };
   return (
     <div className="cms-detail-body">
-      {collection.error && <div className="cms-error">{collection.error}</div>}
+      {collection.error && <ErrorToast message={collection.error} />}
       {item !== undefined && !isPlainObject(item) && (
         <div className="cms-card">
           <h3>{collection.single ? collection.label : 'Basic info'}</h3>

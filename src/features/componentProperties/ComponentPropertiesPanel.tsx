@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useState } from 'react';
 import { useComponentProperties } from './useComponentProperties';
 import type { ComponentPropertiesPanelProps } from './useComponentProperties';
@@ -40,7 +41,7 @@ export default function ComponentPropertiesPanel(props: ComponentPropertiesPanel
         {props.name}
       </div>
       {controller.state.kind === 'loading' && <p className="property-help">Loading properties…</p>}
-      {controller.state.kind === 'error' && <p role="alert">{controller.state.message}</p>}
+      {controller.state.kind === 'error' && <ErrorToast message={controller.state.message} />}
       {data && (
         <PropertyPanelContent
           key={controller.revision}
@@ -49,11 +50,7 @@ export default function ComponentPropertiesPanel(props: ComponentPropertiesPanel
           save={controller.save}
         />
       )}
-      {controller.error && (
-        <p className="property-error" role="alert">
-          {controller.error}
-        </p>
-      )}
+      {controller.error && <ErrorToast message={controller.error} />}
     </section>
   );
 }

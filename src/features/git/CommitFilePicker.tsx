@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useId, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { CloseIcon, FileIcon } from '../../ui/Icons';
@@ -56,10 +57,10 @@ function CommitFilesDialog(props: CommitFilePickerProps & { readonly onClose: ()
           </div>
           <div className="git-commit-files-content">
             {props.error ? (
-              <div className="git-error" role="alert">
-                {props.error}
-                <button onClick={props.onRefresh}>Retry</button>
-              </div>
+              <ErrorToast
+                message={props.error}
+                recovery={[{ label: 'Retry', run: props.onRefresh }]}
+              />
             ) : undefined}
             {props.picked === undefined ? (
               <p role="status">Loading changed files…</p>

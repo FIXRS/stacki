@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import CloneRepositoryModal from './CloneRepositoryModal';
 import WelcomeSplitButton from './WelcomeSplitButton';
 import React, { useEffect, useRef, useState } from 'react';
@@ -240,7 +241,7 @@ function WelcomeHero({
           />
         </div>
       </div>
-      {error && <div className="error-text">{error}</div>}
+      {error && <ErrorToast message={error} />}
     </div>
   );
 }

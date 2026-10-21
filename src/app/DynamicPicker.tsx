@@ -1,3 +1,4 @@
+import { ErrorToast } from '../ui/ErrorToast';
 interface DynamicPickerProps {
   readonly entries: readonly { readonly label: string }[];
   readonly index: number;
@@ -32,11 +33,7 @@ export default function DynamicPicker({
   pattern,
 }: DynamicPickerProps) {
   if (error) {
-    return (
-      <span className="route-chip is-error" title={error}>
-        getStaticPaths failed
-      </span>
-    );
+    return <ErrorToast message={`Could not load dynamic page paths: ${error}`} />;
   }
   if (!entries.length) {
     return (

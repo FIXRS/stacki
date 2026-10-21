@@ -28,7 +28,7 @@ export function BootScreen({
       <div className="studio-brand">
         <StackiLogo />
       </div>
-      <p>{failure ? 'Unable to open your studio.' : 'Opening your studio…'}</p>
+      {!failure && <p>Opening your studio…</p>}
       {!failure && (
         <div
           className="boot-progress"
@@ -39,9 +39,11 @@ export function BootScreen({
           <span />
         </div>
       )}
-      <p className="boot-detail" role="status">
-        {failure || stage}
-      </p>
+      {!failure && (
+        <p className="boot-detail" role="status">
+          {stage}
+        </p>
+      )}
       {!failure && seconds >= 10 && (
         <p className="boot-detail">This is taking longer than usual. {seconds}s elapsed.</p>
       )}

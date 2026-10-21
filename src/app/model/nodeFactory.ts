@@ -393,7 +393,7 @@ export function tagChangeGesture(
 // the bytes they were stated on (page:previewEdit) — never printed whole, on
 // any page since step 10.
 export type Reviewed =
-  | { readonly tag: 'shown'; readonly source: string; readonly withdrawn: number }
+  | { readonly tag: 'shown'; readonly source: string }
   | { readonly tag: 'failed'; readonly message: string };
 
 export async function reviewedSource(
@@ -414,7 +414,7 @@ export async function reviewedSource(
   });
   switch (shown.tag) {
     case 'previewed':
-      return { tag: 'shown', source: shown.origin.source, withdrawn: shown.withdrawn };
+      return { tag: 'shown', source: shown.origin.source };
     case 'failed':
       return shown;
     default: {

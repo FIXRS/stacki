@@ -1,3 +1,5 @@
+// Goal: adding a class preserves authored expressions and surrounding source.
+// Method: real source edits across static and computed attributes, plus invalid names.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addStyleClass } from '../src/features/settings/styleClassEdit';
@@ -8,6 +10,7 @@ for (const [before, after] of [
   ['class:list={["one", dynamic]}', 'class:list={["one", dynamic, "two"]}'],
   ['class:list={classes}', 'class:list={[classes, "two"]}'],
   ['class={`one ${dynamic}`}', 'class={`one ${dynamic} two`}'],
+  ['class={cx(a, b)}', 'class:list={[(cx(a, b)), "two"]}'],
 ] as const) {
   test(`adding a selector preserves surrounding source with ${before}`, () => {
     const source = `---\nconst dynamic = 'other';\n---\n<!-- preserve -->\n<p id="target" ${before}>Text</p>\n<style>p { color: red; }</style>\n`;
@@ -18,11 +21,10 @@ for (const [before, after] of [
     assert.equal(addStyleClass(result, nodeId(node), 'two'), result);
   });
 }
-test('opaque class expressions and invalid names fail without rewriting source', () => {
+test('invalid names fail without rewriting source', () => {
   const source = '<p class={cx(a, b)}>Text</p>';
   const node = flatten(nodesOf(source)).find((node) => node.name === 'p');
   assert.ok(node);
-  assert.throws(() => addStyleClass(source, nodeId(node), 'two'), /cannot be extended safely/);
   for (const name of ['', 'two classes', '"injected"', '`expression`']) {
     assert.throws(() => addStyleClass(source, nodeId(node), name), /single class name/);
   }

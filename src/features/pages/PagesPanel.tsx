@@ -1,3 +1,7 @@
+import { useTreeDragCleanup } from '../../ui/TreeDragDrop';
+import { useProjectPageOrder } from './pageOrderPersistence';
+import { usePageOrderDrag } from './usePageOrderDrag';
+import { PageOrderNotice } from './PageOrderNotice';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WireInjectedRoute } from '../../../shared/ipc/ipcResults';
 import type { ScanPage, ScanResult } from '../../../shared/properties/projectScan';
@@ -6,21 +10,15 @@ import {
   collectPageTreeDirectories,
   pageDirectory,
   parsePageDragText,
-  stripPageExtension,
+  pageDisplayName,
 } from './pageTree';
 import { comparePageNames, isCollectionRoute } from './pageOrder';
-import {
-  CollectionIcon,
-  FileIcon,
-  FolderIcon,
-  FolderPlusIcon,
-  PlusIcon,
-  RefreshIcon,
-} from '../../ui/Icons';
+import { CollectionIcon, FileIcon, FolderIcon, FolderPlusIcon, PlusIcon } from '../../ui/Icons';
 import { NewPageModal } from './PageDialogs';
 import { PageTreeView, type PageEditing, type PageTreeActions } from './PageTreeView';
 
 interface PagesPanelProps {
+  readonly projectPath?: string;
   readonly scan: Pick<ScanResult, 'pages' | 'pageFolders' | 'layouts'>;
   readonly currentPage: ScanPage | undefined;
   readonly injectedRoutes?: readonly WireInjectedRoute[];
@@ -28,7 +26,6 @@ interface PagesPanelProps {
   readonly onSelect: (page: ScanPage) => void;
   readonly onCreate: (name: string, layout: string | undefined) => void;
   readonly onDelete: (page: ScanPage) => void;
-  readonly onRescan: () => void;
   readonly onMovePage: (page: ScanPage, to: string) => void;
   readonly onCreateFolder: () => Promise<string | undefined>;
   readonly onRenameFolder: (from: string, to: string) => void;
@@ -36,11 +33,75 @@ interface PagesPanelProps {
 }
 
 export default function PagesPanel(props: PagesPanelProps) {
+  const ordering = useProjectPageOrder(props.projectPath);
+  const reorder = usePageOrderDrag({
+    order: ordering.state.order,
+    enabled: ordering.state.kind === 'ready',
+    save: ordering.save,
+  });
+  const model = usePagesPanel(props);
+  const {
+    showNew,
+    setShowNew,
+    query,
+    setQuery,
+    tree,
+    searchResults,
+    collapsed,
+    editing,
+    dropDirectory,
+    setDropDirectory,
+    actions,
+    openFolder,
+  } = model;
+
+  return (
+    <div className="panel-section grow">
+      <PagesHeader createFolder={() => void openFolder()} createPage={() => setShowNew(true)} />
+      <div style={{ padding: '0 12px 8px' }}>
+        <input
+          value={query}
+          maxLength={512}
+          placeholder="Search pages and folders"
+          spellCheck={false}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+      </div>
+      <PageOrderNotice state={ordering.state} reload={ordering.reload} />
+      <PageBody
+        order={ordering.state.order}
+        reorder={reorder}
+        {...props}
+        tree={tree}
+        query={query}
+        searchResults={searchResults}
+        collapsed={collapsed}
+        editing={editing}
+        dropDirectory={dropDirectory}
+        actions={actions}
+        clearDrop={() => setDropDirectory(undefined)}
+      />
+      {showNew && (
+        <NewPageModal
+          layouts={props.scan.layouts}
+          onClose={() => setShowNew(false)}
+          onCreate={(name, layout) => {
+            setShowNew(false);
+            props.onCreate(name, layout);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function usePagesPanel(props: PagesPanelProps) {
   const [showNew, setShowNew] = useState(false);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [editing, setEditing] = useState<PageEditing>({ kind: 'none' });
   const [dropDirectory, setDropDirectory] = useState<string | undefined>(undefined);
+  useTreeDragCleanup(() => setDropDirectory(undefined));
   const tree = useMemo(
     () => buildPageTree(props.scan.pages, props.scan.pageFolders),
     [props.scan.pageFolders, props.scan.pages],
@@ -68,45 +129,20 @@ export default function PagesPanel(props: PagesPanelProps) {
     }
   }, [onCreateFolder]);
 
-  return (
-    <div className="panel-section grow">
-      <PagesHeader
-        rescan={props.onRescan}
-        createFolder={() => void openFolder()}
-        createPage={() => setShowNew(true)}
-      />
-      <div style={{ padding: '0 12px 8px' }}>
-        <input
-          value={query}
-          maxLength={512}
-          placeholder="Search pages and folders"
-          spellCheck={false}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-        />
-      </div>
-      <PageBody
-        {...props}
-        tree={tree}
-        query={query}
-        searchResults={searchResults}
-        collapsed={collapsed}
-        editing={editing}
-        dropDirectory={dropDirectory}
-        actions={actions}
-        clearDrop={() => setDropDirectory(undefined)}
-      />
-      {showNew && (
-        <NewPageModal
-          layouts={props.scan.layouts}
-          onClose={() => setShowNew(false)}
-          onCreate={(name, layout) => {
-            setShowNew(false);
-            props.onCreate(name, layout);
-          }}
-        />
-      )}
-    </div>
-  );
+  return {
+    showNew,
+    setShowNew,
+    query,
+    setQuery,
+    tree,
+    searchResults,
+    collapsed,
+    editing,
+    dropDirectory,
+    setDropDirectory,
+    actions,
+    openFolder,
+  };
 }
 
 function usePageTreeActions(
@@ -179,6 +215,8 @@ function moveDroppedPage(
 }
 
 interface PageBodyProps extends PagesPanelProps {
+  readonly order: import('../../../shared/properties/pageOrder').PageOrder;
+  readonly reorder: import('./usePageOrderDrag').PageOrderDrag;
   readonly tree: ReturnType<typeof buildPageTree>;
   readonly query: string;
   readonly searchResults: readonly ScanPage[] | undefined;
@@ -192,7 +230,9 @@ interface PageBodyProps extends PagesPanelProps {
 function PageBody(props: PageBodyProps) {
   return (
     <div
-      className={`panel-body ${props.dropDirectory === '' ? 'pages-root-drop' : ''}`}
+      className={`panel-body ${
+        props.dropDirectory === '' && props.reorder.target === undefined ? 'pages-root-drop' : ''
+      }`}
       onDragLeave={(event) => {
         if (event.currentTarget === event.target) {
           props.clearDrop();
@@ -211,6 +251,8 @@ function PageBody(props: PageBodyProps) {
       ) : (
         <>
           <PageTreeView
+            order={props.order}
+            reorder={props.reorder}
             node={props.tree}
             rel=""
             depth={0}
@@ -262,7 +304,7 @@ function SearchResults({
         {isCollectionRoute(page.name) ? <CollectionIcon size={13} /> : <FileIcon size={13} />}
       </span>
       <span className="label">
-        {stripPageExtension(page.name.split('/').at(-1) ?? page.name)}
+        {pageDisplayName(page)}
         <span className="sub">{page.route}</span>
       </span>
     </div>
@@ -309,11 +351,9 @@ function InjectedRoutes({
 }
 
 function PagesHeader({
-  rescan,
   createFolder,
   createPage,
 }: {
-  readonly rescan: () => void;
   readonly createFolder: () => void;
   readonly createPage: () => void;
 }) {
@@ -321,9 +361,6 @@ function PagesHeader({
     <div className="panel-header">
       <h2>Pages</h2>
       <div style={{ display: 'flex', gap: 2 }}>
-        <button className="ghost" title="Rescan project files" onClick={rescan}>
-          <RefreshIcon size={13} />
-        </button>
         <button className="ghost" title="New folder" onClick={createFolder}>
           <FolderPlusIcon size={13} />
         </button>
@@ -341,8 +378,10 @@ function pagesForQuery(pages: readonly ScanPage[], query: string): readonly Scan
     return undefined;
   }
   return pages
-    .filter(
-      (page) => page.name.toLowerCase().includes(clean) || page.route.toLowerCase().includes(clean),
+    .filter((page) =>
+      [page.name, page.route, pageDisplayName(page)].some((value) =>
+        value.toLowerCase().includes(clean),
+      ),
     )
     .sort((left, right) => comparePageNames(left.name, right.name));
 }

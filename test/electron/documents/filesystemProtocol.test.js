@@ -79,10 +79,15 @@ test('flush: the staged file is fsynced before the rename, the folder after it',
     const expected =
       process.platform === 'win32'
         ? ['fsync file', 'rename']
-        : ['fsync file', 'rename', 'fsync folder'];
+        : ['fsync file', 'rename', 'fsync folder', 'fsync folder'];
     assert.deepEqual(events, expected);
     const entries = fs.readdirSync(root);
-    assert.deepEqual(entries, ['page.astro'], 'one entry, replaced in place; nothing staged left');
+    assert.deepEqual(
+      entries.sort(),
+      ['.stacki-io', 'page.astro'],
+      'the save directory stays stable',
+    );
+    assert.deepEqual(protocolLeftovers(root), [], 'no temporary or lock file remains');
   });
 });
 

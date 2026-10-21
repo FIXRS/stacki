@@ -167,9 +167,8 @@ function useAddClassToNode(
   // Typing a bare class in the style panel's selector box puts it on the
   // element too — a rule for a class the element doesn't carry would never
   // apply. Where it goes depends on how the element's classes are written: a
-  // plain `class`, a `class:list`, a template literal (see classAttr.js). An
-  // element whose class is some other expression is code we would have to
-  // understand to extend, so that one is said out loud rather than dropped.
+  // plain `class`, a `class:list`, or a template literal (see classAttr.ts).
+  // Other expressions stay intact while class:list adds the new class.
   // Resolves with the page edit's outcome, once it reached disk or was
   // refused: the style panel writes the class's rule only after it applied
   // (step 6, plan §3.3 — outcome-gated, never a fabricated atomicity).
@@ -189,15 +188,17 @@ function useAddClassToNode(
       }
       const edit = withClass(node.props, clean);
       if (!edit) {
-        showToast(
-          `Add ${clean} to this element yourself — ` +
-            "its class comes from code Stacki can't edit safely.",
-        );
-        return { tag: 'refused', message: 'its class comes from code' };
+        const message = `Stacki couldn’t add the class “${clean}”. Check the class name and retry.`;
+        showToast(message, 'error');
+        return { tag: 'refused', message };
       }
       // Step 6, attribute: the class attribute, as its own edit request.
-      const patch = { [edit.key]: edit.value };
-      if (!commitEdit(propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true }))) {
+      const patch = { [edit.key]: edit.value, ...(edit.remove ? { class: undefined } : {}) };
+      const gesture = propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true });
+      // Migrating class to class:list must be one node rewrite, so a failed
+      // second attribute write cannot leave duplicate class attributes.
+      const request = edit.remove ? () => undefined : gesture.request;
+      if (!commitEdit({ ...gesture, request })) {
         return { tag: 'refused', message: 'the edit could not be queued' };
       }
       previewAddedClass(previewPath, clean);
