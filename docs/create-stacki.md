@@ -72,6 +72,13 @@ Both commands must report the intended release version. Separately verify that t
 is published, not a draft, and includes the Studio bundle and every platform's update metadata.
 Stay with both workflows until they finish; queued jobs and passing tests are not a live release.
 
+If npm says the package is being processed, publication has been accepted but registry availability
+may lag. Keep the same version and tarball; do not republish or bump the version to fix this delay.
+Recheck at 30–60 second intervals for up to 15 minutes. If it is still unavailable, inspect npm's
+package status before taking another publication action. After it appears, compare
+`npm view create-stacki@VERSION dist.shasum` with the tested tarball's SHA-1 checksum, then run both
+completion commands above. A successful publish command alone does not prove `latest` has updated.
+
 ## npm authentication failures
 
 The 0.1.64 workflow passed all tests and built its package, then npm rejected the publish with
@@ -90,13 +97,29 @@ If the workflow cannot authenticate, a signed-in maintainer can publish the test
    working directory; their unfinished changes must not enter the package.
 2. Build and inspect the package using the commands above, then install its tarball into a disposable
    Astro project to verify dependency installation, type checks, and the Studio build.
-3. Run `npm whoami`, then publish that tarball with `npm publish /path/to/create-stacki-VERSION.tgz
-   --access public --tag latest`.
-4. Complete npm's browser sign-in/passkey confirmation when prompted. `npm whoami` succeeding does
-   not guarantee publication can finish without this step. Keep the publishing process running while
-   the maintainer authenticates; never ask for a password, token, or one-time code in chat.
+3. Run `npm whoami`. If the session expired, run `npm login --auth-type=web` and complete its browser
+   sign-in. Verify `npm whoami` again before publishing the tested tarball:
+
+   ```sh
+   npm publish /path/to/create-stacki-VERSION.tgz --access public --tag latest
+   ```
+
+4. Expect a separate browser confirmation during publication, even immediately after a successful
+   login. Keep `npm publish` running in an interactive terminal, open the fresh URL it prints, and
+   have the maintainer complete the passkey confirmation. A reply that login is complete does not
+   complete this second step. Do not restart publication while it is waiting, reuse an old auth URL,
+   or ask for a password, token, or one-time code in chat.
 5. Verify both registry commands above. A failed workflow may remain red even after a successful
    local publication; the registry is the source of truth for what users receive.
+
+## 0.1.66 authentication record
+
+The GitHub workflow passed its tests and package build, then publication failed with the same
+unauthorized `E404` as earlier releases. Local `npm login` restored the expired maintainer session,
+but `npm publish` still required a second browser confirmation. After that confirmation, npm accepted
+the tested 0.1.66 tarball and reported that registry processing could take a few minutes. During that
+window, `latest` still returned 0.1.65 and querying 0.1.66 returned `E404`. Treat these as separate
+stages: account sign-in, publish confirmation, and registry availability.
 
 References: [npm init](https://docs.npmjs.com/cli/v11/commands/npm-init/) and
 [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/).
