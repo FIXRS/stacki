@@ -11,7 +11,7 @@ const { DocumentActors } = require('#dist/electron/documents/documentActors.js')
 const { NODE_PROJECTOR, NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
 const { createDocumentTelemetry } = require('#dist/electron/documents/documentTelemetry.js');
 const { planIntent } = require('#dist/shared/engine/planner.js');
-const { ATOMIC_DIRECTORY } = require('#dist/electron/documents/atomicDirectory.js');
+const { atomicDirectoryOf } = require('#dist/electron/documents/atomicDirectory.js');
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -39,7 +39,7 @@ async function scratch(base, run) {
 
 /** Temporary and lock files left in a target directory's stable staging folder. */
 function protocolLeftovers(root) {
-  const directory = path.join(root, ATOMIC_DIRECTORY);
+  const directory = atomicDirectoryOf(path.join(root, 'page.astro'));
   return fs.existsSync(directory) ? fs.readdirSync(directory) : [];
 }
 

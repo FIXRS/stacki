@@ -15,6 +15,7 @@ import {
   type PreviewRender,
   type PreviewVerdict,
 } from '../../../shared/page/previewToken';
+import type { CanvasSelectionVerdict } from './previewSelection';
 import type { CanvasEventRequest } from '../../editor/canvasClick';
 
 /** Whether a click or double-click on the canvas may select what it names
@@ -23,7 +24,7 @@ export type JudgeCanvasEvent = (
   token: Digest | undefined,
   render: PreviewRender | undefined,
   request: CanvasEventRequest,
-) => Promise<PreviewVerdict>;
+) => Promise<CanvasSelectionVerdict>;
 
 export interface PreviewRuntimeProps {
   readonly selPath: string | undefined;
@@ -334,7 +335,7 @@ function applyMessage(
         message.token,
         refs,
         { kind: 'click', path: message.path, outside: message.outside },
-        () => applyClick(message, refs, setters),
+        (path) => applyClick({ ...message, path: path ?? message.path }, refs, setters),
       );
       break;
     case 'render':
@@ -395,13 +396,16 @@ function gateEvent(
   token: Digest | undefined,
   refs: RuntimeRefs,
   request: CanvasEventRequest,
-  apply: () => void,
+  apply: (path?: string) => void,
 ): void {
   const render = refs.render.current;
   refs.props.current.judgeEvent(token, render, request).then(
     (verdict) => {
       if (verdict.tag === 'current') {
-        apply();
+        if (judgeEventToken(token, refs.render.current).tag !== 'current') {
+          return;
+        }
+        apply('path' in verdict ? verdict.path : undefined);
       } else {
         refs.props.current.onStaleEvent(verdict);
       }
@@ -527,6 +531,7 @@ function useResetOnReload(
     setters.setRects({});
     setters.setCanvasHover(undefined);
     setters.setSpacing({});
+    setters.setGuide(undefined);
     setters.setSelectedOccurrence(undefined);
     setters.setHoverOcc(0);
     selectedClassesRef.current = undefined;

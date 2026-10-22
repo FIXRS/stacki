@@ -45,7 +45,10 @@ export function renderDefaultsInstance(
       name = 'DefaultsComponent' + index;
     }
     imports.set(file, name);
-    additions.push(`import ${name} from ${JSON.stringify('../../' + componentFile(file))};`);
+    const specifier =
+      snapshot.catalog.find((entry) => entry.file === file)?.importPath ??
+      '../../' + componentFile(file);
+    additions.push(`import ${name} from ${JSON.stringify(specifier)};`);
     return name;
   };
   const render = (node: ResolvedNode, depth: number): string => {
@@ -98,7 +101,10 @@ export function recipeFromCanvas(
   session: DefaultsCanvasSession,
 ): ComponentRecipe {
   const imports = new Map(
-    model.imports.map((item) => [item.name, resolveSourceImport(session.file, item.path)]),
+    model.imports.map((item) => [
+      item.name,
+      resolveSourceImport(session.file, item.path, session.snapshot.catalog),
+    ]),
   );
   const root = canvasNodeAt(model.nodes, session.targetPath);
   if (!root || root.kind !== 'component' || imports.get(root.name ?? '') !== session.component) {

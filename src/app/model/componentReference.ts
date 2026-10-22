@@ -14,6 +14,12 @@ interface ComponentReference {
 // can contain Heading. Match the imported file before considering a name fallback.
 export function componentReference(context: ComponentReference): ScanComponent | undefined {
   const specifier = context.imports.find((item) => item.name === context.name)?.path;
+  const installed = context.components.find(
+    (item) => item.origin?.kind === 'package' && item.origin.importPath === specifier,
+  );
+  if (installed) {
+    return installed;
+  }
   const root = context.project?.replaceAll('\\', '/').replace(/\/$/, '');
   const file = context.file?.replaceAll('\\', '/');
   if (specifier && root && file?.startsWith(root + '/')) {

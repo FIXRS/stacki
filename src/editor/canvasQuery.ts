@@ -10,6 +10,8 @@ interface QueryMessage {
   readonly compute: readonly string[];
   readonly props: readonly string[];
   readonly textParentPath?: string;
+  readonly pageMetadata?: boolean;
+  readonly pageText?: boolean;
 }
 interface PendingQuery {
   readonly resolve: (answer: CanvasAnswer | undefined) => void;
@@ -84,7 +86,11 @@ export function queryCanvas(
   selectors: readonly string[] = [],
   compute: readonly string[] = [],
   props: readonly string[] = [],
-  context: { readonly textParentPath?: string } = {},
+  context: {
+    readonly textParentPath?: string;
+    readonly pageMetadata?: boolean;
+    readonly pageText?: boolean;
+  } = {},
 ): Promise<CanvasAnswer | undefined> {
   if (!frame || typeof path !== 'string') {
     return Promise.resolve(undefined);
@@ -184,6 +190,9 @@ export function receiveCanvasReply(input: unknown): void {
           computedProps: data.computedProps || {},
           authoredProps: data.authoredProps || {},
           inheritedSources: data.inheritedSources || {},
+          ...(data.pageImage === undefined ? {} : { pageImage: data.pageImage }),
+          ...(data.pageType === undefined ? {} : { pageType: data.pageType }),
+          ...(data.pageText === undefined ? {} : { pageText: data.pageText }),
         }
       : undefined,
   );

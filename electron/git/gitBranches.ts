@@ -357,19 +357,10 @@ export type SwitchOutcome =
 /**
  * Move to another branch.
  *
- * Plain `git switch`, tried before anything is asked. Git carries uncommitted
- * work across by itself whenever the files involved do not differ between the
- * two branches, which is nearly always — and asking "what shall I do with your
- * changes?" before trying turns the ordinary case into a dialog about a
- * problem that was not going to happen.
- *
- * When the work genuinely cannot come along, git refuses without moving HEAD
- * and names the files. That comes back as `{ ok: false, blocked: true, files }`
- * rather than an error, because it is a question for the user — leave the work
- * here, or commit it first — and a rejection crossing IPC arrives as a bare
- * string with no file list in it.
- *
- * `park` and `unpark` are passed in: they live in gitParking.ts, over the stash.
+ * Existing branches have separate unfinished work. Park before switching even
+ * when Git could carry edits across, so previews do not contain another branch's
+ * edits. Creating a branch intentionally carries the current work onto it.
+ * The caller restores the destination's own parked work after a successful switch.
  */
 async function switchBranch(
   git: Git,
@@ -377,24 +368,20 @@ async function switchBranch(
     projectPath,
     branch,
     create,
-    parkFirst,
     park,
     unpark,
   }: {
     readonly projectPath: string;
     readonly branch: string;
     readonly create?: boolean;
-    readonly parkFirst?: boolean;
-    readonly park?: () => Promise<boolean>;
-    readonly unpark?: (branch: string) => Promise<unknown>;
+    readonly park: (branch: string) => Promise<boolean>;
+    readonly unpark: (branch: string) => Promise<unknown>;
   },
 ): Promise<SwitchOutcome> {
   const from = (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
   let parked = false;
-  // Only when asked. Creating a branch carries the work onto it, which is what
-  // starting a branch from what is in front of you means.
-  if (parkFirst && !create && park) {
-    parked = await park();
+  if (!create && from !== branch) {
+    parked = await park(from);
   }
   // `switch`, not `checkout`: it does one thing, and it cannot silently detach
   // HEAD or restore a file over a mistyped branch name.
@@ -403,7 +390,7 @@ async function switchBranch(
   } catch (error: unknown) {
     // Put the work straight back rather than leaving it stashed behind a
     // branch change that never happened.
-    if (parked && unpark) {
+    if (parked) {
       await unpark(from);
     }
     const detail = gitErrorDetail(error);

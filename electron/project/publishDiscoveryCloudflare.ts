@@ -69,7 +69,9 @@ export function parseCloudflareProject(input: unknown, account: string): Publish
   };
 }
 
-function cloudflareHeaders(credentials: Record<string, unknown>): Readonly<Record<string, string>> {
+export function cloudflareHeaders(
+  credentials: Record<string, unknown>,
+): Readonly<Record<string, string>> {
   if (credentials['type'] === 'api_key') {
     return {
       'X-Auth-Key': credential(credentials['key']),
@@ -89,7 +91,7 @@ function credential(input: unknown): string {
   return value;
 }
 
-async function cloudflareRequest(url: string, headers: Readonly<Record<string, string>>) {
+export async function cloudflareRequest(url: string, headers: Readonly<Record<string, string>>) {
   const response = await fetch(url, {
     method: 'GET',
     headers,

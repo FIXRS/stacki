@@ -7,6 +7,7 @@ import { toUtf16Span } from '../../shared/core/span';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode } from './astroParserTypes';
+import { findMatchingBrace } from './astroLexical';
 
 export const VOID_ELEMENTS = new Set([
   'area',
@@ -54,14 +55,8 @@ export function assignPathIds(nodes: readonly ParserNode[], prefix: string, dept
 // Attribute (prop) parsing
 // ---------------------------------------------------------------------------
 
-// Values: {type:'string'|'expr'|'bare'|'spread', value}
-// Expression values may contain one level of nested braces (attrs={{ a: 1 }}).
-//
-// `{...rest}` is matched first and kept as its own kind. Without that the name
-// pattern claims `...rest` as a bare attribute — `.` is a legal attribute
-// character — and it is written back WITHOUT its braces, turning
-// `<Foo {...rest} />` into `<Foo ...rest />`, which does not compile. Spreads
-// are everywhere in Astro, so this corrupts real components.
+// Attribute values stay opaque JavaScript; only their balanced source ranges
+// are read. Nested objects, strings and templates must never become fake props.
 export function parseAttrs(attrString: string): Record<string, Attr> {
   return propsOf(scanAttrs(attrString));
 }
@@ -84,70 +79,109 @@ interface ScannedAttr {
   readonly valueAt: readonly [number, number] | undefined;
 }
 
-// The spread body takes one level of nested braces, the same depth the value
-// form allows — `{...cond ? { href } : { type: "button" }}` is ordinary Astro,
-// and stopping at the first inner brace would truncate it. The `d` flag reports
-// where each group matched, which is what the attribute spans are built from:
-// one pattern answers both "what does this tag say" and "where does it say it".
-const ATTR_PATTERN =
-  '\\{\\s*\\.\\.\\.((?:[^{}]|\\{[^{}]*\\})*)\\}|([\\w@:.-]+)' +
-  '(?:\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|\\{((?:[^{}]|\\{[' +
-  '^{}]*\\})*)\\}))?';
+const ATTR_NAME = /[\w@:.-]+/y;
 
-// Compiled once: the `d` flag makes every match report its group indices, and
-// building the pattern per tag cost a compile-cache lookup on every element.
-// Only scanAttrs uses it, and it runs each scan to completion before returning,
-// so the shared lastIndex never interleaves.
-const ATTR_RE = new RegExp(ATTR_PATTERN, 'dg');
-
-function scanAttrs(attrString: string): readonly ScannedAttr[] {
+function scanAttrs(source: string): readonly ScannedAttr[] {
   const found: ScannedAttr[] = [];
-  const re = ATTR_RE;
-  re.lastIndex = 0;
-  let match;
-  while ((match = re.exec(attrString)) !== null) {
-    if (!match[0].trim()) {
-      continue;
+  // Each pass consumes a full attribute or one character, bounded by source length.
+  for (let position = 0; position < source.length;) {
+    const attribute = scanAttr(source, position);
+    if (attribute) {
+      assert(attribute.to > position, 'An attribute scan advances');
+      assert(attribute.to <= source.length, 'An attribute stays inside its source');
+      found.push(attribute);
+      position = attribute.to;
+    } else {
+      position++;
     }
-    assert(found.length <= attrString.length, 'Each attribute consumes at least one character');
-    found.push(scanAttr(match));
   }
   return found;
 }
 
-function scanAttr(match: RegExpExecArray): ScannedAttr {
-  const indices = required(match.indices, 'Attribute match indices');
-  const from = match.index;
-  const to = from + match[0].length;
-  const trimmed = (group: number): readonly [number, number] => {
-    const [start] = required(indices[group], 'Attribute value indices');
-    const raw = required(match[group], 'Attribute value capture');
-    const lead = raw.length - raw.trimStart().length;
-    return [start + lead, start + lead + raw.trim().length];
-  };
-  if (match[1] !== undefined) {
-    // Keyed by the spread's own text, so two different spreads on one tag
-    // stay separate and the order round-trips.
-    const expr = match[1].trim();
-    const attr: Attr = { type: 'spread', value: expr };
-    return { name: `...${expr}`, attr, from, to, nameAt: undefined, valueAt: trimmed(1) };
+function scanAttr(source: string, from: number): ScannedAttr | undefined {
+  if (source.charAt(from) === '{') {
+    return scanSpreadAttr(source, from);
   }
-  const name = required(match[2], 'Attribute name capture');
-  const nameAt = required(indices[2], 'Attribute name indices');
-  if (match[3] !== undefined || match[4] !== undefined) {
-    const group = match[3] !== undefined ? 3 : 4;
-    const valueAt = required(indices[group], 'Quoted attribute indices');
-    const attr: Attr = {
-      type: 'string',
-      value: required(match[group], 'Quoted attribute capture'),
+  ATTR_NAME.lastIndex = from;
+  const match = ATTR_NAME.exec(source);
+  if (!match) {
+    return undefined;
+  }
+  const name = match[0];
+  const end = from + name.length;
+  const nameAt: readonly [number, number] = [from, end];
+  const equalsAt = scanAttrSpace(source, end);
+  if (source.charAt(equalsAt) !== '=') {
+    return { name, attr: { type: 'bare' }, from, to: end, nameAt, valueAt: undefined };
+  }
+  const valueStart = scanAttrSpace(source, equalsAt + 1);
+  const quote = source.charAt(valueStart);
+  if (quote === '"' || quote === "'") {
+    const close = source.indexOf(quote, valueStart + 1);
+    if (close === -1) {
+      return undefined;
+    }
+    return {
+      name,
+      attr: { type: 'string', value: source.slice(valueStart + 1, close) },
+      from,
+      to: close + 1,
+      nameAt,
+      valueAt: [valueStart + 1, close],
     };
-    return { name, attr, from, to, nameAt, valueAt };
   }
-  if (match[5] !== undefined) {
-    const attr: Attr = { type: 'expr', value: match[5].trim() };
-    return { name, attr, from, to, nameAt, valueAt: trimmed(5) };
+  if (quote !== '{') {
+    return undefined;
   }
-  return { name, attr: { type: 'bare' }, from, to, nameAt, valueAt: undefined };
+  const close = findMatchingBrace(source, valueStart);
+  if (close === -1) {
+    return undefined;
+  }
+  const valueAt = scanAttrTrim(source, valueStart + 1, close);
+  return {
+    name,
+    attr: { type: 'expr', value: source.slice(...valueAt) },
+    from,
+    to: close + 1,
+    nameAt,
+    valueAt,
+  };
+}
+
+function scanSpreadAttr(source: string, from: number): ScannedAttr | undefined {
+  const close = findMatchingBrace(source, from);
+  if (close === -1) {
+    return undefined;
+  }
+  const bodyAt = scanAttrSpace(source, from + 1);
+  if (!source.startsWith('...', bodyAt)) {
+    return undefined;
+  }
+  const valueAt = scanAttrTrim(source, bodyAt + 3, close);
+  const value = source.slice(...valueAt);
+  // Key spreads by their source so distinct spreads retain their authored order.
+  return {
+    name: `...${value}`,
+    attr: { type: 'spread', value },
+    from,
+    to: close + 1,
+    nameAt: undefined,
+    valueAt,
+  };
+}
+
+function scanAttrSpace(source: string, from: number): number {
+  let position = from;
+  while (position < source.length && /\s/.test(source.charAt(position))) {
+    position++;
+  }
+  return position;
+}
+
+function scanAttrTrim(source: string, from: number, to: number): readonly [number, number] {
+  const raw = source.slice(from, to);
+  const start = from + raw.length - raw.trimStart().length;
+  return [start, start + raw.trim().length];
 }
 
 // File offsets for every attribute of a tag whose attribute string starts at

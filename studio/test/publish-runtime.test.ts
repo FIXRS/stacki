@@ -1,3 +1,5 @@
+// Goal: Git-only publishing survives Vite configuration runner shutdown.
+// Method: load the publisher through Vite, close the runner, then capture real Git objects.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
@@ -6,7 +8,7 @@ import path from 'node:path';
 import { createServer } from 'vite';
 import { record } from '../src/shared/validation';
 
-test('publishing still builds after Vite closes its configuration module runner', async () => {
+test('publishing still captures after Vite closes its configuration module runner', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-runtime-'));
   for (const directory of ['src/pages', 'public', '.studio-state']) {
     await mkdir(path.join(root, directory), { recursive: true });
@@ -30,7 +32,7 @@ test('publishing still builds after Vite closes its configuration module runner'
     `
     import { Publisher } from ${JSON.stringify(path.resolve('src/features/publishing/publish.ts'))};
     const repository = {
-      async commit() { return { sha: '${'b'.repeat(40)}', url: 'https://example.test/commit' }; },
+      async commit() { return { ok: true, value: { sha: '${'b'.repeat(40)}', url: 'https://example.test/commit' } }; },
       async incoming() { throw new Error('Unexpected sync'); },
       async acceptBase() {},
     };

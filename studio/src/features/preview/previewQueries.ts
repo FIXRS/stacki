@@ -3,6 +3,11 @@ import { queryAuthoredStyles } from '../../../vendor/stacki/electron/preload/fra
 import { mapped } from '../../../vendor/stacki/electron/preload/frameRegions';
 import { ownClasses } from '../../../vendor/stacki/electron/preload/frameMeasure';
 import { styleElements, textStyleHost } from './styleQueryTargets';
+import {
+  renderedPageImage,
+  renderedPageType,
+} from '../../../vendor/stacki/electron/preload/framePageMetadata';
+import { renderedPageText } from '../../../vendor/stacki/electron/preload/framePageText';
 
 function values(input: unknown): string[] {
   if (!Array.isArray(input) || input.length > 1000) {
@@ -15,6 +20,18 @@ export function answerPreviewQuery(input: unknown, selectionCursor?: CSSStyleShe
   const id = data['id'];
   if (typeof id !== 'number' || !Number.isSafeInteger(id)) {
     throw new Error('Invalid query');
+  }
+  if (data['pageMetadata'] === true) {
+    return {
+      type: 'avb:query-result',
+      id,
+      found: true,
+      pageImage: renderedPageImage(document),
+      pageType: renderedPageType(document),
+    };
+  }
+  if (data['pageText'] === true) {
+    return { type: 'avb:query-result', id, found: true, pageText: renderedPageText(document) };
   }
   const path = string(data['path'], 500);
   const elements = path ? styleElements(path) : [];

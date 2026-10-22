@@ -23,7 +23,9 @@ export function componentAt(
   }
   const node = flatten(parsed.model.nodes).find((node) => node.id === id);
   const spec = parsed.model.imports.find((item) => item.name === (node?.name ?? name))?.path;
-  return project.components.find((item) => item.file === resolveImport(file, spec));
+  return project.components.find(
+    (item) => item.file === resolveImport(file, spec, project.components),
+  );
 }
 interface Context {
   readonly project: Project;
@@ -44,6 +46,12 @@ export function componentEntry(context: Context) {
     }
     const component = componentAt(context.project, context.file, context.parsed, id, name);
     if (!component || !context.document?.ready) {
+      return;
+    }
+    if (component.origin?.kind === 'package') {
+      context.report(
+        new Error('Package components are read-only. Edit instance properties on the page.'),
+      );
       return;
     }
     const focus =

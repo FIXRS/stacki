@@ -32,14 +32,14 @@ export function prepareDefaultsCanvas(
     throw new Error('Select a component instance to set its defaults.');
   }
   const specifier = context.model.imports.find((entry) => entry.name === node.name)?.path;
-  const component = specifier && resolveSourceImport(context.file, specifier);
+  const component = specifier && resolveSourceImport(context.file, specifier, snapshot.catalog);
   if (!component) {
     throw new Error('This component does not resolve to a project Astro file.');
   }
   componentFile(component);
   const existing = new Map<string, string>();
   for (const entry of context.model.imports) {
-    const resolved = resolveSourceImport(context.file, entry.path);
+    const resolved = resolveSourceImport(context.file, entry.path, snapshot.catalog);
     if (resolved) {
       existing.set(resolved, entry.name);
     }

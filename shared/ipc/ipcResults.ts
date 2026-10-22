@@ -1,6 +1,7 @@
+import type { AccountState } from './publishAccount';
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
-import type { DesktopPublishState } from '../properties/publishState';
+import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
 import type { MetadataFile } from '../properties/projectMetadata';
 import type { ConversionResult } from './assetConversion';
 import type { CommitDiffResult } from './gitCommitDiff';
@@ -439,8 +440,11 @@ export interface IpcResults {
   readonly 'git:connect': IpcResults['git:publish'];
   readonly 'publish:start': DesktopPublishState;
   readonly 'publish:state': DesktopPublishState;
+  readonly 'publish:availability': PublishAvailability;
+  readonly 'publish:siteURL': string | undefined;
   readonly 'publish:repository': RepositoryResult;
   readonly 'publish:discover': PublishDiscovery;
+  readonly 'publish:account': AccountState;
   readonly 'git:publish': {
     readonly ok: true;
     readonly url: undefined | string;
@@ -449,6 +453,8 @@ export interface IpcResults {
   readonly 'git:push': {
     readonly ok: true;
   };
+  readonly 'git:pull': WireMergeOutcome;
+  readonly 'git:incoming': number;
   readonly 'git:resolveMerge': WireMergeOutcome;
   readonly 'git:restoreFile': {
     readonly ok: boolean;

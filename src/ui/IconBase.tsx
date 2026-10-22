@@ -35,7 +35,7 @@ export const I = ({
     strokeLinecap="round"
     strokeLinejoin="round"
     className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
     aria-hidden="true"
   >
     {children}
@@ -50,7 +50,7 @@ export const I24 = ({ children, size = 24, className, style }: IconProps) => (
     viewBox="0 0 24 24"
     fill="none"
     className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
     aria-hidden="true"
   >
     {children}

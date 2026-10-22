@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePreviewSource } from './usePreviewSource';
+import { PreviewFrame } from './PreviewFrame';
 import { usePreviewDimensions, usePreviewSizing } from './usePreviewSizing';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
@@ -128,6 +129,9 @@ function PreviewContent({
   readonly sizing: Sizing;
   readonly shownGuide: ShownGuide | undefined;
 }) {
+  if (props.devStatus === 'off' || props.devStatus === 'starting') {
+    return <PreviewPlaceholder props={props} />;
+  }
   if (url && props.device === 'canvas') {
     return (
       <CanvasView
@@ -179,10 +183,10 @@ function DesignPreview({
         }}
       >
         <div className="frame-clip">
-          <iframe
-            key={`${url}-${props.refreshKey ?? ''}`}
-            ref={runtime.iframeRef}
-            src={`${url}#avb-design`}
+          <PreviewFrame
+            refreshKey={props.refreshKey ?? ''}
+            frameRef={runtime.iframeRef}
+            url={url}
             title="Site preview"
             onLoad={() => {
               runtime.registerFrame();

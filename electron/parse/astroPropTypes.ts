@@ -71,11 +71,13 @@ export function statedDefault(documentation: string | undefined): StatedDefault 
   // Naming a second value is the tell, whatever word joins them. Asking for
   // "for", "when", "if" or "on" as well let "Defaults to `Play`, or `Pause`
   // while pressed" through as a plain default of Play, and the panel offered
-  // Play on a close button. A list of joining words is always one word short;
-  // two backticked values in one clause cannot be anything but two answers.
-  // Prose still needs those words, having no second value to count.
+  // Play on a close button. A list of joining words is always one word short.
+  // Explicit advice after "; use" starts a separate clause about an authored
+  // choice, not another automatic fallback. Keep quoted values intact while
+  // stopping there. Prose still needs joining words, having no values to count.
   const clause =
-    (documentation.match(/defaults?\s*(?:to|:)\s*((?:`[^`]*`|[^.])+)/i) || [])[1] || '';
+    (documentation.match(/defaults?\s*(?:to|:)\s*((?:`[^`]*`|(?!;\s*use\b)[^.])+)/i) || [])[1] ||
+    '';
   const named = clause.match(/`[^`]+`/g) || [];
   const conditional =
     named.length > 1 ||

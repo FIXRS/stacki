@@ -17,6 +17,7 @@ esbuild.buildSync({
       'export { default as PreviewPane, deviceForWidth }',
       "  from './src/features/preview/PreviewPane.tsx';",
       "export { hasCanvas, queryCanvas } from './src/editor/canvasQuery.ts';",
+      "export { useCanvasMessages } from './src/app/state/appNodeEdits.ts';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'jsx',
@@ -31,6 +32,46 @@ esbuild.buildSync({
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+test('starting and failed previews never show an iframe with a stale URL', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  let retries = 0;
+  const props = {
+    ...hoverPreviewProps(),
+    onRestart: () => {
+      retries += 1;
+    },
+  };
+  try {
+    for (const device of ['desktop', 'canvas']) {
+      await React.act(async () => {
+        root.render(React.createElement(PreviewPane, { ...props, device, devStatus: 'starting' }));
+      });
+      assert.equal(document.querySelector('iframe') === null, true);
+      assert.match(document.body.textContent, /Starting Astro/);
+      await React.act(async () => {
+        root.render(React.createElement(PreviewPane, { ...props, device, devStatus: 'off' }));
+      });
+      assert.equal(document.querySelector('iframe') === null, true);
+      assert.match(document.body.textContent, /Preview is offline/);
+      const retry = [...document.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Start dev server',
+      );
+      assert.ok(retry);
+      await React.act(async () => retry.click());
+    }
+    assert.equal(retries, 2);
+    await React.act(async () => root.render(React.createElement(PreviewPane, props)));
+    assert.ok(document.querySelector('iframe'));
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+  }
+});
 
 test('iframe load requests the verified render again after listeners mount', async () => {
   const dom = installHoverDOM();
@@ -216,7 +257,7 @@ test('a loaded preview frame announces that recovery should be checked', async (
       await settle();
     });
     const designFrame = document.querySelector('iframe');
-    designFrame.dispatchEvent(new window.Event('load'));
+    await React.act(async () => designFrame.dispatchEvent(new window.Event('load')));
     assert.equal(loaded, 1, 'the design frame starts a recovery check');
 
     props.device = 'canvas';
@@ -225,7 +266,7 @@ test('a loaded preview frame announces that recovery should be checked', async (
       await settle();
     });
     const canvasFrame = document.querySelector('iframe');
-    canvasFrame.dispatchEvent(new window.Event('load'));
+    await React.act(async () => canvasFrame.dispatchEvent(new window.Event('load')));
     assert.equal(loaded, 2, 'a canvas overview frame starts the same recovery check');
   } finally {
     await React.act(async () => root.unmount());
@@ -367,6 +408,7 @@ function installHoverDOM() {
   for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node']) {
     global[key] = key === 'window' ? dom.window : dom.window[key];
   }
+  global.KeyboardEvent = dom.window.KeyboardEvent;
   global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
   global.cancelAnimationFrame = clearTimeout;
   global.ResizeObserver = class {
@@ -763,6 +805,281 @@ test('context events use the gate and translate zoomed frame coordinates', async
       },
     });
     assert.equal(document.querySelectorAll('.node-outline.sel').length, 1);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('navigation keeps a loaded page visible while isolating its replacement', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane, queryCanvas } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const props = hoverPreviewProps();
+  const act = (action) =>
+    React.act(async () => {
+      action();
+      await settle();
+    });
+  const render = (patch) =>
+    act(() => {
+      Object.assign(props, patch);
+      root.render(React.createElement(PreviewPane, props));
+    });
+  const load = (frame) => act(() => frame.dispatchEvent(new window.Event('load')));
+  const current = () => document.querySelector('iframe[title="Site preview"]');
+  try {
+    await render({});
+    const first = current();
+    await load(first);
+    assert.ok(document.querySelector('[role="status"]') === null);
+    const pending = queryCanvas('0');
+    await render({ route: '/about' });
+    const next = current();
+    assert.notEqual(next, first);
+    assert.equal(await pending, undefined, 'Navigation cancels old-page queries immediately');
+    assert.equal(first.isConnected, true, 'The last loaded document remains on screen');
+    assert.equal(first.style.visibility, 'visible');
+    assert.equal(first.style.pointerEvents, 'none', 'The retained page cannot receive edits');
+    assert.equal(first.tabIndex, -1);
+    assert.equal(next.style.visibility, 'hidden', 'An unfinished document cannot flash white');
+    assert.equal(document.querySelector('[role="status"]').textContent, 'Loading page…');
+    const sent = [];
+    next.contentWindow.postMessage = (message) => sent.push(message);
+    const query = queryCanvas('0');
+    assert.ok(sent.some((message) => message.type === 'avb:query'));
+    await act(() =>
+      window.dispatchEvent(
+        new window.MessageEvent('message', {
+          source: first.contentWindow,
+          data: {
+            type: 'avb:rects',
+            classes: {},
+            spacing: {},
+            rects: { 0: [{ x: 10, y: 10, w: 80, h: 40 }] },
+          },
+        }),
+      ),
+    );
+    assert.equal(document.querySelectorAll('.node-outline.sel').length, 0);
+    await render({ route: '/contact' });
+    assert.equal(await query, undefined);
+    assert.equal(next.isConnected, false, 'Abandoned loads are removed');
+    assert.equal(document.querySelectorAll('iframe').length, 2, 'Retention is bounded');
+    await load(next);
+    assert.equal(current().style.visibility, 'hidden', 'An abandoned load cannot reveal a page');
+    await load(current());
+    assert.equal(first.isConnected, false);
+    assert.equal(document.querySelectorAll('iframe').length, 1);
+    assert.equal(current().style.visibility, 'visible');
+    assert.ok(document.querySelector('[role="status"]') === null);
+    const loaded = current();
+    await render({ refreshKey: 1 });
+    assert.notEqual(current(), loaded, 'Explicit refresh still creates a new document');
+    assert.equal(loaded.isConnected, true);
+    await load(current());
+    assert.equal(loaded.isConnected, false);
+    const defaultsFrame = current();
+    const messages = [];
+    defaultsFrame.contentWindow.postMessage = (message) => messages.push(message);
+    const defaultsRoute = '/__avb/preview?defaults=11111111-1111-1111-1111-111111111111';
+    await render({ route: defaultsRoute });
+    assert.equal(current(), defaultsFrame, 'Defaults continue to morph the existing document');
+    assert.ok(messages.some((message) => message.type === 'avb:preview-route'));
+    await render({ route: '/contact' });
+    assert.equal(current(), defaultsFrame, 'Leaving defaults retains the same document');
+    assert.ok(document.querySelector('[role="status"]') === null);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('canvas retains one loaded page per breakpoint until replacements load', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const props = { ...hoverPreviewProps(), device: 'canvas' };
+  const act = (action) =>
+    React.act(async () => {
+      action();
+      await settle();
+    });
+  const render = () => act(() => root.render(React.createElement(PreviewPane, props)));
+  const load = (frame) => act(() => frame.dispatchEvent(new window.Event('load')));
+  try {
+    await render();
+    const previous = [...document.querySelectorAll('iframe')];
+    assert.equal(previous.length, 3);
+    for (const frame of previous) {
+      await load(frame);
+    }
+    props.route = '/about';
+    await render();
+    assert.equal(document.querySelectorAll('iframe').length, 6);
+    assert.ok(previous.every((frame) => frame.isConnected));
+    const replacements = [...document.querySelectorAll('iframe[aria-hidden="false"]')];
+    assert.ok(replacements.every((frame) => frame.style.visibility === 'hidden'));
+    for (const frame of replacements) {
+      await load(frame);
+    }
+    assert.equal(document.querySelectorAll('iframe').length, 3);
+    assert.ok(previous.every((frame) => !frame.isConnected));
+    assert.ok(document.querySelector('[role="status"]') === null);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('retained preview pages cannot replay queued editing shortcuts', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { useCanvasMessages } = require(path.join(directory, 'preview.js'));
+  window.avb = { onMenu: () => () => {} };
+  const root = createRoot(document.getElementById('root'));
+  const keys = [];
+  document.addEventListener('keydown', (event) => keys.push(event.key));
+  function Shortcuts() {
+    useCanvasMessages(
+      {
+        inPreviewRef: React.useRef(false),
+        pageStateRef: React.useRef({ pageState: { editable: true } }),
+      },
+      { setInsertOpen() {} },
+    );
+    return React.createElement(
+      React.Fragment,
+      undefined,
+      React.createElement('iframe', { title: 'Retained', 'aria-hidden': 'true' }),
+      React.createElement('iframe', { title: 'Current', 'aria-hidden': 'false' }),
+    );
+  }
+  try {
+    await React.act(async () => root.render(React.createElement(Shortcuts)));
+    const send = (title) =>
+      window.dispatchEvent(
+        new window.MessageEvent('message', {
+          source: document.querySelector(`iframe[title="${title}"]`).contentWindow,
+          data: { type: 'avb:shortcut', name: 'key', key: 'Delete', meta: false },
+        }),
+      );
+    send('Retained');
+    assert.deepEqual(keys, [], 'An old document cannot delete the new selection');
+    send('Current');
+    assert.deepEqual(keys, ['Delete'], 'Current canvas shortcuts still work');
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('parsed pages become visible before slow resources finish loading', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  let loads = 0;
+  const props = {
+    ...hoverPreviewProps(),
+    onPreviewLoaded: () => {
+      loads++;
+    },
+  };
+  const act = (action) =>
+    React.act(async () => {
+      action();
+      await settle();
+    });
+  const render = () => act(() => root.render(React.createElement(PreviewPane, props)));
+  const current = () => document.querySelector('iframe[title="Site preview"]');
+  const ready = (source) =>
+    act(() =>
+      window.dispatchEvent(
+        new window.MessageEvent('message', {
+          source,
+          data: { type: 'avb:canvas-ready' },
+        }),
+      ),
+    );
+  try {
+    await render();
+    const first = current();
+    await ready(first.contentWindow);
+    assert.ok(document.querySelector('[role="status"]') === null);
+    props.route = '/about';
+    await render();
+    const next = current();
+    assert.equal(next.style.visibility, 'hidden');
+    await ready(first.contentWindow);
+    await ready(window);
+    assert.equal(next.style.visibility, 'hidden', 'Only the destination can announce readiness');
+    // Withhold load, as happens while an image, video, or embed is still downloading.
+    await ready(next.contentWindow);
+    assert.equal(loads, 0, 'The full resource load has not finished');
+    assert.equal(next.style.visibility, 'visible', 'Parsed content appears without that wait');
+    assert.equal(first.isConnected, false);
+    assert.ok(document.querySelector('[role="status"]') === null);
+    await act(() => next.dispatchEvent(new window.Event('load')));
+    assert.equal(loads, 1, 'The later load still performs the recovery handshake');
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('clicks follow handles and cancel when the frame changes during checking', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const selected = [];
+  const token = 'a'.repeat(64);
+  let answer;
+  const act = (action) =>
+    React.act(async () => {
+      await action();
+      await settle();
+    });
+  try {
+    await act(() =>
+      root.render(
+        React.createElement(PreviewPane, {
+          ...hoverPreviewProps(),
+          onSelectPath: (path) => selected.push(path),
+          judgeEvent: () =>
+            new Promise((resolve) => {
+              answer = resolve;
+            }),
+        }),
+      ),
+    );
+    const frame = document.querySelector('iframe');
+    const send = (data) =>
+      act(() =>
+        window.dispatchEvent(
+          new window.MessageEvent('message', {
+            source: frame.contentWindow,
+            data,
+          }),
+        ),
+      );
+    const click = { type: 'avb:click-node', path: '0.1', outside: false, occurrence: 0, token };
+    await send({ type: 'avb:render', token, stamps: [] });
+    await send(click);
+    await act(() => answer({ tag: 'current', path: '0.2' }));
+    assert.deepEqual(selected, ['0.2'], 'the moved node is selected at its new path');
+    await send(click);
+    await send({ type: 'avb:render', token: 'b'.repeat(64), stamps: [] });
+    await act(() => answer({ tag: 'current', path: '0.3' }));
+    assert.deepEqual(selected, ['0.2'], 'a verdict for a superseded frame cannot select');
   } finally {
     await act(() => root.unmount());
     dom.window.close();

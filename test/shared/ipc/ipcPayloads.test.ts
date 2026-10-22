@@ -32,6 +32,8 @@ const noPayload = new Set([
 ]);
 const pathPayload = new Set([
   'publish:state',
+  'publish:availability',
+  'publish:siteURL',
   'studio:status',
   'project:close',
   'recents:add',
@@ -141,6 +143,10 @@ const fields = {
 };
 
 const metadataSamples: Readonly<Record<string, unknown>> = {
+  'publish:account': {
+    projectPath: '/site',
+    request: { action: 'start', id: '00000000-0000-4000-8000-000000000000' },
+  },
   'publish:repository': {
     projectPath: '/site',
     request: { action: 'list', account: 'owner' },

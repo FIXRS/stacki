@@ -1,4 +1,5 @@
 import type { ParserNode } from './source';
+import type { ComponentImport } from './imports';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import {
   resolveComponentRecipe,
@@ -34,6 +35,7 @@ const starterCatalog: readonly DefaultComponent[] = starterFiles.map((file) => (
   slotText: false,
 }));
 export interface InsertionDefaults {
+  readonly imports?: readonly ComponentImport[];
   readonly config: ComponentDefaults;
   readonly catalog: readonly DefaultComponent[];
 }

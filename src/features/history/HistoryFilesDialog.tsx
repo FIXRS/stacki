@@ -1,9 +1,16 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Popup from '../../ui/Popup';
 import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
 import { ChevronRightIcon, CloseIcon } from '../../ui/Icons';
 import FileStatus from '../git/FileStatus';
 import HistoryFileDiff from './HistoryFileDiff';
+import HistoryFilesToolbar from './HistoryFilesToolbar';
+import {
+  selectHistoryFiles,
+  type HistoryFileFilter,
+  type HistoryFileSort,
+} from './historyFileList';
+import { summarizeHistoryFiles } from './historyFileSummary';
 
 interface HistoryFilesDialogProps {
   readonly commit: HistoryCommit;
@@ -16,6 +23,13 @@ interface HistoryFilesDialogProps {
 export default function HistoryFilesDialog(props: HistoryFilesDialogProps) {
   const titleId = useId();
   const [selected, setSelected] = useState<HistoryCommitFile | undefined>(undefined);
+  const [filter, setFilter] = useState<HistoryFileFilter>('all');
+  const [sort, setSort] = useState<HistoryFileSort>('path');
+  const counts = useMemo(() => summarizeHistoryFiles(props.files), [props.files]);
+  const visible = useMemo(
+    () => selectHistoryFiles(props.files, { filter, sort }),
+    [props.files, filter, sort],
+  );
   return (
     <Popup
       className={`modal history-files-dialog ${selected ? 'with-diff' : ''}`}
@@ -35,8 +49,18 @@ export default function HistoryFilesDialog(props: HistoryFilesDialogProps) {
           <p className="history-files-commit">
             {props.commit.subject} · {props.commit.shortHash}
           </p>
+          {!selected && (
+            <HistoryFilesToolbar
+              counts={counts}
+              filter={filter}
+              sort={sort}
+              onFilter={setFilter}
+              onSort={setSort}
+            />
+          )}
           <HistoryFilesContent
             {...props}
+            files={visible}
             selected={selected}
             select={setSelected}
             onRestoreFile={(commit, file) =>
@@ -76,6 +100,11 @@ function HistoryFilesContent({
   }
   return (
     <div className="history-files" tabIndex={0} aria-label="Changed files list">
+      {props.files.length === 0 && (
+        <p className="history-empty" role="status">
+          No files match this filter.
+        </p>
+      )}
       {props.files.map((file) => (
         <HistoryChangedFile key={file.path} file={file} onOpen={() => select(file)} />
       ))}

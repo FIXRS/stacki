@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePreviewSource } from './usePreviewSource';
+import { PreviewFrame } from './PreviewFrame';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 
 const BREAKPOINTS = [
@@ -343,16 +344,16 @@ function CanvasFrames({
           >
             {frame.label} · {frame.width}px
           </div>
-          <iframe
-            key={`${url}-${refreshKey}`}
-            ref={(element) => {
+          <PreviewFrame
+            refreshKey={refreshKey}
+            frameRef={(element) => {
               if (element) {
                 iframesRef.current[frame.key] = element;
               } else {
                 delete iframesRef.current[frame.key];
               }
             }}
-            src={`${url}#avb-design`}
+            url={url}
             title={`${frame.label} preview`}
             onLoad={(event) => {
               event.currentTarget.contentWindow?.postMessage(

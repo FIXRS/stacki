@@ -1,13 +1,11 @@
+import { AddPublishAccount } from './PublishAccount';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { RefreshIcon } from '../../ui/Icons';
-import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
-import { discoverPublishing } from '../../ipc/publishDiscoveryBridge';
-import type {
-  PublishAccount,
-  PublishDiscovery,
-  PublishProject,
-} from '../../../shared/properties/publishDiscovery';
+import Dropdown from '../../ui/Dropdown';
+import { HostingChoice, hostingKey } from './PublishHosting';
+import { cachedPublishingDiscovery, invalidatePublishingAccounts } from './publishDiscoveryCache';
+import type { PublishAccount, PublishDiscovery } from '../../../shared/properties/publishDiscovery';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 
 type Props = { readonly projectPath: string } & (
@@ -35,7 +33,11 @@ export function PublishConnections(props: Props) {
       kind: 'loading',
       previous: previous.kind === 'loading' ? previous.previous : previous,
     }));
-    void discoverPublishing(projectPath, { provider, account: '' })
+    void cachedPublishingDiscovery(
+      projectPath,
+      { provider, account: '' },
+      attempt === 0 ? 'reuse' : 'refresh',
+    )
       .then((result) => {
         if (active) {
           setState(result);
@@ -54,8 +56,13 @@ export function PublishConnections(props: Props) {
   const accounts = displayed?.kind === 'ready' ? displayed.accounts : [];
   const projects = displayed?.kind === 'ready' ? displayed.projects : [];
   const busy = state.kind === 'loading';
+  const selected = props.provider === 'github' ? props.value : hostingKey(props.value);
   return (
-    <div className="publish-connections" aria-busy={busy}>
+    <div
+      className="publish-connections"
+      aria-busy={busy}
+      data-loading={busy && !selected && !displayed}
+    >
       {props.provider === 'github' ? (
         <GitHubChoice
           {...props}
@@ -64,7 +71,7 @@ export function PublishConnections(props: Props) {
           refresh={() => setAttempt(attempt + 1)}
         />
       ) : (
-        <ProjectChoice
+        <HostingChoice
           {...props}
           accounts={accounts}
           projects={projects}
@@ -93,6 +100,7 @@ function GitHubChoice(
     readonly refresh: () => void;
   },
 ) {
+  const [adding, setAdding] = useState(false);
   useEffect(() => {
     if (props.value === '' && props.accounts[0]) {
       // Persist a concrete username; other projects may switch the global CLI account.
@@ -105,7 +113,12 @@ function GitHubChoice(
       : [...props.accounts, { id: props.value, name: props.value }];
   return (
     <div className="publish-field">
-      <RefreshLabel label="GitHub account" busy={props.busy} refresh={props.refresh} />
+      <div className="publish-field-heading">
+        <RefreshLabel label="GitHub account" busy={props.busy} refresh={props.refresh} />
+        <button type="button" className="publish-refresh" onClick={() => setAdding(true)}>
+          Add account
+        </button>
+      </div>
       <Dropdown
         ariaLabel="GitHub account"
         value={props.value}
@@ -121,96 +134,22 @@ function GitHubChoice(
         livePreview={false}
         searchable={accounts.length > 6}
       />
+      {adding && (
+        <AddPublishAccount
+          projectPath={props.projectPath}
+          provider="github"
+          close={() => setAdding(false)}
+          connected={() => {
+            setAdding(false);
+            invalidatePublishingAccounts(props.projectPath);
+            props.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function ProjectChoice(
-  props: Extract<Props, { readonly value: Hosting }> & {
-    readonly accounts: readonly PublishAccount[];
-    readonly projects: readonly PublishProject[];
-    readonly busy: boolean;
-    readonly refresh: () => void;
-  },
-) {
-  const selected = hostingKey(props.value);
-  useEffect(() => {
-    if (props.value.provider === 'cloudflare-workers' && !props.value.accountId) {
-      const name = props.value.project;
-      const matches = props.projects.filter(
-        (project) =>
-          project.hosting.provider === 'cloudflare-workers' &&
-          project.hosting.accountId &&
-          project.hosting.project === name,
-      );
-      if (matches.length === 1 && matches[0]) {
-        props.change(matches[0].hosting);
-      }
-    }
-  }, [props]);
-  const options = projectOptions(props.projects, props.accounts);
-  if (selected && !options.some((option) => option.value === selected)) {
-    options.unshift({
-      value: selected,
-      label: hostingName(props.value),
-      group: hostingAccount(props.value)
-        ? 'Saved connection'
-        : 'From Wrangler · account unverified',
-    });
-  }
-  return (
-    <div className="publish-field">
-      <RefreshLabel label="Hosting project" busy={props.busy} refresh={props.refresh} />
-      <Dropdown
-        ariaLabel="Hosting project"
-        value={selected}
-        options={options}
-        placeholder={props.busy ? 'Loading projects…' : 'Choose project…'}
-        menuClassName="publish-dropdown"
-        livePreview={false}
-        searchable={true}
-        searchPlaceholder="Find project or account…"
-        onChange={(value) => {
-          const project = props.projects.find((entry) => hostingKey(entry.hosting) === value);
-          if (project) {
-            props.change(project.hosting);
-          }
-        }}
-      />
-    </div>
-  );
-}
-
-function projectOptions(
-  projects: readonly PublishProject[],
-  accounts: readonly PublishAccount[],
-): DropdownOption<string>[] {
-  return projects
-    .map((project) => {
-      const account = hostingAccount(project.hosting);
-      const group =
-        accounts.find((entry) => entry.id === account)?.name ||
-        account ||
-        'From Wrangler · account unverified';
-      const kind =
-        project.hosting.provider === 'cloudflare'
-          ? 'Pages'
-          : project.hosting.provider === 'cloudflare-workers'
-            ? 'Worker'
-            : '';
-      return {
-        value: hostingKey(project.hosting),
-        label: project.name,
-        group,
-        hint: kind,
-        ...(kind ? { description: kind } : {}),
-      };
-    })
-    .sort(
-      (left, right) =>
-        left.group.localeCompare(right.group) || left.label.localeCompare(right.label),
-    );
-}
 function RefreshLabel(props: {
   readonly label: string;
   readonly busy: boolean;
@@ -262,37 +201,4 @@ function ConnectionHelp({ provider }: { readonly provider: Props['provider'] }) 
       </p>
     </details>
   );
-}
-function hostingAccount(hosting: Hosting): string {
-  switch (hosting.provider) {
-    case 'none':
-      return '';
-    case 'cloudflare':
-    case 'cloudflare-workers':
-      return hosting.accountId;
-    case 'vercel':
-      return hosting.organizationId;
-  }
-}
-function hostingKey(hosting: Hosting): string {
-  switch (hosting.provider) {
-    case 'none':
-      return '';
-    case 'cloudflare':
-    case 'cloudflare-workers':
-      return hosting.project ? `${hosting.provider}/${hosting.accountId}/${hosting.project}` : '';
-    case 'vercel':
-      return hosting.projectId ? `vercel/${hosting.organizationId}/${hosting.projectId}` : '';
-  }
-}
-function hostingName(hosting: Hosting): string {
-  switch (hosting.provider) {
-    case 'none':
-      return '';
-    case 'cloudflare':
-    case 'cloudflare-workers':
-      return hosting.project;
-    case 'vercel':
-      return 'Saved Vercel project';
-  }
 }

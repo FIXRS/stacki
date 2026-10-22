@@ -156,6 +156,7 @@ test(
           return { ok: true, ...structuredClone(written), inverse: applied.inverse };
         },
         gitInfo: async () => ({ isRepo: false }),
+        publishAvailability: async () => ({ github: 'unknown', hosting: 'unconfigured' }),
         // Main's disk check of a canvas rendering (step 7): the files are the ones
         // this fake holds, so every stamped file is current.
         checkPreview: async ({ render }) => {

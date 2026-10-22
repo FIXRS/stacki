@@ -165,6 +165,13 @@ export function definitionOf(
   node: Pick<PairedNode, 'name'>,
   insertables: readonly ScanComponent[],
 ): ScanComponent | undefined {
+  const specifier = model.imports.find((item) => item.name === node.name)?.path;
+  const installed = insertables.find(
+    (item) => item.origin?.kind === 'package' && item.origin.importPath === specifier,
+  );
+  if (installed) {
+    return installed;
+  }
   const byName = insertables.find((component) => component.name === node.name);
   if (byName) {
     return byName;

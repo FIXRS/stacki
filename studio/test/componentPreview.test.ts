@@ -1,3 +1,5 @@
+// Exercise shared preview metadata and path selection with source fixtures and temporary files.
+// Required data must remain unavailable while authored defaults remain owned by the component.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -42,13 +44,21 @@ test('preview metadata reads current component source and rejects files outside 
     await writeFile(file, '---\ntype Props = { label?: string };\n---\n<slot />');
     assert.equal(
       plugin.load(file + '?raw&stacki-preview-props'),
-      'export default {"props":{"label":"Card"}};',
+      'export default {"props":{"label":"Card"},"missing":[]};',
     );
     await writeFile(
       file,
       "---\ntype Props = { label?: string };\nconst { label = 'Saved' } = Astro.props;\n---\n<slot />",
     );
-    assert.equal(plugin.load(file + '?raw&stacki-preview-props'), 'export default {"props":{}};');
+    assert.equal(
+      plugin.load(file + '?raw&stacki-preview-props'),
+      'export default {"props":{},"missing":[]};',
+    );
+    await writeFile(file, '---\ninterface Props { data: PageData; }\n---\n<slot />');
+    assert.equal(
+      plugin.load(file + '?raw&stacki-preview-props'),
+      'export default {"props":{},"missing":["data"]};',
+    );
     assert.throws(() =>
       plugin.load(path.join(root, 'src/pages/index.astro?raw&stacki-preview-props')),
     );

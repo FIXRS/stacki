@@ -102,6 +102,18 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/project/scaffold.ts': {
     writeFileSync: { count: 1, reason: 'a new project, scaffolded before it is opened' },
   },
+  'electron/project/publishReceipt.ts': {
+    writeFile: {
+      count: 1,
+      reason: 'deployment confirmation in Git private metadata; never website documents',
+    },
+  },
+  'electron/project/publishWorkerConfig.ts': {
+    writeFile: {
+      count: 1,
+      reason: 'exclusive temporary Wrangler config inside a publish snapshot; removed after deploy',
+    },
+  },
   'electron/project/starter.ts': {
     writeFileSync: { count: 1, reason: 'package.json of a new project from a starter' },
   },

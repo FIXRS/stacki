@@ -2,7 +2,7 @@
 // labels, the marks on rendered nodes, the selection's paths and the
 // overlay's info (appViewModel.ts).
 
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isFragmentNode, liveClassesById as classesByNodeId } from '../../editor/liveClasses';
 import { isDataBound } from '../../editor/bindings';
 import { thenBranch } from '../../editor/branches';
@@ -22,6 +22,7 @@ import {
   type ShownFile,
 } from '../../features/preview/previewGate';
 import { describePreviewStale, type PreviewVerdict } from '../../../shared/page/previewToken';
+import { PreviewOrigins, judgeRememberedClick } from '../../features/preview/previewSelection';
 import type { JudgeCanvasEvent } from '../../features/preview/previewRuntime';
 import {
   describePreviewReload,
@@ -43,6 +44,7 @@ export function useCanvasGate(
   const { codeWin, pageStateRef, projectRef, setCodeWin, setFileText } = coreState;
   const { fileSaverRef } = lifecycle;
   const { codeWinValue, isFileWin } = codeWindow;
+  const origins = usePreviewOrigins(coreState);
 
   // File edits stream to disk (debounced) — the dev server picks them up.
   const setAssetFileText = useCallback(
@@ -93,6 +95,7 @@ export function useCanvasGate(
         return {
           file,
           state,
+          scope: open.kind === 'component' ? `${file}|` : '',
         };
       };
       const projectPath = projectRef.current?.path;
@@ -100,11 +103,23 @@ export function useCanvasGate(
         projectPath
           ? checkPreviewRender(projectPath, checked)
           : Promise.resolve<PreviewVerdict>({ tag: 'stale', reason: 'no-render', file: undefined });
-      return judgeCanvasEvent(token, render, check, shown);
+      return request.kind === 'click'
+        ? judgeRememberedClick(token, render, request.path, origins.current, check, shown)
+        : judgeCanvasEvent(token, render, check, shown);
     },
-    [pageStateRef, projectRef],
+    [pageStateRef, projectRef, origins],
   );
   return { judgeEvent, setAssetFileText };
+}
+
+// Retain only this file session's saved models while its canvas catches up.
+function usePreviewOrigins({
+  currentPage,
+  pageState,
+}: Pick<ReturnType<typeof useCoreState>, 'currentPage' | 'pageState'>) {
+  const origins = useRef(new PreviewOrigins());
+  origins.current.remember(currentPage?.path, pageState?.editable ? pageState.origin : undefined);
+  return origins;
 }
 
 function eventSelectsShownFile(

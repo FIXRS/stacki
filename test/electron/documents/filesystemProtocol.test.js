@@ -82,11 +82,7 @@ test('flush: the staged file is fsynced before the rename, the folder after it',
         : ['fsync file', 'rename', 'fsync folder', 'fsync folder'];
     assert.deepEqual(events, expected);
     const entries = fs.readdirSync(root);
-    assert.deepEqual(
-      entries.sort(),
-      ['.stacki-io', 'page.astro'],
-      'the save directory stays stable',
-    );
+    assert.deepEqual(entries.sort(), ['.stacki', 'page.astro'], 'the save directory stays stable');
     assert.deepEqual(protocolLeftovers(root), [], 'no temporary or lock file remains');
   });
 });

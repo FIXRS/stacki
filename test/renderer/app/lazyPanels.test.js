@@ -394,6 +394,7 @@ function createBridge() {
       return { ok: true, ...onDisk(disk), inverse: applied.inverse };
     },
     gitInfo: async () => ({ isRepo: false }),
+    publishAvailability: async () => ({ github: 'unknown', hosting: 'unconfigured' }),
     onCssChanged: () => () => {},
   };
   return new Proxy(bridge, {

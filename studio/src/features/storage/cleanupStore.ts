@@ -135,7 +135,7 @@ function parseBaseline(value: unknown): AssetBaseline {
   const data = record(value);
   const entries = data['assets'];
   const sha = string(data['sha'], 40);
-  if (!/^[a-f0-9]{40}$/.test(sha) || !Array.isArray(entries) || entries.length > 10_000) {
+  if (!/^[a-f0-9]{40}$/.test(sha) || !Array.isArray(entries) || entries.length > 100_000) {
     throw new Error('Invalid published asset inventory');
   }
   const assets = new Map<string, string>();

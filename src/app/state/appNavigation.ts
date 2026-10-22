@@ -9,6 +9,9 @@ import { readPage } from '../../ipc/bridge';
 import { readGitInfo } from '../../features/git/gitChipBridge';
 import { assert } from '../../../shared/core/assert';
 import { scanContainsFile } from '../../editor/pagePersistence';
+import { saveStateBase } from '../../editor/saveState';
+import { createCoalescedRun } from '../../lib/coalescedRun';
+import { onWindowReturn } from '../../lib/windowReturn';
 import { cleanError } from '../../lib/cleanError';
 import { toEditorPageState, carriedParse, type OpenFile } from '../../editor/pageState';
 import {
@@ -31,6 +34,7 @@ import {
   useDevEvents,
   useScans,
   usePreviewStart,
+  useBranchPreview,
   useSavers,
   useFlushing,
   useOpenFile,
@@ -43,6 +47,7 @@ export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
   const devEvents = useDevEvents(coreState, assetPickScope);
   const scans = useScans(coreState);
   const previewStart = usePreviewStart(coreState, toasts, assetPickScope);
+  const withBranchChange = useBranchPreview(coreState, previewStart.startPreview);
   const savers = useSavers(toasts, coreState);
   const flushing = useFlushing(savers, coreState, toasts);
   const openFileScope = useOpenFile(flushing, toasts, coreState);
@@ -52,6 +57,7 @@ export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
     ...devEvents,
     ...scans,
     ...previewStart,
+    withBranchChange,
     ...savers,
     ...flushing,
     ...openFileScope,
@@ -510,8 +516,10 @@ export function useGitInfo(
   coreState: ReturnType<typeof useCoreState>,
   lifecycle: ReturnType<typeof useLifecycle>,
 ) {
-  const { project, refreshKey, setGitInfo } = coreState;
+  const { project, projectRef, refreshKey, setGitInfo, pageState } = coreState;
   const { showToast } = lifecycle;
+  const requestRefresh = useRef<() => void>(() => undefined);
+  const savedChecksum = pageState === undefined ? undefined : saveStateBase(pageState.save);
 
   const refreshGit = useCallback(async () => {
     if (!project) {
@@ -522,13 +530,39 @@ export function useGitInfo(
       showToast(result.error, 'error');
       return undefined;
     }
-    setGitInfo(result.value);
+    if (projectRef.current?.path === project.path) {
+      setGitInfo(result.value);
+    }
     return result.value;
-  }, [project, showToast, setGitInfo]);
+  }, [project, projectRef, showToast, setGitInfo]);
 
   useEffect(() => {
-    // A failed read is reported by refreshGit itself.
-    void refreshGit();
-  }, [refreshGit, refreshKey]);
+    let closed = false;
+    const reader = createCoalescedRun(async () => {
+      if (!closed) {
+        await refreshGit();
+      }
+    });
+    const refresh = () => {
+      if (!document.hidden) {
+        void reader.request();
+      }
+    };
+    requestRefresh.current = () => void reader.request();
+    // Git changes need not touch source files; keep branch and HEAD current independently.
+    const offReturn = onWindowReturn(refresh);
+    const timer = window.setInterval(refresh, 15_000);
+    return () => {
+      closed = true;
+      requestRefresh.current = () => undefined;
+      offReturn();
+      window.clearInterval(timer);
+    };
+  }, [refreshGit]);
+  useEffect(() => {
+    // Self writes skip filesystem notifications. Read Git after the save advances its
+    // checksum, including undo/redo, without reading on every unsaved keystroke.
+    requestRefresh.current();
+  }, [refreshGit, refreshKey, savedChecksum]);
   return { refreshGit };
 }

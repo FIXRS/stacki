@@ -6,6 +6,7 @@ import { PropValuePolicyContext } from './propValuePolicy';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
+import type { PageText } from '../../../shared/properties/pageText';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { RichContext } from './RichContent';
 import type { SourceContext, ValueChange, FieldPosition, InsertAPI } from './propBindings';
@@ -18,6 +19,9 @@ import { arrayItems } from './arrayValue';
 import LinkField from './LinkField';
 
 export interface AssetContext {
+  readonly layoutText?: PageText | undefined;
+  readonly layoutImage?: string | undefined;
+  readonly layoutType?: string | undefined;
   readonly projectPath?: string | undefined;
   readonly filePath?: string | undefined;
   readonly nodeName?: string | undefined;
@@ -217,8 +221,10 @@ export function usePropField(props: PropFieldProps) {
 }
 export function usePropFieldModel(props: PropFieldProps) {
   const policy = useContext(PropValuePolicyContext);
+  // Choice controls show the effective fallback while isSet tracks authored values.
+  const showsFallback = ['boolean', 'enum'].includes(props.field.type);
   const field =
-    policy === 'defaults' && props.field.type !== 'boolean'
+    policy === 'defaults' && !showsFallback
       ? { ...props.field, default: undefined, hint: '' }
       : props.field;
   const {
@@ -231,7 +237,9 @@ export function usePropFieldModel(props: PropFieldProps) {
     dataContext,
   } = props;
   const placeholderFor = (target: FieldDefinition) =>
-    policy === 'defaults' ? '' : propFieldPlaceholder(target, assetContext, branchDefault);
+    policy === 'defaults' && !showsFallback
+      ? ''
+      : propFieldPlaceholder(target, assetContext, branchDefault);
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
@@ -323,6 +331,13 @@ export function propFieldPlaceholder(
   assetContext: AssetContext | undefined,
   branchDefault: string | number | undefined,
 ): string {
+  // Rendered layout metadata resolves delegated and CMS defaults that source hints cannot.
+  if (field.name === 'title' || field.name === 'description') {
+    const rendered = assetContext?.layoutText?.[field.name];
+    if (rendered !== undefined) {
+      return rendered;
+    }
+  }
   const siblingNumber = (propName: string) => {
     const sibling = assetContext?.siblingProps?.[propName];
     if (!sibling) {

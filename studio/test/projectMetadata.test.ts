@@ -12,7 +12,7 @@ import { metadataRoute } from '../src/features/settings/projectMetadata';
 import { loadInsertionDefaults } from '../src/features/settings/loadDefaults';
 import { structuralEdits, applyEdits, parsePage } from '../src/features/source/source';
 import { filePath, record } from '../src/shared/validation';
-import { changedPublishFiles } from '../src/features/github/changedPublishFiles';
+import { metadataFiles } from '../src/features/settings/projectMetadata';
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-metadata-'));
@@ -134,8 +134,7 @@ test('guide settings are shared files; malformed values and arbitrary metadata p
     assert.equal((await setup.post({ kind: '../credentials', source })).status, 400);
     assert.equal(filePath('.stacki/guide.json'), '.stacki/guide.json');
     assert.throws(() => filePath('.stacki/secret.json'));
-    const files = [{ path: '.stacki/guide.json', content: source }];
-    assert.deepEqual(changedPublishFiles(files, { truncated: false, tree: [] }), files);
+    assert.ok((await metadataFiles(setup.root)).includes('.stacki/guide.json'));
   } finally {
     await setup.close();
   }

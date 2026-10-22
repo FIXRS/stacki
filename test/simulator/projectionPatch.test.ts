@@ -182,10 +182,17 @@ test('a refused byte in the old value refuses the patch, whatever the new one is
   }
 });
 
-test('why `<` is refused: a value can change the parse, pinned', () => {
+test('tag-like values use a full reparse and remain ordinary attribute text', () => {
   const { projection, bytes, splice } = titleSplice(NESTED, '</div>');
   assert.equal(projectValueSplice(projection, bytes, splice), undefined);
-  assert.equal(projectBytes(PAGE, applySplices(bytes, [splice])).tag, 'parse-error');
+  const changed = projectBytes(PAGE, applySplices(bytes, [splice]));
+  assert.equal(changed.tag, 'valid');
+  assert.ok(changed.tag === 'valid');
+  assert.ok(projection.tag === 'valid');
+  assert.deepEqual(
+    changed.nodes.map((node) => node.kind),
+    projection.nodes.map((node) => node.kind),
+  );
 });
 
 const EXPRESSION_PAGES = [

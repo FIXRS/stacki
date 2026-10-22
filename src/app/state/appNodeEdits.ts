@@ -662,11 +662,11 @@ export function useCanvasMessages(
     };
     const offMenu = window.avb.onMenu('insert', openIfEditable);
     const onMessage = (event: MessageEvent<unknown>): void => {
-      // Only a frame this document embeds may replay keys into the app: a
-      // shortcut from any other window is not a keypress the person made here.
-      const fromOwnFrame = Array.from(document.querySelectorAll('iframe')).some(
-        (frame) => frame.contentWindow === event.source,
-      );
+      // Retained pages are only a visual placeholder during navigation; their
+      // queued shortcuts must not act on the newly opened editor document.
+      const fromOwnFrame = Array.from(document.querySelectorAll('iframe'))
+        .filter((frame) => frame.getAttribute('aria-hidden') !== 'true')
+        .some((frame) => frame.contentWindow === event.source);
       if (!fromOwnFrame) {
         return;
       }

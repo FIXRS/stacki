@@ -1,6 +1,6 @@
 // Goal: the commit graph preserves inspection actions and owns asynchronous reads.
 // Methodology: mount the real component with a stubbed IPC boundary, exercise
-// expansion, file summaries and dialog actions, paging, branch scope, refresh,
+// expansion, file summaries and dialog actions, paging, branch scope, automatic refresh,
 // and out-of-order repository responses.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -42,6 +42,8 @@ test('graph inspection, filters, paging and stale responses', async () => {
   global.HTMLElement = dom.window.HTMLElement;
   global.Node = dom.window.Node;
   global.Element = dom.window.Element;
+  // JSDOM has no layout; dropdown keyboard focus still needs this browser method.
+  window.Element.prototype.scrollIntoView = function () {};
   window.HTMLDialogElement.prototype.showModal = function () {
     this.open = true;
   };
@@ -49,6 +51,14 @@ test('graph inspection, filters, paging and stale responses', async () => {
     this.open = false;
   };
   window.matchMedia = () => ({ matches: true });
+  const polls = new Map();
+  let timerId = 0;
+  window.setInterval = (callback, milliseconds) => {
+    assert.equal(milliseconds, 15_000);
+    polls.set(++timerId, callback);
+    return timerId;
+  };
+  window.clearInterval = (timer) => polls.delete(timer);
   global.IS_REACT_ACT_ENVIRONMENT = true;
   const React = require('react');
   const { act } = React;
@@ -114,8 +124,42 @@ test('graph inspection, filters, paging and stale responses', async () => {
     await click(document.querySelector('.history-view-files'));
     assert.equal(document.querySelector('dialog').open, true);
     assert.equal(document.querySelectorAll('dialog .history-file').length, 5);
-    assert.equal(document.querySelector('.history-file-path').textContent, 'src/pages/index.astro');
+    assert.equal(document.querySelector('.history-file-path').textContent, 'copy.astro');
     assert.match(document.querySelector('dialog').textContent, /From before.astro/);
+    const filterButton = (label) =>
+      [...document.querySelectorAll('.history-file-filters button')].find((button) =>
+        button.textContent.startsWith(label),
+      );
+    const visiblePaths = () =>
+      [...document.querySelectorAll('dialog .history-file-open')].map((button) =>
+        button.getAttribute('aria-label').replace('View diff for ', ''),
+      );
+    await click(filterButton('New'));
+    assert.deepEqual(visiblePaths(), ['copy.astro', 'new.astro']);
+    await click(filterButton('Deleted'));
+    assert.deepEqual(visiblePaths(), ['gone.astro']);
+    await click(filterButton('Changed'));
+    assert.deepEqual(visiblePaths(), ['renamed.astro', 'src/pages/index.astro']);
+    await click(filterButton('All'));
+    await click(document.querySelector('[aria-label="Sort changed files"]'));
+    await click(
+      [...document.querySelectorAll('.dd-option')].find((option) =>
+        option.textContent.includes('Status'),
+      ),
+    );
+    assert.deepEqual(visiblePaths(), [
+      'renamed.astro',
+      'src/pages/index.astro',
+      'copy.astro',
+      'new.astro',
+      'gone.astro',
+    ]);
+    await click(filterButton('New'));
+    await click(document.querySelector('.history-file-open'));
+    await click(document.querySelector('.history-diff-toolbar button'));
+    assert.deepEqual(visiblePaths(), ['copy.astro', 'new.astro']);
+    assert.equal(filterButton('New').getAttribute('aria-pressed'), 'true');
+    assert.match(document.querySelector('[aria-label="Sort changed files"]').textContent, /Status/);
     await act(async () => {
       document
         .querySelector('dialog')
@@ -126,13 +170,13 @@ test('graph inspection, filters, paging and stale responses', async () => {
     await click(document.querySelector('[aria-label="Close changed files"]'));
     assert.equal(document.querySelector('dialog') === null, true);
     await click(document.querySelector('.history-view-files'));
-    await click(document.querySelector('.history-file-open'));
+    await click(document.querySelector('[aria-label="View diff for src/pages/index.astro"]'));
     assert.equal(document.querySelectorAll('.history-diff-line.added').length, 1);
     assert.equal(document.querySelectorAll('.history-diff-line.deleted').length, 1);
     assert.deepEqual(actions, [['preview', merge.hash]]);
     await click(document.querySelector('.history-diff-toolbar button'));
     assert.equal(document.querySelectorAll('dialog .history-file').length, 5);
-    await click(document.querySelector('.history-file-open'));
+    await click(document.querySelector('[aria-label="View diff for src/pages/index.astro"]'));
     await click(document.querySelectorAll('.history-diff-toolbar button')[1]);
     assert.equal(document.querySelector('dialog') === null, true);
     await click(document.querySelector('[aria-label="Commit actions"]'));
@@ -166,12 +210,24 @@ test('graph inspection, filters, paging and stale responses', async () => {
     assert.match(document.querySelector('.history-subject').textContent, /base001/);
     await click(document.querySelector('.history-commit-head'));
     assert.equal(document.querySelector('.history-count-updated').textContent, '~0');
-    await click(document.querySelector('.history-graph-refresh'));
+    assert.equal(document.querySelector('.history-graph-refresh') === null, true);
+    await act(async () => window.dispatchEvent(new window.Event('focus')));
     assert.equal(requests[4].payload.ref, 'HEAD');
-    await reply(4, [], true);
+    await reply(4, [base], true);
+    assert.equal(
+      document.querySelector('.history-commit-head').getAttribute('aria-expanded'),
+      'true',
+    );
+    assert.equal(polls.size, 1, 'only the active project owns a polling timer');
+    await act(async () => [...polls.values()][0]());
+    await reply(5, [], true);
     assert.match(document.querySelector('.history-empty').textContent, /Nothing saved yet/);
   } finally {
     await act(async () => root.unmount());
+    assert.equal(polls.size, 0);
+    const count = requests.length;
+    window.dispatchEvent(new window.Event('focus'));
+    assert.equal(requests.length, count, 'unmounted graphs stop listening');
     dom.window.close();
     delete global.window;
     delete global.document;

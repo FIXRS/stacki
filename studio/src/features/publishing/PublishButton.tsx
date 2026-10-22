@@ -30,16 +30,18 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
     try {
       const state = await publishProject(controller.signal, target, setState);
       report(
-        state.kind === 'committed'
-          ? (state.deployment === 'live'
-              ? 'Published. Your changes are live.'
-              : state.deployment === 'pending'
-                ? 'Saved to GitHub. Live deployment is still unconfirmed; check your hosting provider.'
-                : 'Saved to GitHub. Automatic live deployment is not connected.') +
+        state.kind === 'review-open'
+          ? 'Pull request ready for review.'
+          : state.kind === 'committed'
+            ? (state.deployment === 'live'
+                ? 'Published. Your changes are live.'
+                : state.deployment === 'pending'
+                  ? 'Saved to GitHub. Live deployment is still unconfirmed; check your hosting provider.'
+                  : 'Saved to GitHub. Automatic live deployment is not connected.') +
               (state.cleanupWarning ? ' ' + state.cleanupWarning : '')
-          : state.kind === 'failed'
-            ? new Error(state.message)
-            : 'Publish started',
+            : state.kind === 'failed'
+              ? new Error(state.message)
+              : 'Publish started',
       );
     } catch (error) {
       if (!controller.signal.aborted) {

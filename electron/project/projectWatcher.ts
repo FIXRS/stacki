@@ -29,9 +29,9 @@ function watchProject({
 }: WatchProjectDeps): { close: () => void } {
   const watchers: fs.FSWatcher[] = [];
   const notifier = createNotifier(send);
-  const astroFiles = createAstroFileMonitor(projectPath, (astroChanges) => {
-    send('fs:changed', { files: [], astroChanges });
-  });
+  const astroFiles = createAstroFileMonitor(projectPath, (astroChanges) =>
+    send('fs:changed', { files: [], astroChanges }),
+  );
   const close = (): void => {
     notifier.close();
     astroFiles.close();
@@ -69,7 +69,7 @@ function watchProject({
         }
         noteExternalChange(changed);
         notePageMayHaveChanged(true);
-        const channel = sourceChangeChannel(name, mediaPattern);
+        const channel = sourceChangeChannel(name, mediaPattern, event);
         if (channel === 'fs:changed') {
           notifier.addFile(changed);
           scheduleThumb(projectPath, 60000);
@@ -96,7 +96,11 @@ function watchProject({
 type ChangeChannel = 'cms:changed' | 'assets:changed' | 'css:changed' | 'fs:changed';
 
 // The panel a changed file under src/ concerns, or undefined when none does.
-function sourceChangeChannel(name: string, mediaPattern: RegExp): ChangeChannel | undefined {
+function sourceChangeChannel(
+  name: string,
+  mediaPattern: RegExp,
+  event: string,
+): ChangeChannel | undefined {
   if (/\.json$/i.test(name)) {
     return 'cms:changed';
   }
@@ -109,7 +113,8 @@ function sourceChangeChannel(name: string, mediaPattern: RegExp): ChangeChannel 
   if (/\.(astro|md|mdx|html)$/i.test(name)) {
     return 'fs:changed';
   }
-  return undefined;
+  // Directory creation/removal has no extension but still changes the Pages tree.
+  return event === 'rename' ? 'fs:changed' : undefined;
 }
 
 interface Notifier {

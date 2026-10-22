@@ -28,6 +28,12 @@ export {
 
 export { type IconProps, ASTRO_ASSET_ACCENT } from './IconBase';
 
+export const GitHubIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.githubIconPath} />
+  </I24>
+);
+
 export const FileIcon = (props: IconProps) => (
   <I {...props}>
     <path d={fileIconPath1} />

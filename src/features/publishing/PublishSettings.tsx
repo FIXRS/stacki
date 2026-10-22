@@ -1,11 +1,13 @@
+import { usePublishSettingsConfig } from './usePublishSettingsConfig';
+import { PublishWorkflow } from './PublishWorkflow';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { discoverPublishing } from '../../ipc/publishDiscoveryBridge';
 import { PublishRepositories } from './PublishRepositories';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
 import type { RepositoryRequest } from '../../../shared/ipc/publishRepository';
 import Popup from '../../ui/Popup';
 import Dropdown from '../../ui/Dropdown';
 import { PublishProviderIcon } from './PublishProviderIcon';
+import { UploadCloudIcon } from '../../ui/Icons';
 import { PublishConnections } from './PublishConnections';
 import { useEffect, useState } from 'react';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
@@ -33,8 +35,8 @@ export function PublishSettings(props: Props) {
   useEffect(() => {
     let active = true;
     void readMetadata(props.projectPath, 'publish')
-      .then(async (file) => {
-        const config = await initialSettings(props.projectPath, file.source);
+      .then((file) => {
+        const config = parsePublishSource(file.source);
         if (active) {
           setState({ kind: 'ready', base: file.source, config });
         }
@@ -66,7 +68,7 @@ export function PublishSettings(props: Props) {
             aria-label="Loading publish settings"
           />
           {state.kind === 'ready' ? (
-            <PublishSettingsForm {...props} close={close} stored={state} />
+            <PublishSettingsForm key={props.projectPath} {...props} close={close} stored={state} />
           ) : state.kind === 'loading' ? (
             <PublishSettingsSkeleton close={close} />
           ) : (
@@ -92,17 +94,27 @@ export function PublishSettings(props: Props) {
 function PublishSettingsSkeleton({ close }: Pick<Props, 'close'>) {
   return (
     <>
-      <fieldset className="modal-body publish-fields" disabled aria-busy="true">
-        {['GitHub account', 'GitHub repository', 'Hosting provider', 'Hosting project'].map(
-          (label) => (
-            <div className="publish-field" key={label}>
-              <span className="publish-label">{label}</span>
-              <button className="dd-trigger" aria-label={label} disabled>
-                <span className="dd-label">Loading…</span>
-              </button>
-            </div>
-          ),
-        )}
+      <fieldset className="modal-body publish-fields" disabled aria-busy="true" data-loading="true">
+        {[
+          { name: 'Publish button', labels: ['Main publish button action'] },
+          { name: 'GitHub', labels: ['GitHub account', 'GitHub repository'] },
+          { name: 'Hosting', labels: ['Hosting provider', 'Hosting project'] },
+        ].map((section) => (
+          <section
+            className="publish-settings-section"
+            aria-label={section.name}
+            key={section.name}
+          >
+            {section.labels.map((label) => (
+              <div className="publish-field" key={label}>
+                <span className="publish-label">{label}</span>
+                <button className="dd-trigger" aria-label={label} disabled>
+                  <span className="dd-label">Loading…</span>
+                </button>
+              </div>
+            ))}
+          </section>
+        ))}
         <details className="publish-advanced">
           <summary aria-disabled="true" onClick={(event) => event.preventDefault()}>
             Advanced
@@ -135,10 +147,130 @@ function PublishSettingsForm({
 }: Props & {
   readonly stored: Extract<SettingsState, { kind: 'ready' }>;
 }) {
-  const [config, setConfig] = useState(stored.config);
-  const [base, setBase] = useState(stored.base);
+  const {
+    config,
+    changeConfig: setConfig,
+    changeHosting,
+    discoveringHosting,
+  } = usePublishSettingsConfig(projectPath, stored);
   const [repository, setRepository] = useState<Extract<RepositoryRequest, { action: 'connect' }>>();
   const [repositoryBusy, setRepositoryBusy] = useState(false);
+  const { error, saving, save } = usePublishSettingsSave({
+    projectPath,
+    config,
+    base: stored.base,
+    repository,
+    close,
+  });
+  return (
+    <>
+      <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
+        <PublishTargetField config={config} setConfig={setConfig} />
+        <section className="publish-settings-section" aria-label="GitHub">
+          <PublishWorkflow config={config} change={setConfig} />
+          <PublishConnections
+            projectPath={projectPath}
+            provider="github"
+            value={config.githubAccount}
+            change={(githubAccount) => setConfig({ ...config, githubAccount })}
+          />
+          <PublishRepositories
+            key={config.githubAccount}
+            projectPath={projectPath}
+            account={config.githubAccount}
+            selection={repository}
+            change={setRepository}
+            busy={setRepositoryBusy}
+          />
+        </section>
+        <section className="publish-settings-section" aria-label="Hosting">
+          <HostingFields
+            projectPath={projectPath}
+            hosting={config.hosting}
+            discoveringHosting={discoveringHosting}
+            change={changeHosting}
+          />
+        </section>
+        <AdvancedFields config={config} setConfig={setConfig} />
+        {error && <ErrorToast message={error} />}
+      </fieldset>
+      <SettingsFooter
+        busy={saving || repositoryBusy}
+        discoveringHosting={discoveringHosting}
+        saving={saving}
+        close={close}
+        save={save}
+      />
+    </>
+  );
+}
+
+function PublishTargetField({
+  config,
+  setConfig,
+}: {
+  readonly config: PublishConfig;
+  readonly setConfig: (config: PublishConfig) => void;
+}) {
+  return (
+    <section className="publish-settings-section" aria-label="Publish button">
+      <div className="publish-field">
+        <span className="publish-label">Main publish button action</span>
+        <div className="publish-target-cards">
+          <PublishTargetToggle target="github" config={config} setConfig={setConfig} />
+          <PublishTargetToggle target="hosting" config={config} setConfig={setConfig} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PublishTargetToggle({
+  target,
+  config,
+  setConfig,
+}: {
+  readonly target: 'github' | 'hosting';
+  readonly config: PublishConfig;
+  readonly setConfig: (config: PublishConfig) => void;
+}) {
+  const other = target === 'github' ? 'hosting' : 'github';
+  const lastEnabled = config.defaultTarget === target;
+  return (
+    <label
+      className="publish-target-card"
+      title={lastEnabled ? 'Keep at least one publish destination enabled' : undefined}
+    >
+      {target === 'github' ? <PublishProviderIcon provider="github" /> : <UploadCloudIcon />}
+      <span>{target === 'github' ? 'GitHub' : 'Hosting'}</span>
+      <input
+        className="publish-target-switch"
+        type="checkbox"
+        role="switch"
+        checked={config.defaultTarget !== other}
+        disabled={lastEnabled}
+        onChange={(event) =>
+          setConfig({ ...config, defaultTarget: event.currentTarget.checked ? 'all' : other })
+        }
+      />
+    </label>
+  );
+}
+
+function usePublishSettingsSave({
+  projectPath,
+  config,
+  base: initialBase,
+  repository,
+  close,
+}: {
+  readonly projectPath: string;
+  readonly config: PublishConfig;
+  readonly base: string | undefined;
+  readonly repository: Extract<RepositoryRequest, { action: 'connect' }> | undefined;
+  readonly close: () => void;
+}) {
+  const [base, setBase] = useState(initialBase);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   async function save() {
@@ -165,50 +297,27 @@ function PublishSettingsForm({
       setSaving(false);
     }
   }
-  return (
-    <>
-      <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
-        <PublishConnections
-          projectPath={projectPath}
-          provider="github"
-          value={config.githubAccount}
-          change={(githubAccount) => setConfig({ ...config, githubAccount })}
-        />
-        <PublishRepositories
-          projectPath={projectPath}
-          account={config.githubAccount}
-          selection={repository}
-          change={setRepository}
-          busy={setRepositoryBusy}
-        />
-        <HostingFields
-          projectPath={projectPath}
-          hosting={config.hosting}
-          change={(hosting) => setConfig({ ...config, hosting })}
-        />
-        <AdvancedFields config={config} setConfig={setConfig} />
-        {error && <ErrorToast message={error} />}
-      </fieldset>
-      <SettingsFooter busy={saving || repositoryBusy} saving={saving} close={close} save={save} />
-    </>
-  );
+  return { error, saving, save };
 }
 
 function HostingFields({
   projectPath,
   hosting,
+  discoveringHosting,
   change,
 }: {
   readonly projectPath: string;
   readonly hosting: Hosting;
+  readonly discoveringHosting: boolean;
   readonly change: (value: Hosting) => void;
 }) {
   return (
     <>
-      <div className="publish-field">
+      <div className="publish-field" aria-busy={discoveringHosting}>
         <span className="publish-label">Hosting provider</span>
-        <Dropdown<Hosting['provider']>
+        <Dropdown<Hosting['provider'] | undefined>
           ariaLabel="Hosting provider"
+          placeholder="Checking hosting…"
           options={[
             {
               value: 'none',
@@ -224,8 +333,18 @@ function HostingFields({
           ]}
           menuClassName="publish-dropdown"
           livePreview={false}
-          value={hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
-          onChange={(provider) => change(emptyHosting(provider))}
+          value={
+            discoveringHosting
+              ? undefined
+              : hosting.provider === 'cloudflare-workers'
+                ? 'cloudflare'
+                : hosting.provider
+          }
+          onChange={(provider) => {
+            if (provider !== undefined) {
+              change(emptyHosting(provider));
+            }
+          }}
         />
       </div>
       {hosting.provider === 'none' ? (
@@ -307,11 +426,6 @@ function AdvancedFields({
     <details className="publish-advanced">
       <summary>Advanced</summary>
       <div className="publish-advanced-fields">
-        <TextField
-          label="GitHub username"
-          value={config.githubAccount}
-          change={(githubAccount) => setConfig({ ...config, githubAccount })}
-        />
         <ManualHosting
           hosting={config.hosting}
           change={(hosting) => setConfig({ ...config, hosting })}
@@ -331,7 +445,10 @@ function AdvancedFields({
           values={config.afterPublish}
           change={(afterPublish) => setConfig({ ...config, afterPublish })}
         />
-        <p className="hint-text">Use npm script names, separated by commas.</p>
+        <p className="hint-text">
+          Scripts run only when deploying to hosting. Push to GitHub skips the build and both hooks.
+          Use npm script names, separated by commas.
+        </p>
       </div>
     </details>
   );
@@ -346,11 +463,6 @@ function CloudflareFields({
 }) {
   return (
     <>
-      <TextField
-        label="Cloudflare account ID"
-        value={hosting.accountId}
-        change={(accountId) => change({ ...hosting, accountId })}
-      />
       <TextField
         label="Pages project name"
         value={hosting.project}
@@ -380,20 +492,6 @@ function ManualHosting({
   return (
     <>
       {hosting.provider === 'cloudflare' && <CloudflareFields hosting={hosting} change={change} />}
-      {hosting.provider === 'cloudflare-workers' && (
-        <>
-          <TextField
-            label="Cloudflare account ID"
-            value={hosting.accountId}
-            change={(accountId) => change({ ...hosting, accountId })}
-          />
-          <TextField
-            label="Worker name"
-            value={hosting.project}
-            change={(project) => change({ ...hosting, project })}
-          />
-        </>
-      )}
       {hosting.provider === 'vercel' && (
         <>
           <TextField
@@ -414,11 +512,13 @@ function ManualHosting({
 
 function SettingsFooter({
   busy,
+  discoveringHosting,
   saving,
   close,
   save,
 }: {
   readonly busy: boolean;
+  readonly discoveringHosting: boolean;
   readonly saving: boolean;
   readonly close: () => void;
   readonly save: () => Promise<void>;
@@ -428,31 +528,11 @@ function SettingsFooter({
       <button disabled={busy} onClick={close}>
         Cancel
       </button>
-      <button className="primary" disabled={busy} onClick={() => void save()}>
+      <button className="primary" disabled={busy || discoveringHosting} onClick={() => void save()}>
         {saving ? 'Saving…' : 'Save'}
       </button>
     </div>
   );
-}
-
-async function initialSettings(
-  projectPath: string,
-  source: string | undefined,
-): Promise<PublishConfig> {
-  const config = parsePublishSource(source);
-  if (source !== undefined) {
-    return config;
-  }
-  // Saved choices win; only a single configured destination can prefill a new configuration.
-  const discovered = await discoverPublishing(projectPath, {
-    provider: 'linked',
-    account: '',
-  }).catch(() => undefined);
-  const linked =
-    discovered?.kind === 'ready' && discovered.projects.length === 1
-      ? discovered.projects[0]
-      : undefined;
-  return linked ? { ...config, hosting: linked.hosting } : config;
 }
 
 function emptyHosting(provider: Hosting['provider']): Hosting {

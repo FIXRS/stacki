@@ -33,6 +33,8 @@ export interface ShownFile {
   /** Project-relative, `/`-separated — the path its stamp carries. */
   readonly file: string;
   readonly state: EditorPageState;
+  /** Empty for a page; a component namespace while editing its source. */
+  readonly scope?: string;
 }
 
 /** Ask main whether every stamped file still holds its stamped bytes. */
@@ -102,8 +104,8 @@ export function shownChecksum(state: EditorPageState): Digest | undefined {
   return sameShape(origin.model.nodes, state.model.nodes) ? origin.checksum : undefined;
 }
 
-/** Whether two trees give every index path the same node: the same kinds and
- * names at the same places, the same number of children under each. Text and
+/** Whether two trees give every index path the same node: the same handles, kinds
+ * and names at the same places, the same number of children under each. Text and
  * attribute values may differ — they do not move a path. */
 export function sameShape(left: readonly ShapeNode[], right: readonly ShapeNode[]): boolean {
   const stack: [readonly ShapeNode[], readonly ShapeNode[]][] = [[left, right]];
@@ -121,6 +123,9 @@ export function sameShape(left: readonly ShapeNode[], right: readonly ShapeNode[
       const y = rightLevel[index];
       assert(x !== undefined, 'The index lies inside the left list');
       assert(y !== undefined, 'The index lies inside the right list');
+      if (x.id !== y.id) {
+        return false;
+      }
       if (x.kind !== y.kind) {
         return false;
       }
@@ -135,6 +140,7 @@ export function sameShape(left: readonly ShapeNode[], right: readonly ShapeNode[
 
 /** The part of a page node its path depends on. */
 export interface ShapeNode {
+  readonly id: string;
   readonly kind: string;
   readonly name?: string | undefined;
   readonly children?: readonly ShapeNode[] | undefined;

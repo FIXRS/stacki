@@ -6,6 +6,7 @@ import { definedFields } from '../../shared/core/boundary';
 import type { IpcPayloads } from '../../shared/ipc/ipcPayloads';
 import * as gitHistory from './gitHistory';
 import { git } from '../lib/nodeTools';
+import { ensureExcluded } from '../lib/projectExclusions';
 
 // Work in progress, set aside under the branch it belongs to.
 //
@@ -42,6 +43,7 @@ export async function parkedRef(projectPath: string, branch: string | undefined)
 }
 
 export async function parkBranch(projectPath: string, branch: string | undefined) {
+  await preserveIgnoredPaths(projectPath);
   if (!(await isDirty(projectPath))) {
     return false;
   }
@@ -49,13 +51,44 @@ export async function parkBranch(projectPath: string, branch: string | undefined
   return true;
 }
 
+// Branches can disagree about .gitignore. Keep existing generated files ignored
+// locally so a return trip cannot stash the other branch's runtime dependencies.
+async function preserveIgnoredPaths(projectPath: string): Promise<void> {
+  const { stdout } = await git(projectPath, [
+    'ls-files',
+    '--others',
+    '--ignored',
+    '--exclude-standard',
+    '--directory',
+    '-z',
+  ]);
+  const paths = stdout.split('\0').filter(Boolean);
+  if (paths.length > 4096) {
+    throw new Error('Too many ignored paths to preserve while switching branches');
+  }
+  // Shared Stacki metadata must remain versioned; only its known generated
+  // directories belong in the local exclusions maintained by ensureExcluded.
+  const ignoredPaths = paths.filter((entry) => !entry.startsWith('.stacki/'));
+  if (!ensureExcluded(projectPath, { ignoredPaths })) {
+    throw new Error('Could not preserve generated files before switching branches');
+  }
+}
+
 export async function unparkBranch(projectPath: string, branch: string | undefined) {
   const ref = await parkedRef(projectPath, branch);
   if (!ref) {
     return { restored: false };
   }
+  // Another tool may have edited the destination. Never apply or unwind a stash
+  // over those edits: the recovery below is only safe on an initially clean tree.
+  if (await isDirty(projectPath)) {
+    return {
+      restored: false,
+      error: `Your work on "${branch}" is still parked because this branch has local changes.`,
+    };
+  }
   try {
-    await git(projectPath, ['stash', 'pop', ref]);
+    await git(projectPath, ['stash', 'pop', '--index', ref]);
     return { restored: true };
   } catch {
     // A pop that cannot apply leaves conflict markers in the files. That is a

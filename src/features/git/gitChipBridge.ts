@@ -167,6 +167,14 @@ export function pushGitBranch(projectPath: string, branch: string) {
   const payload = parseIpcPayload('git:push', { projectPath, branch });
   return gitRequest(parseGitSuccess, () => window.avb.gitPush(payload));
 }
+export function readIncomingGitCommits(projectPath: string, branch: string) {
+  const payload = parseIpcPayload('git:incoming', { projectPath, branch });
+  return gitRequest(count, () => window.avb.gitIncoming(payload));
+}
+export function pullGitBranch(projectPath: string, branch: string) {
+  const payload = parseIpcPayload('git:pull', { projectPath, branch });
+  return gitRequest(parseMergeResult, () => window.avb.gitPull(payload));
+}
 export function resolveGitMerge(projectPath: string, branch: string, choices: unknown) {
   const payload = parseIpcPayload('git:resolveMerge', { projectPath, branch, choices });
   return gitRequest(parseMergeResult, () => window.avb.gitResolveMerge(payload));

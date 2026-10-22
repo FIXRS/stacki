@@ -1,6 +1,29 @@
 import { git, run } from '../lib/nodeTools';
 import type { PublishConfig } from '../../shared/properties/publishConfig';
 
+/** URL-based pushes need an explicit tracking update so availability sees the confirmed commit. */
+export async function recordPublishedGitHub(
+  root: string,
+  branch: string,
+  commit: string,
+): Promise<void> {
+  const reference = `refs/remotes/origin/${branch}`;
+  const previous = await git(root, ['rev-parse', '--verify', reference])
+    .then((result) => result.stdout.trim())
+    .catch(() => undefined);
+  if (previous !== undefined) {
+    // A concurrent fetch may already know a newer commit; never move it backwards.
+    const newer = await git(root, ['merge-base', '--is-ancestor', commit, previous])
+      .then(() => true)
+      .catch(() => false);
+    if (newer) {
+      return;
+    }
+  }
+  // Compare-and-swap also protects against a fetch racing this local bookkeeping.
+  await git(root, ['update-ref', reference, commit, previous ?? '0'.repeat(commit.length)]);
+}
+
 /** Resolve the selected account without changing gh's global active account. */
 export async function publishingGitEnvironment(
   root: string,
@@ -43,7 +66,8 @@ export async function publishingGitEnvironment(
 }
 
 export async function publishingGitRemote(root: string, config: PublishConfig): Promise<string> {
-  const remote = (await git(root, ['remote', 'get-url', 'origin'])).stdout.trim();
+  // Validate the configured identity; transport URL rewrites still apply when Git connects.
+  const remote = (await git(root, ['config', '--get', 'remote.origin.url'])).stdout.trim();
   const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(
     remote,
   );

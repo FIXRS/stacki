@@ -35,7 +35,7 @@ export async function vercelProjects(
   });
 }
 
-async function vercelPages(root: string, endpoint: string, field: string, account: string) {
+export async function vercelPages(root: string, endpoint: string, field: string, account: string) {
   const values: unknown[] = [];
   let cursor = '';
   for (let page = 0; page < DISCOVERY_LIMITS.pagesMax; page++) {

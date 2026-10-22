@@ -141,7 +141,8 @@ test('a failed text write keeps the visible edit queued until a later save succe
   await assert.rejects(saver.flush(), /EPERM/);
   assert.equal(disk.text, PAGE);
   assert.deepEqual(box.state.model, predicted, 'the typed text remains visible');
-  assert.equal(box.state.save.tag, 'dirty');
+  assert.equal(box.state.save.tag, 'failed');
+  assert.match(box.state.save.message, /EPERM/);
   assert.equal(queue.entries(PATH).length, 1);
   assert.equal(record.outcome.tag, 'pending', 'the undo record is retained');
   assert.deepEqual(box.notices, [], 'a write failure is not an unsupported visual edit');

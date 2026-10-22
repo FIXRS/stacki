@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadProject, type Project } from './projectClient';
+import { onWindowReturn } from '../../../vendor/stacki/src/lib/windowReturn';
 import { StudioRequestError } from './responseError';
 
 export function useProjectLoad(report: (error: unknown) => void) {
@@ -30,8 +31,10 @@ export function useProjectLoad(report: (error: unknown) => void) {
   useEffect(() => {
     refresh();
     window.addEventListener('studio:project-changed', refresh);
+    const offReturn = onWindowReturn(refresh);
     return () => {
       window.removeEventListener('studio:project-changed', refresh);
+      offReturn();
       active.current?.abort();
     };
   }, [refresh]);

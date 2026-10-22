@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const bridge = require('../../helpers/rendererModule')('src/features/git/gitChipBridge.ts');
 const { repoPath } = require('../../helpers/sources.js');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -85,6 +86,10 @@ test('GitChip operations forward validated payloads for each action mode', async
         calls.push(['init', payload]);
         return { ok: true };
       },
+      gitPull: async (payload) => {
+        calls.push(['pull', payload]);
+        return { ok: true, into: 'main', changed: false };
+      },
       gitPush: async (payload) => {
         calls.push(['push', payload]);
         return { ok: true };
@@ -102,6 +107,7 @@ test('GitChip operations forward validated payloads for each action mode', async
   assert.equal((await bridge.commitGitChanges('/project', 'Update', ['src/a.astro'])).ok, true);
   assert.equal((await bridge.initializeGit('/project')).ok, true);
   assert.equal((await bridge.pushGitBranch('/project', 'main')).ok, true);
+  assert.equal((await bridge.pullGitBranch('/project', 'main')).ok, true);
   assert.equal((await bridge.resolveGitMerge('/project', 'topic', { 'a.astro': 'ours' })).ok, true);
   assert.deepEqual(calls, [
     ['status', { projectPath: '/project' }],
@@ -111,6 +117,7 @@ test('GitChip operations forward validated payloads for each action mode', async
     ['commit', { projectPath: '/project', message: 'Update', paths: ['src/a.astro'] }],
     ['init', '/project'],
     ['push', { projectPath: '/project', branch: 'main' }],
+    ['pull', { projectPath: '/project', branch: 'main' }],
     ['resolve', { projectPath: '/project', branch: 'topic', choices: { 'a.astro': 'ours' } }],
   ]);
 });
@@ -146,9 +153,51 @@ test('GitChip routes every direct Git operation through the parsed bridge', () =
     'checkoutGitBranch',
     'commitGitChanges',
     'initializeGit',
-    'pushGitBranch',
     'resolveGitMerge',
   ]) {
     assert.match(source, new RegExp(`\\b${operation}\\(`));
   }
+});
+
+test('Pull validates requests, response variants and failures', async () => {
+  global.window = { avb: { gitPull: async () => ({ ok: true, changed: 'yes' }) } };
+  await assert.rejects(bridge.pullGitBranch('/project', 'main'), /boolean/i);
+  assert.throws(() => bridge.pullGitBranch('/project', 1));
+  assert.throws(() =>
+    bridge.pullGitBranch('/project', 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1)),
+  );
+  assert.throws(() => bridge.pullGitBranch('/project\0bad', 'main'), /NUL/);
+  const dirty = { ok: false, dirty: true, from: 'main', branch: 'origin/main', files: ['a'] };
+  global.window.avb.gitPull = async () => dirty;
+  assert.deepEqual(await bridge.pullGitBranch('/project', 'main'), { ok: true, value: dirty });
+  global.window.avb.gitPull = async () => {
+    throw new Error('offline');
+  };
+  assert.deepEqual(await bridge.pullGitBranch('/project', 'main'), { ok: false, error: 'offline' });
+});
+
+test('Incoming counts parse bounded integers and distinguish offline from zero', async () => {
+  const requests = [];
+  global.window = {
+    avb: {
+      gitIncoming: async (payload) => {
+        requests.push(payload);
+        return 0;
+      },
+    },
+  };
+  assert.deepEqual(await bridge.readIncomingGitCommits('/project', 'main'), { ok: true, value: 0 });
+  assert.deepEqual(requests, [{ projectPath: '/project', branch: 'main' }]);
+  for (const count of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', undefined]) {
+    window.avb.gitIncoming = async () => count;
+    await assert.rejects(bridge.readIncomingGitCommits('/project', 'main'));
+  }
+  window.avb.gitIncoming = async () => {
+    throw new Error('Offline');
+  };
+  assert.deepEqual(await bridge.readIncomingGitCommits('/project', 'main'), {
+    ok: false,
+    error: 'Offline',
+  });
+  assert.throws(() => bridge.readIncomingGitCommits('/project', undefined));
 });

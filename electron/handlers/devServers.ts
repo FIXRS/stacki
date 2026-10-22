@@ -5,7 +5,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { execFile } from 'child_process';
+import { execFile, type ChildProcess } from 'child_process';
 import { LIMITS } from '../../shared/core/limits';
 import { toRecord } from '../../shared/core/record';
 import type { IpcResults } from '../../shared/ipc/ipcResults';
@@ -27,17 +27,20 @@ import {
   findFreePort,
   nodeCliCommand,
   resolveNodeBin,
+  run,
   spawnAstroServer,
   stopProcessTree,
 } from '../lib/nodeTools';
 import { renderComponentPreviewPage } from '../previewServer/componentPreview';
 import { probeUrl } from '../preview/devProbe';
+import { readDevServerLog } from '../preview/devServerLog';
 import {
   ASTRO_CONFIG_FILES,
   TRAILING_SLASH_MODES,
   nodeVersionOf,
   parseExistingServer,
   parsesAsModule,
+  previewPort,
   serverResponds,
   readAstroLock,
   satisfiesRange,
@@ -48,6 +51,24 @@ import { DATA_ENDPOINT, PATHS_ENDPOINT, renderMarkerConfig } from '../preview/ma
 import { PROGRESS_CLEARED, installDependencies } from './projectHandlers';
 import type { MainHost } from './mainHost';
 import type { Thumbnails } from './thumbnails';
+
+// Subscribe before sending the stop signal so a fast exit cannot be missed.
+function waitForPreviewExit(process: ChildProcess | undefined): Promise<void> {
+  if (!process || process.exitCode !== null || process.signalCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const exited = (): void => {
+      clearTimeout(timeout);
+      resolve();
+    };
+    const timeout = setTimeout(() => {
+      process.removeListener('exit', exited);
+      reject(new Error('Preview did not stop in time. Try switching branches again.'));
+    }, 10000);
+    process.once('exit', exited);
+  });
+}
 
 // The page patcher, handed to every page as a module. It lives in its own
 // file rather than as a string in here because it is real code that has to
@@ -96,6 +117,26 @@ export class DevServers {
   /** The dev server the canvas shows, while one runs. */
   current(): DevServer | undefined {
     return this.server;
+  }
+
+  /** A checkout must wait until the old watcher stops before replacing its files. */
+  async pause(): Promise<void> {
+    this.starts.cancel();
+    const server = this.server;
+    if (!server) {
+      return;
+    }
+    if (server.daemon && server.bin) {
+      const [command, args] = nodeCliCommand(server.bin, ['dev', 'stop']);
+      await run(command, args, server.projectPath, SHORT_COMMAND);
+      if (this.server === server) {
+        this.server = undefined;
+      }
+      return;
+    }
+    const stopped = waitForPreviewExit(server.proc);
+    this.stop(false);
+    await stopped;
   }
 
   /** Runs `task` as the project's one dev start; a later start cancels it. */
@@ -203,6 +244,7 @@ export class DevServers {
         JSON.stringify(markersPath),
         JSON.stringify(previewHelperPath),
         JSON.stringify(RUNTIME_PATHS.studioEntry),
+        JSON.stringify(RUNTIME_PATHS.previewWarmup),
         JSON.stringify(projectDirectories),
         JSON.stringify(MORPH_CLIENT),
         JSON.stringify(MORPH_TAG_HTML),
@@ -322,7 +364,7 @@ export class DevServers {
     { force, bare }: { readonly force: boolean; readonly bare: boolean },
     assertActive: () => void,
   ) {
-    const port = await findFreePort(4321);
+    const port = await findFreePort(previewPort(fs.realpathSync(projectPath)));
     assertActive();
     const args = ['dev', '--port', String(port), '--host', '127.0.0.1'];
     // Astro resolves --config against the project root and rejects absolute
@@ -337,6 +379,7 @@ export class DevServers {
       args.push('--force');
     }
 
+    const startedAtMs = Date.now();
     const proc = spawnAstroServer(projectPath, localBin, args);
 
     const url = `http://127.0.0.1:${port}`;
@@ -364,7 +407,7 @@ export class DevServers {
       }
     });
 
-    // The daemon's own failure reasons only land in `astro dev logs`.
+    // The daemon's own failure reasons land in its separate project log.
 
     // Wait for HTTP readiness; a listening socket alone can leave the iframe blank.
     const deadline = Date.now() + 60000;
@@ -373,7 +416,7 @@ export class DevServers {
       if (!this.server) {
         throw new Error(
           'Dev server exited before it was ready.\n\n' +
-            (await this.failureDetail(projectPath, localBin)),
+            (await this.failureDetail(projectPath, localBin, startedAtMs)),
         );
       }
       if (await serverResponds(url)) {
@@ -384,7 +427,7 @@ export class DevServers {
     }
     throw new Error(
       'Astro dev server did not start within 60 seconds.\n\n' +
-        (await this.failureDetail(projectPath, localBin)),
+        (await this.failureDetail(projectPath, localBin, startedAtMs)),
     );
   }
 
@@ -418,8 +461,16 @@ export class DevServers {
     return localBin;
   }
 
-  private async failureDetail(projectPath: string, localBin: string): Promise<string> {
+  private async failureDetail(
+    projectPath: string,
+    localBin: string,
+    startedAtMs: number,
+  ): Promise<string> {
     let log = this.recentLog();
+    const daemonLog = await readDevServerLog(projectPath, startedAtMs);
+    if (daemonLog) {
+      return `${log}\n\n— Astro startup log —\n${daemonLog}`;
+    }
     try {
       const [logCmd, logArgs] = nodeCliCommand(localBin, ['dev', 'logs']);
       const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) =>
@@ -474,7 +525,7 @@ export function registerDevServerHandlers({
   });
 
   ipcMain.handle('dev:stop', async () => {
-    devServers.stop();
+    await devServers.pause();
     return { ok: true as const };
   });
 

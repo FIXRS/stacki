@@ -7,6 +7,8 @@ import { toRecord } from '../../shared/core/record';
 import { dictionary, list, text } from '../../shared/core/boundary';
 import * as path from 'path';
 import * as fs from 'fs';
+import { readComponentSources, packageSourcePath } from '../lib/componentSources';
+import { componentSourceRoot } from '../../shared/properties/componentSources';
 
 // ---------------------------------------------------------------------------
 // Source files behind a symbol
@@ -75,6 +77,14 @@ export function resolveImportPath(projectPath: string, fromFile: string, spec: s
   const specifier = String(spec || '');
   if (!specifier) {
     return undefined;
+  }
+  for (const source of readComponentSources(projectPath)) {
+    if (specifier.startsWith(source.importPrefix)) {
+      const relative =
+        componentSourceRoot(source) + '/' + specifier.slice(source.importPrefix.length);
+      packageSourcePath(projectPath, relative);
+      return path.resolve(projectPath, relative);
+    }
   }
   if (specifier.startsWith('.')) {
     return firstExisting(path.resolve(path.dirname(fromFile), specifier));

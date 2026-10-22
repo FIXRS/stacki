@@ -16,7 +16,9 @@ export function createAstroNotifications(server: ViteDevServer, root: string) {
       }
     }
   });
+  const projectUpdates = createProjectUpdates(clients, root);
   const changed = (event: string, file: string) => {
+    projectUpdates.changed(file);
     if (['add', 'unlink', 'addDir', 'unlinkDir'].includes(event)) {
       const relative = path.relative(root, file).split(path.sep).join('/');
       if (relative === 'src' || relative.startsWith('src/')) {
@@ -27,6 +29,7 @@ export function createAstroNotifications(server: ViteDevServer, root: string) {
   server.watcher.on('all', changed);
   server.httpServer?.once('close', () => {
     monitor.close();
+    projectUpdates.close();
     server.watcher.off('all', changed);
     for (const client of clients) {
       client.end();
@@ -35,6 +38,31 @@ export function createAstroNotifications(server: ViteDevServer, root: string) {
   });
   return (response: ServerResponse, authorize?: () => Promise<boolean>) =>
     subscribe(clients, response, authorize);
+}
+
+function createProjectUpdates(clients: ReadonlySet<ServerResponse>, root: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return {
+    changed: (file: string) => {
+      const relative = path.relative(root, file).split(path.sep).join('/');
+      if (!/^(src|public)(\/|$)/.test(relative)) {
+        return;
+      }
+      if (timer !== undefined) {
+        return;
+      }
+      // One notification per burst also covers Markdown, collections, assets and empty folders.
+      timer = setTimeout(() => {
+        timer = undefined;
+        for (const client of clients) {
+          if (!client.write('event: project-changed\ndata: {}\n\n')) {
+            client.end();
+          }
+        }
+      }, 200);
+    },
+    close: () => clearTimeout(timer),
+  };
 }
 
 function subscribe(

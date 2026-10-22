@@ -49,6 +49,8 @@ test('malformed settings fail before anything can run', () => {
     undefined,
     {},
     { ...DEFAULT_PUBLISH_CONFIG, version: 2 },
+    { ...DEFAULT_PUBLISH_CONFIG, defaultTarget: 'invalid' },
+    { ...DEFAULT_PUBLISH_CONFIG, defaultTarget: 1 },
     { ...DEFAULT_PUBLISH_CONFIG, githubAccount: 'owner@example.com' },
     { ...DEFAULT_PUBLISH_CONFIG, githubAccount: 'a'.repeat(40) },
     { ...DEFAULT_PUBLISH_CONFIG, buildScript: '--help' },
@@ -71,6 +73,19 @@ test('malformed settings fail before anything can run', () => {
   assert.throws(() => parsePublishSource(' '.repeat(16_385)), /16 KiB/);
   assert.throws(() => scriptCommand(''), /must be named/);
   assert.throws(() => scriptCommand('--help'), /cannot be an option/);
+});
+
+test('the shared Publish button preference defaults to both and preserves each choice', () => {
+  assert.equal(parsePublishSource(undefined).defaultTarget, 'all');
+  const { defaultTarget: omitted, ...legacy } = DEFAULT_PUBLISH_CONFIG;
+  assert.equal(omitted, 'all');
+  assert.equal(parsePublishConfig(legacy).defaultTarget, 'all');
+  for (const defaultTarget of ['all', 'github', 'hosting'] as const) {
+    const config = { ...DEFAULT_PUBLISH_CONFIG, defaultTarget };
+    const source = JSON.stringify(config);
+    assert.deepEqual(parsePublishSource(source), config);
+    assert.doesNotThrow(() => validateMetadata('publish', source));
+  }
 });
 
 test('provider commands pin account and project without changing global CLI state', () => {
@@ -111,6 +126,50 @@ test('provider commands pin account and project without changing global CLI stat
   );
   assert.throws(() => parseDesktopPublishState({ kind: 'done', github: 'yes', hosting: false }));
   assert.throws(() => parseDesktopPublishState({ kind: 'unknown' }));
+});
+
+test('Publishing parses commit messages at the IPC boundary', () => {
+  const input = { projectPath: '/project', target: 'github' };
+  assert.deepEqual(parseIpcPayload('publish:start', input), input);
+  assert.deepEqual(
+    parseIpcPayload('publish:start', { ...input, commitMessage: '  Fix heading  ' }),
+    { ...input, commitMessage: 'Fix heading' },
+  );
+  for (const commitMessage of ['', '  ', 123, 'x'.repeat(4001)]) {
+    assert.throws(() => parseIpcPayload('publish:start', { ...input, commitMessage }));
+  }
+  assert.equal(
+    parseIpcPayload('publish:start', {
+      ...input,
+      commitMessage: 'x'.repeat(4000),
+    }).commitMessage?.length,
+    4000,
+  );
+});
+
+test('Publish progress accepts bounded stage counts and rejects impossible progress', () => {
+  const state = { kind: 'running', step: 'Building', progress: { completed: 1, total: 4 } };
+  assert.deepEqual(parseDesktopPublishState(state), state);
+  assert.deepEqual(parseDesktopPublishState({ kind: 'running', step: 'Preparing' }), {
+    kind: 'running',
+    step: 'Preparing',
+  });
+  for (const progress of [
+    { completed: -1, total: 4 },
+    { completed: 1.5, total: 4 },
+    { completed: 4, total: 4 },
+    { completed: 5, total: 4 },
+    { completed: 0, total: 2 },
+    { completed: 0, total: 6 },
+    { completed: '1', total: 4 },
+    { completed: 0, total: Number.NaN },
+  ]) {
+    assert.throws(() => parseDesktopPublishState({ ...state, progress }));
+  }
+  assert.throws(
+    () => parseDesktopPublishState({ ...state, progress: { completed: 4, total: 4 } }),
+    /Running publish progress must be incomplete/,
+  );
 });
 
 test('Workers keep their Wrangler configuration and require an explicit account when saved', () => {

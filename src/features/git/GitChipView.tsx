@@ -1,11 +1,12 @@
+import { GitPullControl } from './GitPullControl';
+import type { GitIncomingState } from './useGitIncoming';
 import React from 'react';
 import type { WireGitInfo } from '../../../shared/ipc/ipcResults';
-import { branchNameError, sanitizeBranchName } from './branchName';
+import BranchCreate from './BranchCreate';
 import BranchActions from './BranchActions';
 import type FileBrowser from './FileBrowser';
 import CommitFilePicker from './CommitFilePicker';
-import { BranchIcon, CheckIcon, ExternalIcon } from '../../ui/Icons';
-import { repoSlug, webUrl } from './gitPublish';
+import { BranchIcon } from '../../ui/Icons';
 import Tooltip from '../../ui/Tooltip';
 
 type ChangedFiles = React.ComponentProps<typeof FileBrowser>['files'];
@@ -30,9 +31,8 @@ interface GitChipViewProps {
   readonly onTogglePicking: () => void;
   readonly onPick: (paths: readonly string[]) => void;
   readonly onCommit: () => void;
-  readonly onOpenRemote: (remote: string) => void;
-  readonly onPush: () => void;
-  readonly onPublish: () => void;
+  readonly onPull: () => void;
+  readonly incoming: GitIncomingState;
 }
 
 interface BranchesProps {
@@ -71,48 +71,33 @@ function Branches({
   onNewBranch,
   onCreateBranch,
 }: BranchesProps) {
-  const branchError = branchNameError(newBranch, info.branches);
   return (
-    <>
+    <section className="git-branches" aria-label="Branches">
       <div className="history-branches-heading">
         <h3>Branches</h3>
-        <span>Click to switch</span>
+        <span>{info.branches.length} local</span>
       </div>
-      {info.branches.map((branch) => (
-        <BranchRow
-          key={branch}
-          branch={branch}
-          info={info}
-          working={working}
-          onSwitch={onSwitch}
-          onMerge={onMerge}
-          onDelete={onDelete}
-        />
-      ))}
-      <div className="dropdown-row git-create-branch">
-        <input
-          aria-label="New branch name"
-          disabled={working}
-          placeholder="new-branch-name"
-          value={newBranch}
-          aria-invalid={Boolean(branchError)}
-          onChange={(event) => onNewBranch(sanitizeBranchName(event.target.value))}
-          onKeyDown={(event) => {
-            const name = newBranch.trim();
-            if (event.key === 'Enter' && name && !branchError && !working) {
-              onCreateBranch(name);
-            }
-          }}
-        />
-        <button
-          disabled={working || !newBranch.trim() || Boolean(branchError)}
-          onClick={() => onCreateBranch(newBranch.trim())}
-        >
-          Create
-        </button>
+      <div className="git-branch-list">
+        {info.branches.map((branch) => (
+          <BranchRow
+            key={branch}
+            branch={branch}
+            info={info}
+            working={working}
+            onSwitch={onSwitch}
+            onMerge={onMerge}
+            onDelete={onDelete}
+          />
+        ))}
       </div>
-      {branchError && <div className="git-hint">{branchError}</div>}
-    </>
+      <BranchCreate
+        branches={info.branches}
+        working={working}
+        name={newBranch}
+        onName={onNewBranch}
+        onCreate={onCreateBranch}
+      />
+    </section>
   );
 }
 
@@ -132,12 +117,18 @@ function BranchRow({
       <button
         className="history-branch-switch"
         disabled={working || current}
+        aria-current={current ? true : undefined}
         aria-label={current ? `${branch}, current branch` : `Switch to ${branch}`}
         onClick={() => onSwitch(branch)}
       >
-        {current ? <CheckIcon size={12} /> : <BranchIcon size={12} />}
+        <span
+          className={`history-branch-icon history-graph-color-${
+            branch === (info.trunk ?? 'main') ? 0 : 1
+          }`}
+        >
+          <BranchIcon size={14} />
+        </span>
         <Tooltip className="history-branch-name" text={branch} />
-        {current && <span className="history-branch-current">Current</span>}
         {info.parked.includes(branch) && !current && (
           <span className="branch-parked" title="Changes waiting on this branch">
             Saved changes
@@ -219,58 +210,6 @@ function CommitControls({
   );
 }
 
-function GitHubControls({
-  info,
-  working,
-  onOpenRemote,
-  onPush,
-  onPublish,
-}: Pick<GitChipViewProps, 'info' | 'onOpenRemote' | 'onPush' | 'onPublish'> & {
-  readonly working: boolean;
-}) {
-  const canPush = info.hasUpstream ? info.ahead > 0 : true;
-  const pushLabel = !info.hasUpstream
-    ? `Push ${info.branch} to origin`
-    : info.ahead > 0
-      ? `Push ${info.ahead} commit${info.ahead === 1 ? '' : 's'}`
-      : 'Everything pushed';
-  return (
-    <>
-      <div className="divider" />
-      <h3>GitHub</h3>
-      <div className="dropdown-row" style={{ flexDirection: 'column', gap: 6 }}>
-        {info.remote ? (
-          <>
-            <button
-              className="repo-link"
-              title={`Open ${repoSlug(info.remote)} on GitHub`}
-              onClick={() => onOpenRemote(info.remote ?? '')}
-            >
-              <span className="repo-slug">{repoSlug(info.remote)}</span>
-              <ExternalIcon size={11} />
-            </button>
-            <button className="primary" disabled={working || !canPush} onClick={onPush}>
-              {pushLabel}
-            </button>
-            {info.dirty && (
-              <div className="hint-text">
-                You have uncommitted changes — commit them first to include them.
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="hint-text">This project isn’t on GitHub yet.</div>
-            <button className="primary" disabled={working} onClick={onPublish}>
-              Publish to GitHub…
-            </button>
-          </>
-        )}
-      </div>
-    </>
-  );
-}
-
 export default function GitChipView(props: GitChipViewProps) {
   const working = props.busy !== undefined;
   return (
@@ -281,6 +220,14 @@ export default function GitChipView(props: GitChipViewProps) {
         </p>
       )}
 
+      {props.info.remote && (
+        <GitPullControl
+          incoming={props.incoming}
+          busy={props.busy}
+          info={props.info}
+          onPull={props.onPull}
+        />
+      )}
       <Branches
         info={props.info}
         working={working}
@@ -305,22 +252,6 @@ export default function GitChipView(props: GitChipViewProps) {
         onPick={props.onPick}
         onCommit={props.onCommit}
       />
-      <GitHubControls
-        info={props.info}
-        working={working}
-        onOpenRemote={props.onOpenRemote}
-        onPush={props.onPush}
-        onPublish={props.onPublish}
-      />
     </div>
   );
-}
-
-export function openGitRemote(remote: string): void {
-  const url = webUrl(remote);
-  if (url) {
-    void window.avb.openExternal(url);
-  } else {
-    throw new Error('Git remote: expected a GitHub URL');
-  }
 }

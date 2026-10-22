@@ -21,6 +21,20 @@ export function PublishProgress({
   readonly dismiss: () => void;
 }) {
   const { error, done, total, label, title, hint } = progressView(state, failed);
+  if (state?.kind === 'review-open') {
+    return (
+      <section className="studio-publish-progress" aria-label="Review ready">
+        <strong>Ready for review</strong>
+        <p>
+          <a href={state.url} target="_blank" rel="noreferrer">
+            Open pull request
+          </a>
+        </p>
+        <p>Your live site is unchanged. Merge and deploy through GitHub.</p>
+        <button onClick={dismiss}>Dismiss</button>
+      </section>
+    );
+  }
   if (error) {
     return (
       <ErrorToast

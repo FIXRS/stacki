@@ -30,7 +30,14 @@ from pushed HTML, and normal page fetching remains the fallback after failed del
 
 ## Publishing and GitHub synchronization
 
-A publish captures an isolated filesystem snapshot under the project coordinator, then releases editing while the build runs. Only after a successful build does the GitHub App create a commit and update the branch without forcing it. Both the starting head and the final fast-forward condition are checked. A changed remote branch stops publication. Binary assets use Git blob uploads. The UI shows completed publish stages. When configured, it confirms the exact revision from the live gateway before reporting deployment success. Otherwise it reports only the GitHub commit.
+A publish captures immutable Git objects under the project coordinator. GitHub-only actions skip
+builds and hooks; hosting actions copy and build an isolated snapshot. Git transfers missing
+objects directly, preserving unrelated repository paths and publishing captured asset deletions
+in the same commit. An exact expected-head lease prevents overwriting concurrent changes. The
+Worker grants repository-scoped installation access only to the authenticated container; the
+App private key stays in the Worker. The UI shows completed stages and, when configured, confirms
+the exact revision from the live gateway before reporting deployment success. Otherwise it reports
+only the GitHub commit.
 
 While the studio is open, GitHub source changes are checked at most once per minute per visible active editor. Disjoint edits merge into the active shared documents. Conflicts leave the previous baseline in place and let the editor choose draft or GitHub versions for conflicting files. Resolutions are tied to the inspected GitHub revision. No publish is performed by synchronization.
 

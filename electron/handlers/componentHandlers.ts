@@ -22,6 +22,7 @@ import { componentUsage } from '../properties/componentUsage';
 import { toPosix } from '../lib/mainHelpers';
 import { selectionTrail } from '../documents/pageRequests';
 import type { MainHost } from './mainHost';
+import { componentSpecifier } from '../properties/componentImports';
 
 // Step 6: every applied property batch leaves its inverse here, and the reply
 // carries the token Undo sends back (componentProperties.ts).
@@ -76,6 +77,10 @@ function registerComponentCreateHandlers({
   );
 
   ipcMain.handle('page:importPathFor', async (_event, { pagePath, targetPath, projectPath }) => {
+    const preferred = projectPath ? componentSpecifier(projectPath, targetPath) : undefined;
+    if (preferred !== undefined) {
+      return { relative: preferred, srcRelative: undefined };
+    }
     const rel = toPosix(path.relative(path.dirname(pagePath), targetPath));
     const relative = rel.startsWith('.') ? rel : './' + rel;
     let sourceRelative: string | undefined = undefined;

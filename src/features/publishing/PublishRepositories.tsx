@@ -2,6 +2,7 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
+import Popup from '../../ui/Popup';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
 import type {
   PublishingRepositories,
@@ -30,7 +31,11 @@ export function PublishRepositories(props: Props) {
   const displayed = state.kind === 'loading' ? state.previous : state;
   const ready = displayed?.kind === 'ready' ? displayed.value : undefined;
   return (
-    <div className="publish-field" aria-busy={state.kind === 'loading' && !!account}>
+    <div
+      className="publish-field"
+      aria-busy={state.kind === 'loading' && !!account}
+      data-loading={state.kind === 'loading' && !!account && !displayed}
+    >
       <div className="publish-field-heading">
         <div className="publish-label-refresh">
           <span className="publish-label">GitHub repository</span>
@@ -119,43 +124,61 @@ function NewRepository(props: NewRepositoryProps) {
   const { name, setName, visibility, setVisibility, state, error, create } =
     useNewRepository(props);
   return (
-    <div className="publish-new-repository" aria-busy={state === 'creating'}>
-      <label>
-        Repository name
-        <input
-          value={name}
-          maxLength={100}
-          disabled={state === 'creating'}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
-      <Dropdown
-        ariaLabel="Repository visibility"
-        value={visibility}
-        options={[
-          { value: 'private', label: 'Private' },
-          { value: 'public', label: 'Public' },
-        ]}
-        onChange={setVisibility}
-        livePreview={false}
-        menuClassName="publish-dropdown"
-        disabled={state === 'creating'}
-      />
-      <p className="hint-text">Creates an empty repo. Connect it by saving these settings.</p>
-      {error && <ErrorToast message={error} />}
-      <div className="publish-field-actions">
-        <button type="button" disabled={state === 'creating'} onClick={props.close}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={!name || state === 'creating'}
-          onClick={() => void create()}
-        >
-          {state === 'creating' ? 'Creating…' : 'Create repo'}
-        </button>
-      </div>
-    </div>
+    <Popup
+      className="modal publish-settings publish-new-repository"
+      label="Create repository"
+      onClose={props.close}
+      dismissible={state === 'editing'}
+    >
+      {({ close }) => (
+        <>
+          <div className="modal-header">Create repository</div>
+          <div className="modal-body publish-fields" aria-busy={state === 'creating'}>
+            <label>
+              Repository name
+              <input
+                value={name}
+                maxLength={100}
+                disabled={state === 'creating'}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            <div className="publish-field">
+              <span className="publish-label">Visibility</span>
+              <Dropdown
+                ariaLabel="Repository visibility"
+                value={visibility}
+                options={[
+                  { value: 'private', label: 'Private' },
+                  { value: 'public', label: 'Public' },
+                ]}
+                onChange={setVisibility}
+                livePreview={false}
+                menuClassName="publish-dropdown"
+                disabled={state === 'creating'}
+              />
+            </div>
+            <p className="hint-text">
+              Creates an empty repo in {props.account}. Save Publish settings to connect it.
+            </p>
+            {error && <ErrorToast message={error} />}
+          </div>
+          <div className="modal-footer">
+            <button type="button" disabled={state === 'creating'} onClick={close}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!name || state === 'creating'}
+              onClick={() => void create()}
+            >
+              {state === 'creating' ? 'Creating…' : 'Create repo'}
+            </button>
+          </div>
+        </>
+      )}
+    </Popup>
   );
 }
 

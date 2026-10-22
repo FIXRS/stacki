@@ -55,6 +55,23 @@ project expressions to obtain a label.
 
 ## IPC
 
+Layout fields may request the rendered page's social image and type through `avb:query`
+with `pageMetadata: true`. Both preview clients read Open Graph metadata (or Twitter
+metadata when absent), so CMS fallbacks and delegated head components are reflected
+without evaluating project expressions in the editor. Replies pass `parsePageImage`
+before reaching the field: only bounded project paths and HTTP(S) URLs without
+credentials are accepted. Types pass the bounded `parsePageType` parser. Images on
+the canonical site's origin are mapped to project
+paths for local thumbnails; external CDN URLs remain external. This is display-only;
+the page's image and type props stay omitted. Page readiness refreshes the values, and selection,
+page and project changes discard stale replies.
+
+Unset layout titles and descriptions use `pageText: true` on the same query channel.
+Both preview clients return rendered title and description metadata, parsed as bounded
+optional strings by `shared/properties/pageText.ts`. These values only supply placeholders;
+they never author props. Explicit overrides and defaults recipes do not inherit the rendered
+text. Page readiness refreshes it, and page, project, and layout changes discard stale replies.
+
 `shared/ipc/ipcPayloads.ts` is the channel-to-payload inventory and
 `shared/ipc/ipcResults.ts` is the channel-to-result inventory. `shared/ipc/preloadApi.ts`
 maps the public preload method names to those channels. A new or changed channel
@@ -89,6 +106,50 @@ Expected operating failures use `Result` or an explicit result union. A shape
 that violates the declared wire contract is a programmer error and throws at
 the boundary. Do not catch that assertion and turn it into an operating result.
 
+`git:checkout` automatically parks tracked and untracked edits before switching to an existing
+branch, even when Git could carry them across. The dirty check reads disk after editor saves
+flush; a clean tree needs neither a stash nor a commit. Returning restores that branch's own
+drafts, including staged changes. Creating a branch carries current edits onto the new branch.
+A failed switch restores the source drafts. Existing `parkFirst` requests remain compatible;
+parking is now automatic. Restoration refuses to overwrite newly introduced local edits.
+Before checkout, existing ignored paths are preserved in Git's local exclusions so differing
+branch ignore rules cannot stash generated caches as drafts. Shared `.stacki` metadata is
+excluded from this inheritance; only Stacki's known generated directories stay ignored.
+The Desktop branch action flushes edits, awaits `dev:stop`, then performs checkout and
+restarts the preview on success or failure. `dev:stop` waits for the owned process or daemon
+to exit; external servers remain untouched. Starting/offline previews hide any stale iframe
+URL and expose loading or retry controls instead of a blank connection-error document.
+
+`git:pull` takes a project path and the currently displayed branch. It fetches that branch
+from `origin` with the project's publishing account, then merges through the existing
+`WireMergeOutcome` contract. A missing remote branch or changed local branch stops the pull;
+uncommitted files are never discarded. Conflicts are unwound for review through
+`git:resolveMerge`. The Git panel flushes saves first and refreshes Git and the editor afterward.
+`git:incoming` takes the same payload and returns a validated nonnegative commit count.
+It reads the advertised branch and fetches missing objects without touching working files,
+the index, remote-tracking refs, or `FETCH_HEAD`. A missing remote branch returns zero;
+network failures remain unavailable rather than pretending the branch is current.
+The project checks every 30 seconds and on window return, with one read in flight and one
+coalesced retry. Project, branch, remote, and HEAD changes discard stale results. Pull stays
+disabled until the latest branch has a confirmed positive incoming count.
+
+
+Publishing account sign-in uses `publish:account` with bounded `start`, `status`, and `cancel`
+requests parsed by `shared/ipc/publishAccount.ts`. A session belongs to its project and random
+identifier and provider; one pending session owns CLI authentication at a time.
+Requests may select Cloudflare; omitted providers retain GitHub compatibility. Replies expose only
+progress, a device verification code, a bounded Cloudflare OAuth authorization URL, or a
+sanitized failure. The URL must use the HTTPS Cloudflare dashboard authorization endpoint. CLI output and credentials never
+cross the renderer boundary. Closing the dialog cancels the child; server time and output limits
+also terminate abandoned sessions. Local Studio shares this service through its authenticated
+API routes; managed Studio refuses changes to server CLI accounts.
+
+Desktop's `publish:siteURL` independently discovers the selected hosting project's public
+domain without blocking local deployment-status checks. Its optional string reply passes
+`parsePublishedSiteURL`: a bounded HTTPS origin without credentials, ports, paths, queries,
+or fragments. Provider credentials stay in the main process. Missing access or an unavailable
+provider omits the link; it never changes the deployment receipt or publishes the project.
+
 ## Page saves
 
 `shared/ipc/pageSave.ts` is the save contract (plan §11 step 0; since step 10
@@ -108,7 +169,12 @@ keeps its queued edits on every failure, and the next send names the same
 origin. The renderer's `SaveState` union (`src/editor/saveState.ts`) turns a
 refusal against other bytes into `conflicted`: autosave stops, the edits stay,
 and only "Reload from disk" or a reviewed "Save this version" leaves that
-state.
+state. A confirmed filesystem failure remains `failed` with its message and a persistent
+"Retry save" notification until another attempt or edit. The renderer retries an individual
+`page:edit` at most three times after 100/250/500 ms only when a `filesystem` reply names
+EPERM, EACCES or EBUSY. Each attempt retains its original checksum and goes through the
+actor's normal lock, witness and read-back checks. Conflicts, uncertain writes, missing
+files and transport exceptions are never automatically replayed.
 
 Every edit offered by the visual editor is expected to save through that editor.
 An `unsupported-operation` remaining after the node and page rewrite fallbacks is
@@ -121,12 +187,15 @@ Since step 5 every write of project text — page, chunk, style re-write,
 stylesheet, code window, CMS and asset edits, component-property batches — is
 an intent to the file's document actor (see Document actors below), which
 writes through `electron/documents/atomicWrite.ts`: a temporary file in a stable
-`.stacki-io` child directory on the target filesystem (`wx`, the target's mode and
+project `.stacki/io` directory on the target filesystem (`wx`, the target's mode and
 owner, fsync), one rename, an fsync of both changed directories, then
 the actor's own read-back, which reports another writer as `write-race`.
-The hidden staging directory stays in place between saves: Astro stats directory
+The staging directory stays outside source trees: Astro stats directory
 entries before ignoring dotfiles, so deleting save files directly beside a page
-can crash route discovery. Staging links and mount points on other devices are refused.
+can crash route discovery. Both `.stacki` and `io` reject links and mount points on other devices.
+Staging uses the nearest ancestor with `.stacki` or `package.json`; standalone files
+use their parent. Locks hash the target directory identity and filename so equal filenames in separate
+folders do not contend. Generated `.stacki/io/` files are locally excluded from Git.
 Write failures cross `page:edit` as `filesystem` and stay queued for the next save;
 write races use `write-race` and reconcile against disk before another attempt.
 Neither is an unsupported visual gesture that should be withdrawn.
@@ -423,6 +492,15 @@ the value cache's selection and history invalidation and never becomes editable 
   the editor shows (the clean checksum, or the origin while unsaved edits keep
   every path), and main answers `current` — judged again after main answers. A
   refusal is a notice; nothing is selected. Hover needs the latest token only.
+  During a local render backlog, ordinary clicks may resolve through one of the
+  last eight saved origins of the open file (`previewSelection.ts`). The old
+  path names a stable node handle, which is resolved again in the current model;
+  a move never reuses the old numeric index and a deletion never selects its
+  neighbour. The original manifest digest is verified, only the open file's
+  known stamp is replaced with its current origin checksum, and main checks
+  that manifest against disk. Navigation, another save, an unknown origin or an
+  outside change still refuses the click. The runtime rechecks the frame token
+  after the asynchronous gate returns. Context actions retain the strict gate.
   Markdown and MDX pages carry no stamp: their markers come from the Markdown
   processor's tree, which never sees the file's bytes (carried at step 10);
   their layouts' stamps are still checked, and every edit is checked by main.
@@ -450,7 +528,7 @@ chunk file has its own actor; `component:editProperties`
 leases its files' actors in sorted canonical order and witnesses each by its
 `before` checksum, with the checked rollback as intents too.
 `documentDisk.ts` is the real disk: bounded reads, a lock file inside the target's
-stable `.stacki-io` directory (dead or old owners broken), the atomic replace, exclusive creation,
+project’s `.stacki/io` directory (dead or old owners broken), the atomic replace, exclusive creation,
 and canonical keys (directory identity plus the name, case-folded where a probe
 shows the directory ignores case). Bounds: `documentActorsMax`,
 `documentBytesRetainedMax`, `intentsPendingMax`, `parseTasksInFlightMax`,
@@ -585,8 +663,8 @@ Module imports are rebased for the temporary location. Surrounding navigator row
 and cannot be selected or receive drops; canvas focus uses the ordinary component focus overlay.
 “Close defaults”, Escape, and a click outside the focused canvas subtree save and close the
 defaults session. Explicit boolean and enum choices remain stored even when they match an
-Astro fallback, so the inspector marks them as set. Defaults mode leaves unset text and enum
-fields empty. Boolean controls show the effective value while their blue labels still require
+Astro fallback, so the inspector marks them as set. Defaults mode leaves unset text fields
+empty. Boolean and enum controls show the fallback while their blue labels still require
 an explicit override. Authored Content is blue in both modes; resetting removes the authored
 children so Astro supplies its slot fallback (or empty content). Resetting a prop removes that
 override.
@@ -624,23 +702,71 @@ smaller patches retain binary/rename metadata and validated hunk line numbers fo
 
 ## Project publishing
 
+`.stacki/component-sources.json` registers bounded, read-only installed component roots for both
+hosts. `shared/properties/componentSources.ts` parses package names, relative directories and
+import prefixes. Scan entries carry a discriminated `origin`: local or package with an explicit
+import specifier. Package identity remains its project-relative `node_modules` path, distinct from
+the canonical filesystem location and insertion import. This prevents a local copy with the same
+name from silently replacing the package. Only configured roots are scanned; linked package roots
+are supported, internal links are refused, and ordinary document writes still reject installed files.
+The shared metadata transport includes these settings, so sync and publishing preserve them.
+
+The optional `githubWorkflow` in publish settings selects `direct` or `pull-request`. Absence
+preserves direct publishing. A successful review returns `review-open` with the validated
+`ReviewReceipt` from `shared/properties/publishReview.ts`; this state is not a published revision.
+Review branches identify their parent and captured tree, so retries recover an unchanged branch
+and open PR. New content produces a new review; changed branches and closed PRs require attention.
+Review submission does not advance the draft baseline, clean assets, run hooks or deploy. Hosted
+review credentials use the authenticated `/studio/internal/review-connection` endpoint and add
+Pull requests write permission to the existing repository-scoped Contents write permission.
+
 `.stacki/publish.json` is shared metadata parsed by `shared/properties/publishConfig.ts`.
 It stores provider/project identifiers, a Desktop GitHub username, and bounded npm script names;
 credentials stay in each host's authentication store or environment. Metadata reads and writes use
 the existing witnessed, conflict-checked project metadata transport.
 
-`publish:start` accepts a project path and `all`, `github`, or `hosting`; `publish:state` accepts
+`defaultTarget` selects the main Publish button's action: `all`, `github`, or `hosting`.
+Missing settings and older version-1 files default to `all`. Desktop and Studio share the
+same settings form and resolve this preference from project metadata when Publish is clicked;
+the dropdown's explicit destination actions do not change the saved preference.
+
+`publish:start` accepts a project path, `all`, `github`, or `hosting`, and an optional validated
+`commitMessage` (1–4000 trimmed characters); `publish:state` accepts
 that project path. Both return `DesktopPublishState`, parsed by `publishState.ts` before renderer
 use. One Desktop job runs at a time. Failures preserve which external actions completed, so a
 hosting retry cannot be mistaken for rolling back a successful GitHub push. Studio's publish
-route accepts the same target and reads the same config before building its isolated snapshot.
+route accepts the same target and reads the same config before selecting Git-only or hosting work.
+Desktop resolves `github`, and `all` with hosting `none`, to a Git-only plan. It captures a bounded
+private index/tree without checking out files or running build/publish scripts. Hosting plans
+retain isolated snapshots and scripts. The Git inspection budget is 100,000 files / 8 GiB;
+the hosting checkout budget remains 10,000 files / 256 MiB. NUL-separated file and tree listings
+are streamed with bounded records, buffers, work and time. Source, branch and HEAD are rechecked
+before committing; the staged and committed trees must match the captured tree. Incoming remote
+commits return a failure directing the user to the existing Pull flow, without merging or stashing.
+Operational failures in capture, inspection and commit return `Result`; invariant failures escape.
+Running Desktop states may include validated `progress` with completed and total stages
+(at most five). The dialog uses an indeterminate bar until this is known, then advances only
+when a stage completes. Successful URL-based pushes update the matching origin tracking ref;
+failed pushes leave it unchanged, and concurrent newer tracking refs are preserved.
+Desktop prompts for a message after flushing edits when GitHub publishing needs a new commit.
+The backend also refuses to build or commit dirty changes without a message. Existing commits
+push without a new message, and hosting-only publishing does not require one.
+
+`publish:availability` may include `githubPush` with a bounded commit count and a validated
+HTTPS GitHub repository URL. The count compares HEAD to the destination branch on origin and
+includes the commit Publish will create from the current worktree. A new remote branch counts
+the local history; staged-only differences that Publish would discard do not add a commit.
+The Publish menu owns push status and its independent repository link; the Git panel owns
+local branches and commits. Saves and refreshed Git state invalidate the menu's count.
 
 `publish:discover` accepts `{ projectPath, request: { provider, account } }`, where provider is
 Cloudflare, Vercel or GitHub and an empty account requests available connections/linked projects.
 `shared/properties/publishDiscovery.ts` parses bounded account labels and hosting destinations.
 Failures carry a sanitized message, never provider credentials or command output. Studio exposes
-the same discovery service at `/studio/api/publish/discover`; both hosts require an explicit
-project selection and settings save before changing the publish destination.
+the same discovery service at `/studio/api/publish/discover`; both hosts preserve saved publish
+destinations. When publish settings are absent, an explicit
+Publish action can import a single complete existing provider link through the witnessed metadata
+write before starting the job. Ambiguous or incomplete links still require settings.
 
 `publish:repository` accepts bounded `list`, `create`, and `connect` requests parsed by
 `shared/ipc/publishRepository.ts`. Lists retain the actual Git origin even if discovery fails.
@@ -662,3 +788,32 @@ boundaries. The internal handoff and visible stack keep at most five messages, d
 text. Recovery actions stay available until dismissal, and use the latest component callbacks.
 The stack follows the top native dialog so modal validation and retry controls stay accessible.
 Normal progress, empty states, and successful receipts remain part of their feature UI.
+
+## Studio large-project publishing
+
+Studio captures up to 100,000 files / 8 GiB into a private Git object store under its mutation
+coordinator. Its manifest contains paths, modes, sizes and blob identifiers, never file bodies.
+Only `src`, `public` and shared project metadata are replaced; explicit asset deletions and all
+other repository paths are preserved in one commit whose parent is the witnessed baseline.
+Git fetches a shallow, blob-filtered parent and pushes missing objects with an exact expected-head
+lease. A confirmed mismatch before pushing can refresh and recapture, at most three attempts.
+Rejected or ambiguous pushes are never retried automatically. Baselines and upload cleanup advance
+only after a confirmed push. Build mutations do not enter the captured Git objects.
+
+GitHub-only and `all` with hosting `none` skip builds and hooks. Hosting copies are bounded to
+100,000 files / 2 GiB and preflight available disk for the copy, output and a 1 GiB reserve. Native
+Git commands have ten-minute, 1 MiB output and free-disk guards; listings stream with bounded
+records. Native Git pack work uses one thread and bounded window/cache settings. The default build
+has a 2 GiB Node heap ceiling; this does not bound non-Node build tools or total container memory.
+
+The authenticated `/studio/internal/publish-connection` POST returns a repository-scoped GitHub
+App installation token and validated destination. `/studio/internal/bootstrap` additionally
+returns the saved baseline. Both require the existing private container token, use `no-store`,
+and never expose the App private key. Installation tokens are passed only in the Git child's
+environment, not command arguments, persistent Git configuration, logs, browser responses or
+build/hook environments. The old full-content commit and archive endpoints are removed. Startup
+fetches objects directly to disk, rejects linked or special files and runtime-state paths, checks
+disk capacity, checks out the witnessed revision and removes temporary Git objects.
+
+The Worker and container must be deployed together for the new internal protocol. Existing
+container instance sizes are preserved by updates; the supplied template now selects standard-2.

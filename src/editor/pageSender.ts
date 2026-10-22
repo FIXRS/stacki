@@ -38,6 +38,7 @@ import type { EntrySent } from './pagePersistence';
 import {
   saveStateBase,
   saveStateFailed,
+  saveStateNeedsWrite,
   saveStateRefused,
   saveStateStarted,
   type SaveState,
@@ -93,7 +94,9 @@ async function sendGestureEntry(
   if (origin === undefined) {
     // Typed code made the page parse and its save has not replied: nothing
     // names a node yet. The gesture waits, unsent, for the next save.
-    deps.update(path, (current) => withSave(current, failed(current.save)));
+    deps.update(path, (current) =>
+      withSave(current, failed(current.save, 'The page’s text is not saved yet.')),
+    );
     return { tag: 'failed', error: new Error('The page’s text is not saved yet.') };
   }
   const sent = await sendGesture({
@@ -124,7 +127,7 @@ async function sendGestureEntry(
       return { tag: 'conflicted' };
     }
     case 'retry':
-      deps.update(path, (current) => withSave(current, failed(current.save)));
+      deps.update(path, (current) => withSave(current, failed(current.save, sent.message)));
       return { tag: 'failed', error: new Error(sent.message) };
     case 'uncertain':
       return uncertain(deps, path, advanced(origin, sent.replies, entry.gesture), sent.message);
@@ -166,11 +169,11 @@ async function uncertain(
   try {
     disk = (await deps.read(path)).checksum;
   } catch {
-    deps.update(path, (current) => withSave(current, failed(current.save)));
+    deps.update(path, (current) => withSave(current, failed(current.save, message)));
     return { tag: 'failed', error: new Error(message) };
   }
   if (disk === origin.checksum) {
-    deps.update(path, (current) => withSave(current, failed(current.save)));
+    deps.update(path, (current) => withSave(current, failed(current.save, message)));
     return { tag: 'failed', error: new Error(message) };
   }
   refuse(deps, path, 'write-race', origin.checksum, disk);
@@ -266,7 +269,7 @@ async function sendCodeEntry(
       refuse(deps, path, sent.reason, sent.baseChecksum, sent.diskChecksum);
       return { tag: 'conflicted' };
     case 'failed':
-      deps.update(path, (current) => withSave(current, failed(current.save)));
+      deps.update(path, (current) => withSave(current, failed(current.save, sent.message)));
       return { tag: 'failed', error: new Error(sent.message) };
     default: {
       const exhaustive: never = sent;
@@ -367,9 +370,12 @@ function withSave(current: EditorPageState, save: SaveState): EditorPageState {
 }
 
 function started(save: SaveState): SaveState {
-  return save.tag === 'dirty' ? saveStateStarted(save) : save;
+  return saveStateNeedsWrite(save) ? saveStateStarted(save) : save;
 }
 
-function failed(save: SaveState): SaveState {
-  return save.tag === 'saving' ? saveStateFailed(save) : save;
+function failed(save: SaveState, message: string): SaveState {
+  if (save.tag === 'clean' || save.tag === 'conflicted') {
+    return save;
+  }
+  return saveStateFailed(save, message);
 }

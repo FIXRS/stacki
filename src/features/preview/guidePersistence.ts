@@ -1,6 +1,7 @@
 import { validateGuidePreferences } from '../../../shared/properties/guidePreferences';
 // One pending settings value coalesces slider changes; saves are serialized per mounted project.
 import { useEffect, useRef, useState } from 'react';
+import { onWindowReturn } from '../../lib/windowReturn';
 import { record } from '../../../shared/core/boundary';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import { GUIDE_DEFAULTS, type GuideSettings } from './guideModel';
@@ -37,9 +38,17 @@ export function useProjectGuideSettings(project: string | undefined) {
     const current = createGuideController(project, setState);
     controller.current = current;
     current.reload();
-    window.addEventListener('focus', current.reload);
+    const refresh = () => {
+      if (!document.hidden) {
+        current.reload();
+      }
+    };
+    const offReturn = onWindowReturn(refresh);
+    // Project metadata has no dedicated watcher; reconcile while the editor remains visible.
+    const timer = window.setInterval(refresh, 15_000);
     return () => {
-      window.removeEventListener('focus', current.reload);
+      offReturn();
+      window.clearInterval(timer);
       current.close();
       controller.current = undefined;
     };
@@ -165,7 +174,7 @@ class ProjectGuideController {
       if (this.status !== 'closed') {
         this.status = 'failed';
       }
-      this.report(`${errorMessage(error)} Reload project settings to continue.`);
+      this.report(`${errorMessage(error)} Project settings will retry automatically.`);
     } finally {
       this.writing = false;
       if (this.pending !== undefined) {

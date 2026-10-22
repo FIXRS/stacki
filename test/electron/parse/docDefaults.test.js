@@ -45,6 +45,20 @@ const plain = field('Output format. Defaults to `webp`.');
 check('a single value becomes the default', plain.default === 'webp', JSON.stringify(plain));
 check('a single value claims no hint', !plain.hint, JSON.stringify(plain));
 
+// Usage advice names an explicit alternative; it does not change the fallback.
+const adviceDocument =
+  'Open Graph type. Defaults to `website`; use `article` for posts and news pages.';
+const advice = field(adviceDocument);
+check('usage advice retains the default', advice.default === 'website', JSON.stringify(advice));
+check('usage advice is not a fallback hint', advice.hint === undefined, JSON.stringify(advice));
+check('the tooltip keeps usage advice', advice.doc === adviceDocument, JSON.stringify(advice));
+const literalAdvice = field('Text. Defaults to `text; use as is`.');
+check(
+  'advice punctuation within a literal stays intact',
+  literalAdvice.default === 'text; use as is',
+  JSON.stringify(literalAdvice),
+);
+
 // Two values: no default may be claimed, whatever joins them.
 for (const [label, document] of [
   ['for', 'Output format. Defaults to `webp`, or `svg` for SVG sources.'],
@@ -52,6 +66,7 @@ for (const [label, document] of [
   ['while', 'What it says. Defaults to `Play`, or `Pause` while pressed.'],
   ['going', 'Which way. Defaults to `Next`, or `Previous` going back.'],
   ['plain or', 'Which way. Defaults to `Next`, or `Previous`.'],
+  ['semicolon', 'Output format. Defaults to `webp`; or `svg` for SVG sources.'],
 ]) {
   const thingField = field(document);
   check(

@@ -3,6 +3,7 @@
 // renderer can never confuse a page route with a component folder.
 
 import { LIMITS } from '../core/limits';
+import { parseComponentOrigin, type ComponentOrigin } from './componentSources';
 import { parseField, type PropField } from './propSchema';
 
 export interface ScanPage {
@@ -20,6 +21,7 @@ export interface RenderTag {
 }
 
 export interface ScanComponent {
+  readonly origin?: ComponentOrigin;
   readonly path: string;
   readonly name: string;
   readonly folder: string;
@@ -103,6 +105,7 @@ function parsePage(input: unknown, where: string): ScanPage {
 function parseComponent(input: unknown, where: string): ScanComponent {
   const record = asRecord(input, where);
   const out: Record<string, unknown> = {
+    ...(record['origin'] === undefined ? {} : { origin: parseComponentOrigin(record['origin']) }),
     path: asString(record['path'], `${where}.path`),
     name: asString(record['name'], `${where}.name`),
     folder: asString(record['folder'], `${where}.folder`),

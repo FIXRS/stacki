@@ -15,7 +15,6 @@ import {
   required,
 } from './astroAttrs';
 import {
-  TAG_RE,
   findMatchingBrace,
   findMatchingParen,
   normalizeHead,
@@ -39,6 +38,7 @@ import {
   parseTemplateWithinBounds,
 } from './astroParseState';
 import { isInlineRun } from './astroSerialize';
+import { scanTag } from './astroTag';
 
 function tryParseMap(exprText: string, base: number | undefined = undefined): MapNode | undefined {
   const inner = exprText.slice(1, -1); // strip the outer { }
@@ -560,22 +560,13 @@ function parseTemplateTag(
   base: number | undefined,
 ): TemplateTagResult {
   const shorthand = template.startsWith('<>', lt);
-  TAG_RE.lastIndex = lt;
-  const match = shorthand ? ['<>', 'Fragment', '', ''] : TAG_RE.exec(template);
+  const match = shorthand
+    ? { full: '<>', name: 'Fragment', attrs: '', selfClose: '' }
+    : scanTag(template, lt);
   if (!match) {
-    return { kind: 'bail', what: 'a stray <' };
+    return { kind: 'bail', what: 'a stray < or unclosed tag attribute' };
   }
-
-  const full = required(match[0], 'Tag match');
-  const name = required(match[1], 'Tag name capture');
-  const attrs = required(match[2], 'Tag attributes capture');
-  const selfClose = match[3];
-  // One level of nested braces in an attribute ({{ a: 1 }}) is supported;
-  // anything deeper would be corrupted by the attr parser — bail to code
-  // view instead.
-  if (/=\s*\{[^{}]*\{[^{}]*\{/.test(attrs) || /\{\s*\.\.\.[^{}]*\{[^{}]*\{/.test(attrs)) {
-    return { kind: 'bail', what: 'an attribute with deeply nested { } braces' };
-  }
+  const { full, name, attrs, selfClose } = match;
   const isComponent = /^[A-Z]/.test(name);
   const kind = isComponent ? 'component' : 'element';
   const afterOpen = lt + full.length;

@@ -7,14 +7,14 @@
 // somewhere else entirely. One instance per main process, made by main.ts.
 
 import * as path from 'path';
-import { execFile, type ChildProcess } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import * as thumbs from '../project/thumbs';
-import { commandNeedsShell, sameFilesystemPath } from '../lib/platform';
+import { sameFilesystemPath } from '../lib/platform';
 import { createSerialQueue } from '../lib/serialQueue';
-import { SHORT_COMMAND, isWin } from '../lib/mainHelpers';
-import { findFreePort, nodeCliCommand, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
+import { isWin } from '../lib/mainHelpers';
+import { findFreePort, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
 import { hasDependencies } from '../project/projectFiles';
-import { readAstroLock, serverAlive } from '../preview/devServerChecks';
+import { serverAlive } from '../preview/devServerChecks';
 import type { DevServers } from './devServers';
 import type { MainHost } from './mainHost';
 
@@ -30,22 +30,31 @@ export class Thumbnails {
   // one belongs to a start screen that is no longer on screen — and the machine
   // is now busy starting the project the user actually asked for.
   private captureEra = 0;
+  private captureController: AbortController | undefined;
   private thumbTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
   constructor(private readonly host: ThumbnailHost) {}
 
   capture(projectPath: string) {
     const era = this.captureEra;
-    return this.queueCapture(() =>
-      era === this.captureEra
-        ? this.captureNow(projectPath)
-        : { ok: false as const, error: 'skipped' },
-    );
+    return this.queueCapture(async () => {
+      if (era !== this.captureEra) {
+        return { ok: false as const, error: 'skipped' };
+      }
+      const controller = new AbortController();
+      this.captureController = controller;
+      try {
+        return await this.captureNow(projectPath, controller.signal);
+      } finally {
+        this.captureController = undefined;
+      }
+    });
   }
 
-  /** A project is being opened: captures still queued for the start screen are skipped. */
+  /** Give the editor priority over active and queued welcome-screen server startups. */
   noteProjectOpened(): void {
     this.captureEra++;
+    this.captureController?.abort();
   }
 
   /** The project closed: no background capture is left pending for it. */
@@ -53,6 +62,7 @@ export class Thumbnails {
     clearTimeout(this.thumbTimer);
     this.thumbTimer = undefined;
     this.captureEra++;
+    this.captureController?.abort();
   }
 
   // While a project is open, its picture is kept current in the background: once
@@ -84,7 +94,7 @@ export class Thumbnails {
     }
   }
 
-  private async captureNow(projectPath: string) {
+  private async captureNow(projectPath: string, signal: AbortSignal) {
     const userData = this.host.userDataPath();
     const devServer = this.host.devServers.current();
     // Already running for this project (it is the one that is open) — use it.
@@ -96,7 +106,7 @@ export class Thumbnails {
     if (!hasDependencies(projectPath)) {
       return { ok: false as const, error: 'This project has no dependencies installed yet.' };
     }
-    return withTemporaryServer(projectPath, this.host.devServers, (url) =>
+    return withTemporaryServer(projectPath, signal, (url) =>
       thumbs.capture(userData, projectPath, url + '/'),
     );
   }
@@ -126,18 +136,24 @@ export function registerThumbnailHandlers({
 // left alone, and the temporary one is stopped however the capture ends.
 async function withTemporaryServer(
   projectPath: string,
-  devServers: Pick<DevServers, 'current'>,
+  signal: AbortSignal,
   capture: (url: string) => ReturnType<typeof thumbs.capture>,
 ) {
   const binName = isWin ? 'astro.cmd' : 'astro';
   const localBin = path.join(projectPath, 'node_modules', '.bin', binName);
   const port = await findFreePort(4400 + Math.floor(Math.random() * 200));
+  if (signal.aborted) {
+    return { ok: false as const, error: 'skipped' };
+  }
   const proc = spawnAstroServer(projectPath, localBin, [
     'dev',
     '--port',
     String(port),
     '--host',
     '127.0.0.1',
+    // Keep a temporary server in our process group. A detached Astro daemon
+    // cannot be cancelled while it is still compiling and has no lock file yet.
+    '--ignore-lock',
   ]);
   const spawnState: { error?: Error } = {};
   proc.on('error', (error) => {
@@ -148,36 +164,14 @@ async function withTemporaryServer(
   proc.stderr.on('data', (chunk) => (log = (log + chunk).slice(-4000)));
 
   const url = `http://127.0.0.1:${port}`;
-  const stop = () => {
-    // Astro >= 7 forks the real server and the CLI exits, so killing what was
-    // spawned is not enough — the CLI is asked to stop it, and the process
-    // group is killed for the versions that do not fork.
-    try {
-      // Opening this project can replace the thumbnail's daemon while its
-      // capture is running. Stop only the daemon that still owns our port.
-      const lock = readAstroLock(projectPath);
-      const devServer = devServers.current();
-      if (
-        lock?.url &&
-        new URL(lock.url).port === String(port) &&
-        (!devServer || !sameFilesystemPath(devServer.projectPath, projectPath))
-      ) {
-        const [stopCmd, stopArgv] = nodeCliCommand(localBin, ['dev', 'stop']);
-        execFile(
-          stopCmd,
-          stopArgv,
-          { ...SHORT_COMMAND, cwd: projectPath, shell: commandNeedsShell(stopCmd) },
-          () => {},
-        );
-      }
-    } catch {
-      /* best effort */
-    }
-    stopProcessTree(proc);
-  };
+  const stop = () => stopProcessTree(proc);
+  signal.addEventListener('abort', stop, { once: true });
 
   try {
-    const state = await waitForTemporaryServer(proc, url, spawnState);
+    const state = await waitForTemporaryServer(proc, url, spawnState, signal);
+    if (signal.aborted) {
+      return { ok: false as const, error: 'skipped' };
+    }
     if (state instanceof Error) {
       return { ok: false as const, error: state.message };
     }
@@ -189,6 +183,7 @@ async function withTemporaryServer(
     }
     return await capture(url);
   } finally {
+    signal.removeEventListener('abort', stop);
     stop();
   }
 }
@@ -199,9 +194,13 @@ async function waitForTemporaryServer(
   proc: ChildProcess,
   url: string,
   spawnState: { readonly error?: Error },
+  signal: AbortSignal,
 ): Promise<'up' | 'down' | Error> {
   const deadline = Date.now() + 45000;
   while (Date.now() < deadline) {
+    if (signal.aborted) {
+      return 'down';
+    }
     if (spawnState.error) {
       return spawnState.error;
     }

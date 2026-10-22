@@ -4,13 +4,17 @@ import { aliasMap } from '../../../vendor/stacki/electron/content/cmsRefs';
 import { instancesIn } from '../../../vendor/stacki/electron/properties/componentUsage';
 import type { ComponentUsageFile } from '../../../vendor/stacki/src/features/palette/paletteModel';
 import { walk, readSource } from '../project/projectServer';
-import { sourcePath } from '../../shared/validation';
+import { packageComponentFiles } from '../../../vendor/stacki/electron/lib/componentSources';
+import { componentFile } from '../../../vendor/stacki/shared/properties/componentDefaults';
 
 export async function scanComponentUsage(root: string, selected?: string) {
   const paths = (await walk(root, 'src')).filter(
     (file) => file.endsWith('.astro') || /^src\/pages\/.+\.mdx?$/.test(file),
   );
-  const targets = paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/'));
+  const targets = [
+    ...packageComponentFiles(root),
+    ...paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/')),
+  ];
   if (selected && !targets.includes(selected)) {
     throw new Error('Select a component inside this project');
   }
@@ -78,7 +82,7 @@ export async function componentUsageRoute(
     throw new Error('Use GET for component usage');
   }
   const input = new URL(request.url ?? '/', 'http://studio').searchParams.get('file');
-  const usage = await scanComponentUsage(root, input === null ? undefined : sourcePath(input));
+  const usage = await scanComponentUsage(root, input === null ? undefined : componentFile(input));
   response.setHeader('Content-Type', 'application/json');
   response.end(
     JSON.stringify(input === null ? usage.map(({ file, total }) => ({ file, total })) : usage[0]),

@@ -217,6 +217,7 @@ async function project() {
     // Called on every preview, so it must not pile up.
     wt.ensureExcluded(directory);
     wt.ensureExcluded(directory);
+    check('save staging is excluded', exclude.includes('.stacki/io/'));
     const lines = (read(directory, '.git/info/exclude') || '')
       .split('\n')
       .filter((line) => line.trim() === '.stacki/preview/');

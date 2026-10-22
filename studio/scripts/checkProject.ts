@@ -5,6 +5,10 @@ import { defaultsIssues } from '../vendor/stacki/shared/properties/componentDefa
 import { validateMetadata } from '../vendor/stacki/shared/properties/projectMetadata';
 
 export async function checkProject(root: string): Promise<void> {
+  const sources = await readMetadataSource(root, 'componentSources');
+  if (sources.source !== undefined) {
+    validateMetadata('componentSources', sources.source);
+  }
   const settings = await loadInsertionDefaults(root);
   const issues = defaultsIssues(settings.config, settings.catalog);
   const guide = await readMetadataSource(root, 'guide');

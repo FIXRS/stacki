@@ -51,9 +51,9 @@ export function registerCmsHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 's
 }
 
 function registerCmsListHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
-  // Data modules under src/data may hold one record of settings rather than a
-  // repeating array. Source files elsewhere retain the stricter collection
-  // rule, so ordinary application constants do not become CMS entries.
+  // Data modules and root constants files may hold one record of site settings.
+  // Other source files retain the stricter collection rule, so internal utility
+  // constants do not become CMS entries.
   ipcMain.handle('cms:list', async (_event, projectPath) => {
     const root = path.join(projectPath, 'src');
     const files: CmsFile[] = [];

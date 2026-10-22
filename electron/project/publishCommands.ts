@@ -4,6 +4,7 @@ import type { PublishConfig } from '../../shared/properties/publishConfig';
 import { hostingCommand, scriptCommand } from '../../shared/properties/publishCommands';
 import type { PublishCommand } from '../../shared/properties/publishCommands';
 import { resolvePublishExecutable } from './publishExecutable';
+import { withWorkerAccount } from './publishWorkerConfig';
 
 export async function runPublishScripts(
   root: string,
@@ -22,7 +23,17 @@ export async function deployHosting(root: string, config: PublishConfig): Promis
   if (config.hosting.provider === 'none') {
     throw new Error('Choose a hosting provider in Publish settings.');
   }
-  await runPublishCommand(root, hostingCommand(config.hosting));
+  const command = hostingCommand(config.hosting);
+  if (config.hosting.provider === 'cloudflare-workers') {
+    await withWorkerAccount(root, config.hosting.accountId, (configuration) =>
+      runPublishCommand(root, {
+        ...command,
+        arguments: [...command.arguments, '--config', configuration],
+      }),
+    );
+  } else {
+    await runPublishCommand(root, command);
+  }
 }
 
 /** Run installed tools only: publishing must never implicitly download executable packages. */
@@ -53,7 +64,7 @@ export async function runPublishCommand(root: string, command: PublishCommand): 
     let failure = '';
     const stop = (message: string) => {
       failure = message;
-      stopCommand(child.pid);
+      stopPublishProcess(child.pid);
       child.kill('SIGKILL');
     };
     const collect = (chunk: Buffer) => {
@@ -105,7 +116,7 @@ export function publishEnvironment(): NodeJS.ProcessEnv {
   return environment;
 }
 
-function stopCommand(pid: number | undefined): void {
+export function stopPublishProcess(pid: number | undefined): void {
   if (pid === undefined) {
     return;
   }

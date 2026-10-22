@@ -2,9 +2,16 @@ import { parseNumericBindings, type NumericStyleBinding } from '../preview/numer
 import { responseError, StudioRequestError } from './responseError';
 import { parseField, type PropField } from '../../../vendor/stacki/shared/properties/propSchema';
 import { beginOperation } from '../session/activity';
-import { record, string, filePath } from '../../shared/validation';
+import { record, string } from '../../shared/validation';
+import { componentFile } from '../../../vendor/stacki/shared/properties/componentDefaults';
+import {
+  parseComponentOrigin,
+  type ComponentOrigin,
+} from '../../../vendor/stacki/shared/properties/componentSources';
 
 export interface Component {
+  readonly origin?: ComponentOrigin;
+  readonly importPath?: string;
   readonly numericStyles?: readonly NumericStyleBinding[];
   readonly renderTag?: { readonly tag?: string; readonly prop?: string };
   readonly file: string;
@@ -55,13 +62,17 @@ export async function request(url: string, options?: RequestInit): Promise<unkno
   }
 }
 function strings(input: unknown): string[] {
-  if (!Array.isArray(input) || input.length > 20_000) {
+  if (!Array.isArray(input) || input.length > 100_000) {
     throw new Error('Invalid list');
   }
   return input.map((item) => string(item));
 }
 export async function loadProject(signal?: AbortSignal): Promise<Project> {
-  const data = record(await request('/studio/api/project', signal ? { signal } : undefined));
+  return parseProject(await request('/studio/api/project', signal ? { signal } : undefined));
+}
+
+export function parseProject(input: unknown): Project {
+  const data = record(input);
   if (!Array.isArray(data['components'])) {
     throw new Error('Missing components');
   }
@@ -74,7 +85,9 @@ export async function loadProject(signal?: AbortSignal): Promise<Project> {
       throw new Error('Invalid default slot type');
     }
     return {
-      file: filePath(item['file']),
+      file: componentFile(item['file']),
+      origin: parseComponentOrigin(item['origin']),
+      ...(item['importPath'] === undefined ? {} : { importPath: string(item['importPath'], 500) }),
       name: string(item['name']),
       fields: item['fields'].map((field) => parseField(field, 'component')),
       slots: strings(item['slots']),

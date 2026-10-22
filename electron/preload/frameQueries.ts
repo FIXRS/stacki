@@ -6,6 +6,8 @@ import { PROBE_ATTR, isElement, isText } from './frameBasics';
 import { queryAuthoredStyles } from './frameStyleSources';
 import { list, pathText, text } from '../../shared/core/boundary';
 import { LIMITS } from '../../shared/core/limits';
+import { renderedPageImage, renderedPageType } from './framePageMetadata';
+import { renderedPageText } from './framePageText';
 import { freezeViewportHeight, report } from './frameViewport';
 import { startGuide, type GuideFrame } from './frameGuide';
 import {
@@ -186,6 +188,26 @@ function applyClassPatch(data: Record<string, unknown>): void {
 }
 
 const answerQuery = (data: Record<string, unknown>, id: number) => {
+  if (data['pageText'] === true) {
+    window.parent.postMessage(
+      { type: 'avb:query-result', id, found: true, pageText: renderedPageText(document) },
+      '*',
+    );
+    return;
+  }
+  if (data['pageMetadata'] === true) {
+    window.parent.postMessage(
+      {
+        type: 'avb:query-result',
+        id,
+        found: true,
+        pageImage: renderedPageImage(document),
+        pageType: renderedPageType(document),
+      },
+      '*',
+    );
+    return;
+  }
   const path = typeof data['path'] === 'string' ? data['path'] : '';
   const els = path ? elementsForPath(path) : [];
   const styleHost = els[0] ?? answerQueryTextHost(path, data['textParentPath']);

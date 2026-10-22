@@ -8,7 +8,7 @@ import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
 import type { useEditor } from '../project/useEditor';
 import type { Project } from '../project/projectClient';
 import { parsePage, type TreeAction } from '../source/source';
-import { relativeImport } from '../source/imports';
+import { componentImport } from '../source/imports';
 import { parseInsertContent } from '../source/insertContent';
 import { dropTarget } from '../navigator/dropTarget';
 
@@ -84,7 +84,7 @@ async function insertChoice(
       kind: 'insert',
       ...target,
       name: component.name,
-      importPath: relativeImport(document.file, component.file),
+      importPath: componentImport(document.file, component),
       paired: component.slots.includes('default') && component.slotText === true,
     };
   } else {

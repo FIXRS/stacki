@@ -58,8 +58,11 @@ test('the complete channel inventory matches real main and terminal registration
   );
   // Step 8 retired page:writeRaw; step 9 added page:previewEdit; step 10
   // retired page:write and page:serialize, the Markdown whole-model save.
-  // Publishing, shared project settings, defaults canvases, and history add scoped handlers.
-  assert.equal(harness.handlers.size, 132);
+  // Publishing and its availability check, project settings, canvases, and history are scoped.
+  // Account sign-in adds one project-scoped channel for start, status, and cancellation.
+  // Published-site discovery has its own channel so remote lookups cannot block local status.
+  // Git pull and its background incoming check each have a project-scoped channel.
+  assert.equal(harness.handlers.size, 137);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),
@@ -248,6 +251,48 @@ test('CMS discovers data modules outside a content glob', async (context) => {
   ]);
   assert.deepEqual(covered, { files: ['src/data/posts/first.md'], dirs: [] });
   assert.ok(!covered.files.includes('src/data/site.ts'));
+});
+
+test('CMS discovers root site constants and preserves unrelated source', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const source = [
+    '/** Site name. Keep this comment. */',
+    'export const SITE_NAME: string = "Original";',
+    'export const SITE_DESCRIPTION =',
+    '  "Site description";',
+    'export const SITE_URL = "https://example.com";',
+    'export const SITE_LOCALE = "en-US";',
+    'export const NOINDEX_ROUTES: string[] = ["/404"];',
+    'const privateSetting = "Private";',
+    '',
+  ].join('\r\n');
+  const file = path.join(harness.root, 'src/consts.ts');
+  fs.writeFileSync(file, source);
+  fs.writeFileSync(path.join(harness.root, 'src/constants.mjs'), 'export const title = "Site";');
+  fs.writeFileSync(path.join(harness.root, 'src/consts.d.ts'), 'export const title: string;');
+  fs.writeFileSync(path.join(harness.root, 'src/constants-helper.ts'), 'export const limit = 3;');
+  const listed = toArray(toRecord(await harness.invoke('cms:list', harness.root))?.['files']);
+  assert.ok(listed);
+  assert.deepEqual(listed.map((entry) => toRecord(entry)?.['rel']).sort(), [
+    'constants.mjs#*general',
+    'consts.ts#*general',
+  ]);
+  const payload = { projectPath: harness.root, rel: 'consts.ts#*general' };
+  const read = toRecord(await harness.invoke('cms:read', payload));
+  const data = toRecord(read?.['data']);
+  assert.ok(data);
+  assert.deepEqual(data, {
+    SITE_NAME: 'Original',
+    SITE_DESCRIPTION: 'Site description',
+    SITE_URL: 'https://example.com',
+    SITE_LOCALE: 'en-US',
+  });
+  const saved = toRecord(
+    await harness.invoke('cms:write', { ...payload, data: { ...data, SITE_NAME: 'Updated' } }),
+  );
+  assert.equal(saved?.['ok'], true);
+  assert.equal(fs.readFileSync(file, 'utf8'), source.replace('Original', 'Updated'));
 });
 
 test('dev-server parsers support current and legacy responses', () => {

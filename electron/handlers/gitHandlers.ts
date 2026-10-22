@@ -6,6 +6,7 @@ import { readPublishConfig } from '../project/publishConfig';
 import { publishingGitEnvironment } from '../project/publishGitHub';
 import type { GitInfo } from '../lib/mainTypes';
 import { mergeBranch, deleteBranch, switchBranch, resolveMerge } from '../git/gitBranches';
+import { pullBranch, readIncomingCommits } from '../git/gitPull';
 import * as gitHistory from '../git/gitHistory';
 import { readCommitDiff } from '../git/gitCommitDiff';
 import * as gitSnapshot from '../git/gitSnapshot';
@@ -26,6 +27,7 @@ export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
   registerGitGhStatusHandlers(host);
   registerGitUnparkHandlers(host);
   registerGitPublishHandler(host);
+  registerGitPullHandler(host);
 }
 
 function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
@@ -144,21 +146,22 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
     return { ok: true as const };
   });
 
-  // Switching branches. The behaviour, and why it tries before it asks, is in
-  // gitBranches.js; park/unpark are handed in because they live here.
-  ipcMain.handle('git:checkout', async (_event, { projectPath, branch, create, parkFirst }) => {
+  // Keep drafts on their original branches, including edits Git could carry across.
+  ipcMain.handle('git:checkout', async (_event, { projectPath, branch, create }) => {
     const result = await switchBranch(git, {
       projectPath,
       branch,
-      ...definedFields({ create, parkFirst }),
-      park: async () => parkBranch(projectPath, await currentBranch(projectPath)),
+      ...definedFields({ create }),
+      park: (from) => parkBranch(projectPath, from),
       unpark: (from) => unparkBranch(projectPath, from),
     });
     if (!result.ok) {
       return result;
     }
-    // Whatever was last left on this branch comes back out, however the switch
-    // was made — that half is always wanted.
+    if (create || result.from === branch) {
+      return { ...result, parkedFrom: undefined, restored: false };
+    }
+    // Only this destination's drafts come back; the source branch stays parked.
     const back = await unparkBranch(projectPath, branch);
     return { ...result, parkedFrom: result.parked ? result.from : undefined, ...back };
   });
@@ -244,6 +247,29 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
       env: environment,
     });
     return { ok: true as const };
+  });
+}
+
+function registerGitPullHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
+  ipcMain.handle('git:incoming', async (_event, payload) => {
+    const environment = await publishingGitEnvironment(
+      payload.projectPath,
+      readPublishConfig(payload.projectPath),
+    );
+    return readIncomingCommits(
+      (projectPath, args) => git(projectPath, args, { timeout: 30000, env: environment }),
+      payload,
+    );
+  });
+  ipcMain.handle('git:pull', async (_event, payload) => {
+    const environment = await publishingGitEnvironment(
+      payload.projectPath,
+      readPublishConfig(payload.projectPath),
+    );
+    return pullBranch(
+      (projectPath, args) => git(projectPath, args, { timeout: 120000, env: environment }),
+      payload,
+    );
   });
 }
 

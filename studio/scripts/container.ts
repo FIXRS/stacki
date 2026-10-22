@@ -1,3 +1,6 @@
+import { boundedText } from '../src/features/updates/catalog';
+import { restorePublishRepository } from '../src/features/publishing/publishBootstrap';
+import { published } from '../src/features/publishing/publishFailure';
 import { restoreCmsDeletions } from '../src/features/cms/cmsDeleted';
 import { restoreAssetState } from '../src/features/assets/assetState';
 import { writeFile, mkdir, access } from 'node:fs/promises';
@@ -17,23 +20,19 @@ if (!backend || !token) {
 }
 const headers = { 'x-studio-token': token };
 console.log('Restoring repository and shared drafts');
-const archive = await fetch(backend + '/studio/internal/archive', {
+const bootstrap = await fetch(backend + '/studio/internal/bootstrap', {
+  method: 'POST',
   headers,
   signal: AbortSignal.timeout(60_000),
 });
-if (!archive.ok) {
-  throw new Error('Could not load repository');
+if (!bootstrap.ok) {
+  throw new Error('Could not load repository connection.');
 }
-const bytes = await archive.arrayBuffer();
-if (bytes.byteLength > 100_000_000) {
-  throw new Error('Repository archive exceeds 100 MB');
-}
-await writeFile('/workspace/repository.tgz', new Uint8Array(bytes));
-await command('tar', ['xzf', '/workspace/repository.tgz', '--strip-components=1', '-C', root]);
-await mkdir(path.join(root, '.studio-state'), { recursive: true });
+const connection: unknown = JSON.parse(await boundedText(bootstrap, 16_384));
+const baseline = published(await restorePublishRepository(root, connection));
 await writeFile(
   path.join(root, '.studio-state/github-base.json'),
-  JSON.stringify({ sha: archive.headers.get('x-studio-git-sha') }),
+  JSON.stringify({ sha: baseline }),
 );
 const filesResponse = await fetch(backend + '/studio/internal/files', { headers });
 if (!filesResponse.ok) {

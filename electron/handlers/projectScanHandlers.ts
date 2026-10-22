@@ -3,6 +3,8 @@
 
 import { MAIN_LIMITS, readSource, directoryBudget } from '../lib/mainLimits';
 import { sameFilesystemPath } from '../lib/platform';
+import { ensureExcluded } from '../lib/projectExclusions';
+import { isAtomicTemporary } from '../documents/atomicWrite';
 import { assert } from '../../shared/core/assert';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -13,6 +15,8 @@ import { listAstroFiles, routeForPage } from '../project/projectFiles';
 import { scanPageTitles } from '../properties/pageTitles';
 import { safeSchema } from '../properties/propDefaults';
 import type { MainHost } from './mainHost';
+import { packageComponentFiles, packageComponentImport } from '../lib/componentSources';
+import { packageOf } from '../lib/installedPackages';
 
 export function registerProjectScanHandlers(
   host: Pick<MainHost, 'ipcMain' | 'noteProjectRoot' | 'readTrailingSlash'>,
@@ -30,6 +34,7 @@ function registerProjectScanHandler({
     // Also set here, not just in watch:start — the Assets panel can render
     // thumbnails before the watcher starts, and they'd be refused.
     noteProjectRoot(projectPath);
+    ensureExcluded(projectPath);
     const sourceDirectory = path.join(projectPath, 'src');
     const pagesDirectory = path.join(sourceDirectory, 'pages');
     const layoutsDirectory = path.join(sourceDirectory, 'layouts');
@@ -56,12 +61,16 @@ function registerProjectScanHandler({
       ...safeSchema(filePath, projectPath),
     }));
 
-    const components = listAstroFiles(componentsDirectory).map((filePath) => ({
+    const components = [
+      ...listAstroFiles(componentsDirectory),
+      ...packageComponentFiles(projectPath).map((file) => path.join(projectPath, file)),
+    ].map((filePath) => ({
       path: filePath,
       name: path.basename(filePath, '.astro'),
       folder: toPosix(path.relative(componentsDirectory, path.dirname(filePath))),
       instances: 0,
       ...safeSchema(filePath, projectPath),
+      ...scanComponentOrigin(projectPath, filePath),
     }));
 
     // Instance counts: how often each component is used across every .astro
@@ -105,6 +114,16 @@ function registerProjectScanHandler({
       trailingSlash: readTrailingSlash(projectPath),
     };
   });
+}
+
+function scanComponentOrigin(root: string, file: string) {
+  const importPath = packageComponentImport(root, file);
+  if (importPath === undefined) {
+    return {};
+  }
+  const owner = packageOf(file);
+  assert(owner !== undefined, 'Package components have an installed owner');
+  return { origin: { kind: 'package' as const, package: owner, importPath } };
 }
 
 function registerProjectClassesHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
@@ -187,6 +206,10 @@ function listPageFolders(pagesDirectory: string): string[] {
           continue;
         }
         const full = path.join(folder, entry.name);
+        // Internal save folders, including old staging, are never page folders.
+        if (entry.name === '.stacki' || isAtomicTemporary(full)) {
+          continue;
+        }
         pageFolders.push(toPosix(path.relative(pagesDirectory, full)));
         walkDirectories(full, depth + 1);
       }

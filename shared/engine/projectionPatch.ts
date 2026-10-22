@@ -11,12 +11,12 @@
 // markup between) uses EXPRESSION_VALUE_BYTES; any other ancestor is refused.
 // Why, from electron/parse/astroParser.ts, first for markup:
 //
-//   - The tag is read by TAG_RE and its attributes by ATTR_PATTERN; both take
+//   - The tag and attribute scanners both take
 //     a quoted value as `"[^"]*"` or `'[^']*'`, so any byte but the quote is
 //     inert inside it. Quotes are refused in both values.
-//   - findMatchingClose scans the markup between an open and its close tag as
-//     raw text, and every alternative it matches starts with `<`. Refused.
-//   - The nested-brace bail on a tag's attribute string and
+//   - Tag matching skips balanced attributes. Angle brackets remain refused
+//     conservatively, so these edits use a full parse rather than this shortcut.
+//   - The balanced attribute reader and
 //     findMatchingFragmentClose react to `{` and `}`. Refused.
 //   - The frontmatter fence and the line-ending sniff need a line break;
 //     control bytes are refused. `>` is refused too: inert by the argument
@@ -43,9 +43,9 @@
 // which leaves none of those bytes. The neighbours of the value are its own
 // quotes, so no pair (`//`, `*/`, `?.`) can form across its edges.
 //
-// Both the old and the new bytes must pass. A value the parser was fooled by
-// (`</div>` inside one) produced the current projection; removing it changes
-// the structure, so patching over it would copy the mistake.
+// Both the old and the new bytes must pass. This conservative table must stay
+// valid even when scanner behavior changes; newly supported value syntax still
+// takes the full parse path until the shortcut has a separate equivalence proof.
 //
 // A Markdown page is never patched: see hostContext.
 //

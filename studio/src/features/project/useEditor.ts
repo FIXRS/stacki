@@ -16,7 +16,7 @@ import type { Project } from './projectClient';
 import { useDocument } from '../collaboration/useDocument';
 import type { Session } from '../auth/useSession';
 import { usePreview } from '../preview/usePreview';
-import { relativeImport } from '../source/imports';
+import { componentImport } from '../source/imports';
 import { flatten, parsePage, type TreeAction } from '../source/source';
 export function useEditor(
   project: Project,
@@ -119,7 +119,7 @@ function insertComponent(
         ),
     ),
     name: component.name,
-    importPath: relativeImport(file, component.file),
+    importPath: componentImport(file, component),
     paired: component.slots.includes('default') && component.slotText === true,
   });
 }

@@ -21,7 +21,7 @@ export class PreviewContainer extends Container<Environment> {
   override pingEndpoint = 'localhost/studio/api/status';
   override async fetch(request: Request): Promise<Response> {
     if ((await this.getState()).status !== 'healthy') {
-      await this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 180_000 });
+      await this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 600_000 });
     }
     return super.fetch(request);
   }

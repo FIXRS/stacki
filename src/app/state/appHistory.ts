@@ -3,6 +3,7 @@
 // the code source, outside edits and file events, and composing navigation
 // (App.tsx).
 
+import { useGitIncoming } from '../../features/git/useGitIncoming';
 import { revertComponentProperties } from '../../features/componentProperties/propertiesBridge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parsePageSource as parseSourcePage, readPage } from '../../ipc/bridge';
@@ -15,6 +16,7 @@ import {
   saveStateAccepted,
   saveStateBase,
   saveStateEdited,
+  saveStateNeedsWrite,
   saveStateRefused,
 } from '../../editor/saveState';
 import type { Digest } from '../../../shared/core/brand';
@@ -58,6 +60,7 @@ export function useNavigation(
   const openComponentScope = useOpenComponent(coreState, lifecycle);
   const commitPreview = useCommitPreview(coreState, lifecycle);
   const gitInfoScope = useGitInfo(coreState, lifecycle);
+  const gitIncoming = useGitIncoming(coreState.project?.path, coreState.gitInfo);
   return {
     ...selectPageScope,
     ...projectMenu,
@@ -66,6 +69,7 @@ export function useNavigation(
     ...openComponentScope,
     ...commitPreview,
     ...gitInfoScope,
+    gitIncoming,
   };
 }
 
@@ -425,14 +429,16 @@ export function useScheduleSave(
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(
         () => {
-          autosave().catch((error: unknown) =>
-            showToast(`Save failed: ${cleanError(error)}`, 'error'),
-          );
+          autosave().catch((error: unknown) => {
+            if (pageStateRef.current.pageState?.save.tag !== 'failed') {
+              showToast(`Save failed: ${cleanError(error)}`, 'error');
+            }
+          });
         },
         saveDelay({ urgency: immediate }),
       );
     },
-    [autosave, showToast, saveTimer],
+    [autosave, showToast, saveTimer, pageStateRef],
   );
   scheduleSaveRef.current = scheduleSave;
 
@@ -632,7 +638,7 @@ export function useOutsideEdit(
       const saver = pageSaverRef.current;
       const before = pageStateRef.current.pageState;
       assert(saver !== undefined, 'The page saver exists before any file event');
-      if (!before || before.save.tag !== 'dirty' || saver.writing()) {
+      if (!before || !saveStateNeedsWrite(before.save) || saver.writing()) {
         return;
       }
       // Unsaved edits that are all requests map through an outside change or
@@ -651,7 +657,11 @@ export function useOutsideEdit(
         return; // gone or unreadable: the next save reports it
       }
       const latest = pageStateRef.current;
-      if (latest.currentPage?.path !== pagePath || latest.pageState?.save.tag !== 'dirty') {
+      if (
+        latest.currentPage?.path !== pagePath ||
+        !latest.pageState ||
+        !saveStateNeedsWrite(latest.pageState.save)
+      ) {
         return;
       }
       // A save that started or finished during the read moved the base, and its
@@ -662,7 +672,7 @@ export function useOutsideEdit(
       }
       setConflictReason(undefined);
       setPageState((current) =>
-        current?.save.tag === 'dirty'
+        current && saveStateNeedsWrite(current.save)
           ? { ...current, save: saveStateRefused(current.save, base, diskChecksum) }
           : current,
       );
@@ -712,15 +722,15 @@ export function useFileEvents(
       if (closed || !page || page.kind === 'route') {
         return;
       }
+      // Current page deleted externally.
+      if (!scanContainsFile(scanResult, page.path)) {
+        clearDeletedOpenPage({ pageLoadRef, setCurrentPage, setPageState, setSelectedId });
+        return;
+      }
       // Chunk .html files feed the open page's Fragment subtrees — treat a
       // change to any of them like a change to the page itself.
       const chunk = [...files].some((file) => file.toLowerCase().endsWith('.html'));
       if (!files.has(page.path) && !chunk && files.size > 0) {
-        return;
-      }
-      // Current page deleted externally.
-      if (!scanContainsFile(scanResult, page.path)) {
-        clearDeletedOpenPage({ pageLoadRef, setCurrentPage, setPageState, setSelectedId });
         return;
       }
       if (!state || (files.size === 0 && state.save.tag !== 'clean')) {
@@ -769,8 +779,9 @@ function watchExternalFilesOnReturn(
     const snapshot = state.pageStateRef.current;
     if (snapshot.pageState?.save.tag === 'clean' && snapshot.currentPage?.path) {
       pendingFiles.add(snapshot.currentPage.path);
-      void request();
     }
+    // Listings must reconcile even when no page is open or the current page has unsaved edits.
+    void request();
     tellCanvas({ type: 'avb:patch-now' });
   });
 }

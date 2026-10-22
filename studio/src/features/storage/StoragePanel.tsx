@@ -1,6 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
+import { onWindowReturn } from '../../../vendor/stacki/src/lib/windowReturn';
 import { reportErrorToast } from '../../../vendor/stacki/src/ui/errorNotices';
-import { useState } from 'react';
-import { RefreshIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
 import { byteSize, parseReport, type CleanupReport } from './cleanupTypes';
@@ -9,22 +9,18 @@ export function StoragePanel({ refresh }: { readonly refresh: () => void }) {
   const model = useCleanup(refresh);
   return (
     <section className="storage-panel" aria-label="Storage and cleanup">
-      <button
-        className="storage-toggle"
-        onClick={() => void model.scan()}
-        disabled={model.busy}
-        aria-busy={model.busy}
-        aria-label={model.report ? 'Refresh storage scan' : undefined}
-        title={model.report ? 'Refresh storage scan' : undefined}
-      >
-        {model.report ? (
-          <RefreshIcon size={14} />
-        ) : model.busy ? (
-          'Checking storage…'
-        ) : (
-          'Storage & cleanup'
-        )}
-      </button>
+      {model.report ? (
+        <h3>Storage & cleanup</h3>
+      ) : (
+        <button
+          className="storage-toggle"
+          onClick={() => void model.scan()}
+          disabled={model.busy}
+          aria-busy={model.busy}
+        >
+          {model.busy ? 'Checking storage…' : 'Storage & cleanup'}
+        </button>
+      )}
       {model.report && <StorageUsage report={model.report} />}
       {model.report && <CleanupChoices model={model} />}
       {model.message && (
@@ -41,15 +37,19 @@ function useCleanup(refresh: () => void) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState('');
+  useStorageUpdates({ enabled: report !== undefined, busy, scan });
   async function scan() {
     setBusy(true);
     setMessage('');
-    setSelected(new Set());
-    setConfirming(false);
     try {
-      setReport(parseReport(await request('/studio/api/storage')));
+      const next = parseReport(await request('/studio/api/storage'));
+      if (JSON.stringify(next) !== JSON.stringify(report)) {
+        setReport(next);
+        // Changed candidates invalidate a destructive selection made against the previous scan.
+        setSelected(new Set());
+        setConfirming(false);
+      }
     } catch (error) {
-      setReport(undefined);
       reportErrorToast(error instanceof Error ? error.message : 'Storage scan failed');
     } finally {
       setBusy(false);
@@ -62,15 +62,7 @@ function useCleanup(refresh: () => void) {
     setBusy(true);
     setMessage('');
     try {
-      const result = record(
-        await request('/studio/api/storage/cleanup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            candidates: report.candidates.filter((item) => selected.has(item.file)),
-          }),
-        }),
-      );
+      const result = await requestCleanup(report, selected);
       const warning = result['warning'] ? string(result['warning']) : '';
       setReport(parseReport(result['report']));
       setMessage(
@@ -104,6 +96,55 @@ function useCleanup(refresh: () => void) {
     },
   };
 }
+async function requestCleanup(report: CleanupReport, selected: ReadonlySet<string>) {
+  return record(
+    await request('/studio/api/storage/cleanup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidates: report.candidates.filter((item) => selected.has(item.file)),
+      }),
+    }),
+  );
+}
+function useStorageUpdates(model: {
+  readonly enabled: boolean;
+  readonly busy: boolean;
+  readonly scan: () => Promise<void>;
+}) {
+  const current = useRef(model);
+  current.current = model;
+  useEffect(() => {
+    if (!model.enabled) {
+      return;
+    }
+    let reading = false;
+    const update = async () => {
+      if (document.hidden || reading || current.current.busy) {
+        return;
+      }
+      reading = true;
+      try {
+        await current.current.scan();
+      } finally {
+        reading = false;
+      }
+    };
+    const requestUpdate = () => void update();
+    const offReturn = onWindowReturn(requestUpdate);
+    window.addEventListener('studio:assets-changed', requestUpdate);
+    window.addEventListener('studio:project-changed', requestUpdate);
+    // Remote storage may change without a local upload or source-file notification.
+    const timer = window.setInterval(requestUpdate, 30_000);
+    return () => {
+      offReturn();
+      window.removeEventListener('studio:assets-changed', requestUpdate);
+      window.removeEventListener('studio:project-changed', requestUpdate);
+      window.clearInterval(timer);
+    };
+  }, [model.enabled]);
+}
+
 function toggleSelected(previous: ReadonlySet<string>, file: string) {
   const next = new Set(previous);
   if (next.has(file)) {

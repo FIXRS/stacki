@@ -4,7 +4,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
-import { portAnswers, serverResponds } from '#dist/electron/preview/devServerChecks.js';
+import {
+  portAnswers,
+  previewPort,
+  serverResponds,
+} from '#dist/electron/preview/devServerChecks.js';
 import { listenForPreviewFailures } from '#dist/electron/preview/previewFailure.js';
 
 class Contents extends EventEmitter {
@@ -16,7 +20,9 @@ class Contents extends EventEmitter {
 
 test('a listening port is not ready until HTTP responds', async () => {
   let respond = false;
-  const server = createServer((_request, response) => {
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    requests.push(request.url ?? '');
     if (respond) {
       response.writeHead(500);
       response.end('An Astro compile error is visible, not a blank connection failure.');
@@ -35,6 +41,7 @@ test('a listening port is not ready until HTTP responds', async () => {
     assert.equal(await serverResponds(url), false);
     respond = true;
     assert.equal(await serverResponds(url), true);
+    assert.deepEqual(requests, ['/@vite/client', '/@vite/client']);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve, reject) =>
@@ -42,6 +49,15 @@ test('a listening port is not ready until HTTP responds', async () => {
     );
   }
   assert.equal(await serverResponds(url), false);
+});
+
+test('preview ports are stable per project and leave room for bounded conflict retries', () => {
+  const project = '/projects/documentation';
+  assert.equal(previewPort(project), previewPort(project));
+  assert.notEqual(previewPort(project), previewPort('/projects/storefront'));
+  assert.ok(previewPort(project) >= 45000);
+  assert.ok(previewPort(project) < 55000);
+  assert.throws(() => previewPort(''), /Preview port requires a project path/);
 });
 
 test('only a failed active preview is reported; deliberate navigation is ignored', () => {

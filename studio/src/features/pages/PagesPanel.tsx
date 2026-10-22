@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { Peer } from '../collaboration/presence';
 import { PageFileList } from './PageFileList';
 import { CreateFileDialog } from './CreateFileDialog';
-import { PlusIcon, RefreshIcon } from '../../../vendor/stacki/src/ui/Icons';
+import { PlusIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request, type Project } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
 
@@ -41,11 +41,7 @@ export function PagesPanel({
   const items = collection ? project.collections : project.pages;
   return (
     <div className="panel-section grow">
-      <PagesHeader
-        collection={collection}
-        refresh={refresh}
-        create={() => setCreating(!creating)}
-      />
+      <PagesHeader collection={collection} create={() => setCreating(!creating)} />
       <div className="panel-search">
         <input
           aria-label="Search files"
@@ -163,27 +159,15 @@ function useCreateFile(
 }
 function PagesHeader({
   collection,
-  refresh,
   create,
 }: {
   readonly collection: boolean;
-  readonly refresh: () => void;
   readonly create: () => void;
 }) {
   return (
     <div className="panel-header">
       <h2>{collection ? 'Collections' : 'Pages'}</h2>
       <div className="studio-panel-actions">
-        {collection && (
-          <button
-            className="ghost"
-            title="Refresh files"
-            aria-label="Refresh files"
-            onClick={refresh}
-          >
-            <RefreshIcon size={14} />
-          </button>
-        )}
         <button
           className="ghost"
           aria-label={collection ? 'Create item' : 'Create page'}

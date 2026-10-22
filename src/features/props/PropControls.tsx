@@ -210,7 +210,10 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
   const { field, value, onChange, placeholderFor, label } = state;
   assert(field.options?.length, 'Enum control: options exist');
 
-  const defaultText = field.default !== undefined ? String(field.default) : undefined;
+  const renderedDefault =
+    value === undefined && field.name === 'type' ? state.assetContext?.layoutType : undefined;
+  const defaultText =
+    renderedDefault ?? (field.default !== undefined ? String(field.default) : undefined);
   const raw = attrText(value);
   // Exactly two options, one of them the default: the same shape as a
   // boolean — an either/or with a known resting state — so it reads as one.
@@ -269,7 +272,7 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
         // Says what happens when nothing is picked. For a conditional
         // default that's the condition itself — better than naming one of
         // the two answers as if it were the only one.
-        placeholder={placeholderFor(field) || '(not set)'}
+        placeholder={renderedDefault ?? (placeholderFor(field) || '(not set)')}
         options={choices.map((option) => ({
           value: option === omittedDefault ? '' : option,
           label: option,
@@ -442,8 +445,15 @@ export function LinkControl({ state }: { readonly state: PropControlState }) {
   );
 }
 export function MediaControl({ state }: { readonly state: PropControlState }) {
+  const policy = useContext(PropValuePolicyContext);
   const { assetContext, onChange, name, valueText, isMediaAttr, label } = state;
   assert(assetContext?.projectPath, 'Media control: project exists');
+  const fallback = state.field.default ?? state.branchDefault;
+  const fallbackValue =
+    policy === 'instance' && !state.field.defaultExpr && typeof fallback === 'string'
+      ? fallback
+      : undefined;
+  const renderedFallback = name === 'image' ? assetContext.layoutImage : undefined;
 
   const nodeName = String(assetContext.nodeName || '').toLowerCase();
   const mediaKind = looksLikeAssetPath(valueText)
@@ -465,7 +475,8 @@ export function MediaControl({ state }: { readonly state: PropControlState }) {
     <div className="props-field">
       {label}
       <AssetField
-        value={valueText}
+        value={state.isSet ? valueText : undefined}
+        fallbackValue={renderedFallback ?? fallbackValue}
         mediaKind={mediaKind}
         // A non-media prop only lands here because its value is an asset
         // path, so open in asset mode; "Text" is the way back out.

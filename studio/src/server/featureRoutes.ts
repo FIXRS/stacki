@@ -1,3 +1,4 @@
+import { accountRoute } from '../features/publishing/accountRoutes';
 import { repositoryRoute } from '../features/publishing/repositoryRoutes';
 import { discoveryRoute } from '../features/publishing/discoveryRoutes';
 import { metadataRoute } from '../features/settings/projectMetadata';
@@ -33,6 +34,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       (await defaultsCanvasRoute(root, rooms, request, response, pathname, readBody)) ||
       (await metadataRoute(root, rooms, request, response, pathname, readBody)) ||
       (await discoveryRoute(root, request, response, pathname, readBody)) ||
+      (await accountRoute(root, request, response, pathname, readBody)) ||
       (await repositoryRoute(root, request, response, pathname, readBody)) ||
       (await componentUsageRoute(root, request, response, pathname)) ||
       (await cms(request, response, pathname, readBody)) ||

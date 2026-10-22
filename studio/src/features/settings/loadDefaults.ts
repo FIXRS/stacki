@@ -16,11 +16,11 @@ export async function loadInsertionDefaults(root: string) {
     slotText: component.slotText,
   }));
   if (stored.source === undefined) {
-    return { config: starterDefaults(catalog), catalog };
+    return { config: starterDefaults(catalog), catalog, imports: project.components };
   }
   const parsed = parseDefaultsSource(stored.source);
   if (!parsed.ok) {
     throw new Error(parsed.error.message);
   }
-  return { config: parsed.value, catalog };
+  return { config: parsed.value, catalog, imports: project.components };
 }

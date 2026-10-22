@@ -2,7 +2,7 @@ import { readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { safePath } from '../project/projectServer';
 import { record, string } from '../../shared/validation';
-import type { RepositoryFile } from '../github/github';
+import type { PublishedFile } from '../publishing/publishSource';
 import { SerialQueue } from '../../shared/serialQueue';
 import { CleanupStore, assetDigest, gitBlob, type AssetBaseline } from './cleanupStore';
 import { referencedAssets } from './assetReferences';
@@ -65,14 +65,9 @@ export class StorageCleanup {
       };
     });
   }
-  async afterPublish(files: readonly RepositoryFile[], sha: string) {
+  async afterPublish(files: readonly PublishedFile[], sha: string) {
     const published = new Map(
-      files
-        .filter((file) => file.path.startsWith('public/') && !file.deleted)
-        .map((file) => [
-          file.path,
-          gitBlob(Buffer.from(file.content, file.encoding === 'base64' ? 'base64' : 'utf8')),
-        ]),
+      files.filter((file) => file.path.startsWith('public/')).map((file) => [file.path, file.sha]),
     );
     return this.coordinator.run(async () => {
       await this.store.rememberPublished(sha, published);

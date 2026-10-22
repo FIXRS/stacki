@@ -1,4 +1,5 @@
 import { parsePageOrder } from './pageOrder';
+import { COMPONENT_SOURCE_FILE, parseComponentSources } from './componentSources';
 import { validateGuidePreferences } from './guidePreferences';
 import { parsePublishSource } from '../properties/publishConfig';
 // Only these reviewed project files are exposed through the metadata transport.
@@ -7,6 +8,7 @@ import { parseComponentDefaults, DEFAULT_LIMITS } from './componentDefaults';
 import type { Result } from '../core/result';
 
 export const METADATA_FILES = {
+  componentSources: COMPONENT_SOURCE_FILE,
   components: '.stacki/components.json',
   guide: '.stacki/guide.json',
   pages: '.stacki/pages.json',
@@ -17,6 +19,9 @@ export interface MetadataFile {
   readonly source?: string;
 }
 export function metadataKind(input: unknown): MetadataKind {
+  if (input === 'componentSources') {
+    return input;
+  }
   if (input === 'components' || input === 'guide' || input === 'publish' || input === 'pages') {
     return input;
   }
@@ -50,6 +55,10 @@ export function validateMetadata(kind: MetadataKind, source: string): void {
     return;
   }
   const input: unknown = JSON.parse(source);
+  if (kind === 'componentSources') {
+    parseComponentSources(input);
+    return;
+  }
   if (kind === 'pages') {
     parsePageOrder(input);
     return;

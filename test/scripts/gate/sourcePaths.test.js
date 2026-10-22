@@ -67,12 +67,20 @@ const EXEMPT = new Set([
 ]);
 
 function testFiles() {
-  const listing = execFileSync('git', ['ls-files', '-z', 'test'], { cwd: ROOT, encoding: 'utf8' });
-  return listing
-    .split('\0')
+  // Local checks run before staging, so new tests must follow the same rules
+  // as committed tests. Deleted files have no source left to inspect.
+  const listing = execFileSync(
+    'git',
+    ['ls-files', '-z', '--cached', '--others', '--exclude-standard', 'test'],
+    { cwd: ROOT, encoding: 'utf8', maxBuffer: 4_000_000, timeout: 30_000 },
+  );
+  const files = [...new Set(listing.split('\0'))];
+  assert.ok(files.length <= 20_000, 'test source path scan exceeds its file limit');
+  return files
     .filter((file) => /\.(?:[cm]?js|ts)$/.test(file))
     .filter((file) => !file.startsWith('test/fixtures/') && !file.startsWith('test/corpus/'))
-    .filter((file) => !EXEMPT.has(file));
+    .filter((file) => !EXEMPT.has(file))
+    .filter((file) => fs.existsSync(repoPath(file)));
 }
 
 test('tests name repository files by one whole path', () => {

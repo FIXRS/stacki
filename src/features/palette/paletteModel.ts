@@ -1,6 +1,7 @@
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
 import { count, list, optional, pathText, record, text } from '../../../shared/core/boundary';
+import { assert } from '../../../shared/core/assert';
 
 export interface ComponentUsageFile {
   readonly rel: string;
@@ -98,11 +99,22 @@ export function componentPreviewURL(
   // A basename cannot distinguish components in different folders or a layout
   // from a component. Match the scan's folder convention without exposing an absolute path.
   const base = component.isLayout ? 'src' : 'src/components';
-  const file = [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/');
+  const file =
+    component.origin?.kind === 'package'
+      ? packagePreviewPath(component)
+      : [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/');
   const query = new URLSearchParams({ c: component.name, p: file });
   // Astro 5 returns a 404 when an injected page violates the project's slash policy.
   const route = trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';
   return `${devURL.replace(/\/+$/, '')}${route}?${query}`;
+}
+
+function packagePreviewPath(component: ScanComponent): string {
+  assert(component.origin?.kind === 'package', 'Package previews require package origin');
+  const file = component.path.replaceAll('\\', '/');
+  const index = file.lastIndexOf(`node_modules/${component.origin.package}/`);
+  assert(index >= 0, 'Package preview identity retains its installed path');
+  return file.slice(index);
 }
 
 export function usageFileLabel(file: ComponentUsageFile): string {

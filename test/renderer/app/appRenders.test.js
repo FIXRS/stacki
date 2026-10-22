@@ -183,9 +183,10 @@ const check = (what, condition, detail) => {
     // naming its file, so the split is by module rather than by line: xterm
     // ships a `confirm()` before opening a link from terminal output, minified
     // onto lines that say nothing about where they came from.
+    // Linked dependencies can have parent-relative or absolute module banners.
     const ours = bundle
       .split(/^(?=\/\/ \S+\n)/m)
-      .filter((chunk) => !/^\/\/ node_modules\//.test(chunk))
+      .filter((chunk) => !/^\/\/ (?:.*[/\\])?node_modules[/\\]/.test(chunk))
       .join('\n');
     const native = [...ours.matchAll(/(?<![.\w])(?:window\.)?(confirm|alert)\s*\(/g)]
       .map((match) => match[0])

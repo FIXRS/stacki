@@ -21,6 +21,7 @@ const logger = new AstroLogger({ level: 'silent', destination: { write: () => {}
 async function fixture(context: TestContext) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-astro-save-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'package.json'), '{}');
   const pages = path.join(root, 'src', 'pages');
   fs.mkdirSync(pages, { recursive: true });
   const file = toFilePath(path.join(pages, 'index.astro'));

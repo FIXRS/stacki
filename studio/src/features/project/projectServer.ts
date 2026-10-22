@@ -1,5 +1,5 @@
 import { numericStyleBindings } from '../preview/numericStyleBindings';
-import { readdir, readFile, realpath, stat, mkdir, lstat } from 'node:fs/promises';
+import { opendir, readFile, realpath, stat, mkdir, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { componentSchema } from '../components/componentSchema';
 import {
@@ -8,6 +8,13 @@ import {
   defaultSlotInline,
 } from '../../../vendor/stacki/electron/parse/astroComponentApi';
 import { sourcePath, filePath, MAX_SOURCE } from '../../shared/validation';
+import {
+  packageComponentFiles,
+  readPackageSource,
+  packageComponentImport,
+} from '../../../vendor/stacki/electron/lib/componentSources';
+import { componentSpecifier } from '../../../vendor/stacki/electron/properties/componentImports';
+import { packageOf } from '../../../vendor/stacki/electron/lib/installedPackages';
 
 export async function safePath(root: string, relative: string): Promise<string> {
   filePath(relative);
@@ -57,31 +64,38 @@ export async function readSource(root: string, relative: string): Promise<string
 export async function walk(root: string, directory: string): Promise<string[]> {
   const queue = [directory];
   const files: string[] = [];
-  for (let index = 0; index < queue.length && index < 1_000; index++) {
+  for (let index = 0; index < queue.length && index < 10_000; index++) {
     const current = queue[index];
     if (!current) {
       break;
     }
     let entries;
     try {
-      entries = await readdir(path.join(root, current), { withFileTypes: true });
+      entries = await opendir(path.join(root, current));
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         continue;
       }
       throw error;
     }
-    for (const entry of entries) {
+    let visited = 0;
+    for await (const entry of entries) {
+      if (++visited > 110_000) {
+        throw new Error('Project directory exceeds its entry limit');
+      }
       if (entry.name.startsWith('.') || entry.isSymbolicLink()) {
         continue;
       }
       const relative = `${current}/${entry.name}`;
       if (entry.isDirectory()) {
+        if (queue.length >= 10_000) {
+          throw new Error('Project directory limit exceeded');
+        }
         queue.push(relative);
       } else if (entry.isFile()) {
         files.push(relative);
       }
-      if (files.length > 10_000) {
+      if (files.length > 100_000) {
         throw new Error('Project file limit exceeded');
       }
     }
@@ -90,20 +104,36 @@ export async function walk(root: string, directory: string): Promise<string[]> {
 }
 export async function scanProject(root: string) {
   const files = [...(await walk(root, 'src')), ...(await walk(root, 'public'))];
-  const componentFiles = files.filter(
-    (file) => file.endsWith('.astro') && !file.startsWith('src/pages/'),
-  );
+  const componentFiles = [
+    ...packageComponentFiles(root),
+    ...files.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/')),
+  ];
   const components = await Promise.all(
     componentFiles.map(async (file) => {
-      const source = await readSource(root, file);
+      const source = await readComponentSource(root, file);
+      const importPath = componentSpecifier(root, file);
+      const owner = packageOf(file);
+      const renderTag = rootTag(source);
       return {
         file,
         name: path.basename(file, '.astro'),
-        fields: await componentSchema(file, source, (candidate) => readSource(root, candidate)),
+        ...(importPath === undefined ? {} : { importPath }),
+        ...(owner === undefined
+          ? {}
+          : {
+              origin: {
+                kind: 'package' as const,
+                package: owner,
+                importPath: packageComponentImport(root, file) ?? '',
+              },
+            }),
+        fields: await componentSchema(file, source, (candidate) =>
+          readComponentSource(root, candidate),
+        ),
         slots: parseSlots(source),
         numericStyles: numericStyleBindings(source),
         slotText: defaultSlotInline(source),
-        renderTag: rootTag(source),
+        ...(renderTag === undefined ? {} : { renderTag }),
       };
     }),
   );
@@ -131,4 +161,8 @@ export async function scanProject(root: string) {
     components,
     classes: [...classes].sort(),
   };
+}
+
+async function readComponentSource(root: string, file: string): Promise<string> {
+  return file.startsWith('node_modules/') ? readPackageSource(root, file) : readSource(root, file);
 }

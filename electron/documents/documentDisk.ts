@@ -115,7 +115,11 @@ export class NodeDocumentDisk implements DocumentDisk {
     if (!directory.ok) {
       return err({ code: 'failed', message: directory.error.message });
     }
-    const lockFile = lockFileOf(target.value);
+    const location = lockFileOf(target.value);
+    if (!location.ok) {
+      return location;
+    }
+    const lockFile = location.value;
     const first = this.#tryLock(file, lockFile);
     if (first.ok || first.error.code === 'failed') {
       return first;
@@ -134,7 +138,11 @@ export class NodeDocumentDisk implements DocumentDisk {
     if (!target.ok) {
       return err({ code: 'failed', message: target.error.message });
     }
-    const lockFile = lockFileOf(target.value);
+    const location = lockFileOf(target.value);
+    if (!location.ok) {
+      return location;
+    }
+    const lockFile = location.value;
     const owner = readLockOwner(lockFile);
     if (owner?.token !== lock.token) {
       return err({ code: 'failed', message: `The lock on ${lock.path} was taken over` });
@@ -178,6 +186,11 @@ export class NodeDocumentDisk implements DocumentDisk {
 
   /** The actor's path and identity key for `file` (see header). */
   canonical(file: string): Result<CanonicalDocument, string> {
+    // Check the authored path before canonicalization loses a workspace package link.
+    const installed = refuseInstalled(file);
+    if (!installed.ok) {
+      return err(installed.error.message);
+    }
     const target = writeTargetOf(file);
     if (!target.ok) {
       return err(target.error.message);
@@ -353,13 +366,19 @@ export interface LockOwner {
   readonly token: string;
 }
 
-/** The lock file for a write target. The name hashes the case-folded file
- * name, so every spelling of one file meets at one lock; two names that differ
- * only in case on a case-sensitive disk share a lock too, which costs them a
- * `write-race` at worst, never a lost update. */
-function lockFileOf(target: string): string {
-  const name = digestOf(foldCase(path.basename(target))).slice(0, 16);
-  return path.join(atomicDirectoryOf(target), `${LOCK_PREFIX}${name}${LOCK_SUFFIX}`);
+/** Directory identity and a folded filename distinguish equal basenames while
+ * making aliases of the same target contend for one lock in shared staging. */
+function lockFileOf(
+  target: string,
+): Result<string, { readonly code: 'failed'; readonly message: string }> {
+  try {
+    const directory = fs.statSync(path.dirname(target));
+    const identity = `${directory.dev}:${directory.ino}/${foldCase(path.basename(target))}`;
+    const name = digestOf(identity);
+    return ok(path.join(atomicDirectoryOf(target), `${LOCK_PREFIX}${name}${LOCK_SUFFIX}`));
+  } catch (error: unknown) {
+    return err({ code: 'failed', message: `Could not locate lock: ${errorMessage(error)}` });
+  }
 }
 
 // A lock file is written by another process: parse it, never trust it. Its
@@ -463,7 +482,7 @@ function refuseInstalled(
 ): Result<void, { readonly code: 'failed'; readonly message: string }> {
   const landing = landingOf(file);
   assert(path.isAbsolute(landing), 'A landing path is absolute');
-  if (isInstalledFile(landing)) {
+  if (isInstalledFile(file) || isInstalledFile(landing)) {
     const owner = packageOf(landing);
     const what =
       owner === undefined ? 'is inside node_modules' : `belongs to the installed package ${owner}`;

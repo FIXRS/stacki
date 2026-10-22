@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { desktopElementActions } from './desktopElementActions';
 import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanvasBar';
 import { DesktopPublishButton } from './DesktopPublishButton';
@@ -125,6 +126,15 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
         />
       )}
       <ConflictNotice app={app} />
+      <ErrorToast
+        message={
+          app.pageState?.save.tag === 'failed'
+            ? `${app.currentPage?.name ?? 'This file'} has not been saved. ` +
+              app.pageState.save.message
+            : undefined
+        }
+        recovery={[{ label: 'Retry save', run: app.flushSave }]}
+      />
       {app.busy && <BusyOverlay message={app.busy} />}
       <ToastStack notices={app.notices} dismiss={app.dismissToast} />
       <ConfirmHost />
@@ -189,6 +199,8 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
         projectPath={app.project.path}
         flushSave={app.flushSave}
         refresh={app.refreshGit}
+        saveState={app.pageState?.save}
+        repository={app.gitInfo}
       />
     </div>
   );
@@ -555,6 +567,8 @@ function HistoryGitControls({ app }: { readonly app: ShellView }) {
       busy={app.busy}
       showToast={app.showToast}
       flushSave={app.flushSave}
+      incoming={app.gitIncoming}
+      withBranchChange={app.withBranchChange}
       onWorktreeChanged={async () => {
         if (app.previewRef) {
           await app.exitCommitPreview();

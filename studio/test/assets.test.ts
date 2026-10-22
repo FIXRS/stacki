@@ -10,7 +10,8 @@ import { readAssetState, restoreAssetState } from '../src/features/assets/assetS
 import { saveAsset } from '../src/features/storage/assetStorage';
 import { parseAssetListing } from '../vendor/stacki/src/features/assets/assetPanelBridge';
 import { Publisher } from '../src/features/publishing/publish';
-import type { RepositoryFile } from '../src/features/github/github';
+import type { PublishSource } from '../src/features/publishing/publishSource';
+import { ok } from '../vendor/stacki/shared/core/result';
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-assets-'));
@@ -95,13 +96,13 @@ test('asset deletion is included in the built publication snapshot', async () =>
   try {
     await saveAsset(root, 'public/old.png', Buffer.from('old'));
     await mutateAsset(root, { kind: 'rename', rel: 'public/old.png', name: 'new.png' });
-    let committed: readonly RepositoryFile[] = [];
+    let committed: PublishSource | undefined;
     const publisher = new Publisher(
       root,
       {
         async commit(files) {
           committed = files;
-          return { sha: 'b'.repeat(40), url: 'https://example.com/commit' };
+          return ok({ sha: 'b'.repeat(40), url: 'https://example.com/commit' });
         },
         async incoming() {
           throw new Error('Unexpected synchronization');
@@ -115,8 +116,8 @@ test('asset deletion is included in the built publication snapshot', async () =>
       },
     );
     assert.equal((await publisher.publish()).kind, 'committed');
-    assert.ok(committed.find((file) => file.path === 'public/old.png')?.deleted);
-    assert.equal(committed.find((file) => file.path === 'public/new.png')?.deleted, undefined);
+    assert.ok(committed?.deleted.includes('public/old.png'));
+    assert.ok(committed?.files.some((file) => file.path === 'public/new.png'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

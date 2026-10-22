@@ -8,7 +8,7 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createAstroFileMonitor } from '#dist/electron/project/astroFileMonitor.js';
 import { watchProject } from '#dist/electron/project/projectWatcher.js';
-import { record } from '#dist/shared/core/boundary.js';
+import { list, pathText, record } from '#dist/shared/core/boundary.js';
 import {
   parseAstroFileChanges,
   type AstroFileChange,
@@ -98,6 +98,47 @@ test('Desktop watcher reports additions and removals once', async (context) => {
     ],
   );
 });
+
+test('Desktop watcher reconciles empty page folders without Astro files', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-folder-notices-'));
+  fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
+  const notifications: unknown[] = [];
+  const watcher = watchProject({
+    projectPath: root,
+    isSelfWrite: () => false,
+    noteExternalChange: () => {},
+    notePageMayHaveChanged: () => {},
+    scheduleThumb: () => {},
+    mediaPattern: /\.png$/,
+    send: (channel, value) => {
+      if (channel === 'fs:changed') {
+        notifications.push(value);
+      }
+    },
+  });
+  context.after(() => {
+    watcher.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const folder = path.join(root, 'src/pages/empty');
+  fs.mkdirSync(folder);
+  await waitForFolderNotification(notifications);
+  assert.ok(list(pathText)(record(notifications[0])['files']).includes(folder));
+  notifications.length = 0;
+  fs.rmdirSync(folder);
+  await waitForFolderNotification(notifications);
+  assert.ok(list(pathText)(record(notifications[0])['files']).includes(folder));
+});
+
+async function waitForFolderNotification(notifications: readonly unknown[]): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (notifications.length > 0) {
+      return;
+    }
+    await delay(100);
+  }
+  assert.fail('Expected a folder notification within three seconds');
+}
 
 async function waitForChanges(changes: readonly AstroFileChange[], count: number): Promise<void> {
   // FSEvents delivery can lag while the full suite saturates the machine.

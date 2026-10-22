@@ -145,6 +145,7 @@ async function mountApp(root, files, build, options = {}) {
       }),
       onFsChanged: () => () => {},
       gitInfo: async () => ({ isRepo: false }),
+      publishAvailability: async () => ({ github: 'unknown', hosting: 'unconfigured' }),
       onCssChanged: () => () => {},
       ...options.bridge,
     },

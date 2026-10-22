@@ -83,6 +83,7 @@ export interface PickedAsset {
 }
 export interface AssetFieldProps {
   readonly value?: string | undefined;
+  readonly fallbackValue?: string | undefined;
   readonly onChange: (value: string, immediate?: boolean) => void;
   readonly mediaKind?: AssetRequest['mediaKind'];
   readonly projectPath: string;
@@ -109,8 +110,8 @@ export default function AssetField(props: AssetFieldProps) {
         {toggle}
         {remoteCard}
         <input
-          value={state.current}
-          placeholder="https://…"
+          value={props.value ?? ''}
+          placeholder={state.isFallback ? state.current : 'https://…'}
           spellCheck={false}
           onChange={(event) => onChange(event.target.value)}
         />
@@ -130,6 +131,7 @@ export default function AssetField(props: AssetFieldProps) {
 
 function useAssetField({
   value,
+  fallbackValue,
   onChange,
   mediaKind = 'asset',
   projectPath,
@@ -141,7 +143,10 @@ function useAssetField({
   baseDir: baseDirectory,
   onCurrentDimensions,
 }: AssetFieldProps) {
-  const current = value || '';
+  // Preview the effective asset without writing the component's fallback into the page.
+  // An explicit empty string still overrides the fallback, just as it does in Astro.
+  const current = value ?? fallbackValue ?? '';
+  const isFallback = value === undefined && Boolean(fallbackValue);
   const external = isExternalAsset(current);
   const [mode, setMode] = useState(
     () => initialMode || (showModeToggle && external ? 'url' : 'asset'),
@@ -207,7 +212,7 @@ function useAssetField({
         onChange(assetValueFor(pickedRel, baseDirectory), true);
       },
     });
-  return { current, external, mode, setMode, dims, entry, target, noteDims, choose };
+  return { current, isFallback, external, mode, setMode, dims, entry, target, noteDims, choose };
 }
 
 type AssetFieldState = ReturnType<typeof useAssetField>;
@@ -251,6 +256,7 @@ function RemoteCard({ state }: { readonly state: AssetFieldState }) {
           {remoteName(current)}
         </div>
         <div className="af-sub">{remoteHost(current)}</div>
+        {state.isFallback && <div className="af-sub">Component fallback</div>}
         {dims && (
           <div className="af-sub">
             {dims.w} x {dims.h}px
@@ -281,6 +287,7 @@ function LocalCard({
         <div className="af-name" title={sourceRel || current}>
           {entry ? entry.name : sourceRel || current || 'No asset selected'}
         </div>
+        {state.isFallback && <div className="af-sub">Component fallback</div>}
         {dims && (
           <div className="af-sub">
             {dims.w} x {dims.h}px

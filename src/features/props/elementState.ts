@@ -17,6 +17,8 @@ import { VOID_TAGS } from '../../editor/elementSchemas';
 import { isInlineOnly } from './RichContent';
 import { type ElementPropsPanelProps } from './propsPanelTypes';
 import { sourceKind, useSourceDimensions } from './SourcePanels';
+import { useLayoutMetadata } from './useLayoutMetadata';
+import { useLayoutText } from './useLayoutText';
 
 // Whether the Settings group is open, remembered across selections. See where it
 // is read, below.
@@ -39,10 +41,15 @@ export function useElementProps(props: ElementPropsPanelProps) {
   const focus = useElementFocus(props);
   const settings = elementSettings(props, layout, rules.appliesNow);
   const dimensions = elementDimensionAction(props);
+  const layoutMetadata = useLayoutMetadata(props);
+  const layoutText = useLayoutText(props);
   const assetContext = {
     projectPath: props.projectPath,
     filePath: props.filePath,
     nodeName: props.node.name,
+    layoutImage: layoutMetadata?.image,
+    layoutType: layoutMetadata?.type,
+    layoutText,
     onPickDimensions: dimensions.onPickDimensions,
     srcDims: assets.sourceDimensions,
     onSrcDimensions: assets.setSourceDimensions,

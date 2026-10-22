@@ -10,10 +10,11 @@ a person, for Claude Code, for Codex, and for Pi, because every gate calls the s
 |---|---|---|---|
 | Agent pre-tool | Before an agent runs a command or edits a file | `scripts/agent/core.mts` verdicts | No: refusals come from the harness |
 | Agent post-tool | After an agent edits a file | Prettier (writes), policy scan, ESLint on the file | No |
-| Agent stop | When an agent tries to finish | Prettier check, scan, ESLint on every changed file, then `tsc` | After 3 refusals for the same findings the session may end, and the human is told; new findings start a new round |
+| Agent stop | When an agent tries to finish | Changed-file formatting, scan and lint; all Desktop compiler targets and test source paths | After 3 refusals for the same findings the session may end, and the human is told; new findings start a new round |
 | `pre-commit` | `git commit` | Prettier check, scan, ESLint on staged files | `--no-verify`, which agent hooks refuse |
 | `commit-msg` | `git commit` | Typed subject ≤ 72 characters, blank line, body | As above |
-| `pre-push` | `git push` | `tsc`, full ESLint, full scan | As above |
+| Local development | `npm run dev` or `npm run check:local` | All Desktop compiler targets, full lint, formatting, policy, test source paths, Studio static checks | Run directly at any time |
+| `pre-push` | `git push` | Full CI gate: clean builds, Desktop and Studio static checks and tests | As above |
 | CI (`npm test`) | Every pull request and push to `main` | Builds, `tsc` (app and scripts), ESLint, Prettier, scan, every test | **No**, once `main` requires the `Check` workflow |
 
 The adapters are thin: `.claude/settings.json` and `.codex/hooks.json` call
@@ -23,6 +24,11 @@ hooks live in `.githooks/` and are installed by `npm install` (`scripts/policy/i
 Commands for people and agents:
 
 - `npm run check:changed` — what the stop hook runs. Use it before you finish.
+- `npm run check:local` — fast, repository-wide checks before starting development.
+  `npm run dev` runs these automatically before building and launching the app.
+- `npm run typecheck` — checks the root, scripts, contracts, Electron, preload and preview
+  compiler configurations with separate incremental caches. The broad root program alone
+  cannot catch differences in the build targets' library and module settings.
 - `npm run check:policy` — the repository policy scan.
 - `npm run lint`, `npm run typecheck`, `npm run format` — the individual tools.
 - `env -u ELECTRON_RUN_AS_NODE npm test` — the full gate CI runs.
@@ -30,6 +36,12 @@ Commands for people and agents:
   iterating. It builds over the existing tree (incrementally) and skips the clean and the
   whole-tree static checks, so it is no substitute for `check:changed` or the full gate
   (`scripts/gate/gatePlan.ts`).
+
+The push hook compiles the test runner and runs the full gate, with live output and a 30-minute
+limit per command. It clears `ELECTRON_RUN_AS_NODE` for its children so agent terminals do not
+silently run browser probes as Node programs. A failed build or test stops the push. This costs
+several minutes, but catches local regressions before GitHub starts a release. CI still checks
+clean dependency installation and all three operating systems; local checks cover the host OS.
 
 ### The gate files
 

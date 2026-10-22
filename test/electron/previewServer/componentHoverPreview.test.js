@@ -78,6 +78,50 @@ test('preview metadata rejects malformed and oversized inputs', () => {
   );
 });
 
+test('required page data blocks standalone rendering without inventing object values', () => {
+  const source = `---
+import type { PageData } from './queries';
+interface Props { data: PageData; heading: string; }
+const { data, heading } = Astro.props;
+const labels = data.entries.map((entry) => entry.label);
+---
+<h2>{heading}</h2>`;
+  assert.deepEqual(componentPreviewInputs(source, 'Overview'), {
+    props: { heading: 'Overview' },
+    missing: ['data'],
+  });
+});
+
+test('optional props and authored defaults do not block previews', () => {
+  const source = `---
+interface Props {
+  data?: PageData;
+  items: Item[];
+  count: number;
+  title: string;
+  visible: boolean;
+  tag: 'h2' | 'h3';
+}
+const { data, items = [], count = 0, title = '', visible = false, tag } = Astro.props;
+---
+<h2>{title}</h2>`;
+  assert.deepEqual(componentPreviewInputs(source, 'Card'), {
+    props: { tag: 'h2' },
+    missing: [],
+  });
+});
+
+test('required unsampled primitive, array, and object props remain unavailable', () => {
+  const source = `---
+interface Props { src: string; count: number; active: boolean; items: Item[]; data: object; }
+---
+<div />`;
+  assert.deepEqual(componentPreviewInputs(source, 'Card'), {
+    props: {},
+    missing: ['src', 'count', 'active', 'items', 'data'],
+  });
+});
+
 test('exact project paths distinguish duplicate component names and support layouts', () => {
   const paths = [
     '/src/components/One/Card.astro',
@@ -169,15 +213,28 @@ test('generated Astro route keeps its default slot and loads the selected source
     .split('---')[1]
     .replace(/export const prerender = false;/, '')
     .replace("import 'virtual:stacki-component-preview-styles';", '')
+    .replace(
+      "import { packageModules, packageInputs } from 'virtual:stacki-package-components';",
+      '',
+    )
     .replaceAll('import.meta.glob', 'glob');
   const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props }; })`, {
     Astro: { url: new URL('http://localhost/__avb/preview?p=' + selected) },
+    packageModules: {},
+    packageInputs: {},
     glob: (_pattern, options) => (options?.eager ? {} : options?.query ? sources : modules),
   });
   const result = await run();
   assert.equal(result.name, 'Card');
   assert.deepEqual({ ...result.props }, { heading: 'Card' });
   assert.deepEqual(loaded, [selected + '?raw&stacki-preview-props', selected]);
+
+  loaded.length = 0;
+  sources[selected] = async () =>
+    componentPreviewInputs('---\ninterface Props { data: PageData; }\n---\n<div />', 'Overview');
+  const unavailable = await run();
+  assert.equal(unavailable.C, jsonNull, 'missing required data must prevent component execution');
+  assert.deepEqual(loaded, [], 'the component module is not even imported without its data');
 });
 
 test('Vite metadata exports plain ESM data and reflects source edits', async (context) => {
@@ -192,11 +249,11 @@ test('Vite metadata exports plain ESM data and reflects source edits', async (co
   assert.match(first, /^export default /);
   assert.doesNotMatch(first, /require|exports|node:|Astro\.props/);
   const imported = await import('data:text/javascript,' + encodeURIComponent(first));
-  assert.deepEqual(imported.default, { props: { heading: 'AccordionItem' } });
+  assert.deepEqual(imported.default, { props: { heading: 'AccordionItem' }, missing: [] });
   fs.writeFileSync(file, accordion.replace('heading, headingTag', "heading = 'Saved', headingTag"));
   assert.equal(
     plugin.load(id),
-    'export default {"props":{}};',
+    'export default {"props":{},"missing":[]};',
     'a later load sees authored defaults after a source edit',
   );
   for (const query of ['', '?raw', '?stacki-preview-props', '?raw&not-stacki-preview-props']) {

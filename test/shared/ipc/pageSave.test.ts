@@ -19,8 +19,9 @@ import { parsePageDiskRead, parsePageEditResult } from '#dist/shared/ipc/pageSav
 import { diffCodePatch } from '#dist/shared/engine/codePatch.js';
 import { toDigest } from '#dist/shared/core/brand.js';
 import type { PageDiskRead } from '#dist/shared/ipc/pageSave.js';
+import { parseScanResult } from '#dist/shared/properties/projectScan.js';
 import { toRecord } from '#dist/shared/core/record.js';
-import { ATOMIC_DIRECTORY } from '#dist/electron/documents/atomicDirectory.js';
+import { atomicDirectoryOf } from '#dist/electron/documents/atomicDirectory.js';
 import { pageEditError } from '#dist/electron/documents/pageRequests.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
@@ -62,7 +63,7 @@ function fixture() {
 type Harness = ReturnType<typeof fixture>;
 
 function temporaries(directory: string): readonly string[] {
-  const staging = path.join(directory, ATOMIC_DIRECTORY);
+  const staging = atomicDirectoryOf(path.join(directory, 'page.astro'));
   return fs.existsSync(staging) ? fs.readdirSync(staging) : [];
 }
 
@@ -322,4 +323,20 @@ test('a byte-order mark does not hide the frontmatter', async (context) => {
   const post = toRecord(toRecord(await harness.invoke('page:read', markdown))?.['model']);
   assert.equal(post?.['mdHasFrontmatter'], true);
   assert.match(String(post?.['extraFrontmatter']), /^title: Shipping the editor/);
+});
+
+test('project scans hide save staging while retaining authored empty folders', async () => {
+  const harness = fixture();
+  try {
+    for (const folder of ['.stacki-io', '.stacki/io', 'blog', 'blog/.stacki-io']) {
+      fs.mkdirSync(path.join(harness.root, 'src/pages', folder), { recursive: true });
+    }
+    fs.mkdirSync(path.join(harness.root, '.git/info'), { recursive: true });
+    const scan = parseScanResult(await harness.invoke('project:scan', harness.root));
+    assert.deepEqual(scan.pageFolders, ['blog']);
+    const exclusions = fs.readFileSync(path.join(harness.root, '.git/info/exclude'), 'utf8');
+    assert.ok(exclusions.split('\n').includes('.stacki/io/'));
+  } finally {
+    harness.dispose();
+  }
 });

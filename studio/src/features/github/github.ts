@@ -1,7 +1,10 @@
 import { prepareStudioBranch } from '../updates/githubUpdate';
 import type { StudioRelease } from '../updates/release';
-import { GitHubChangedError, GitHubRequestError } from './githubErrors';
-import { changedPublishFiles } from './changedPublishFiles';
+import { GitHubRequestError } from './githubErrors';
+import type { PublishSource, PublishReceipt } from '../../shared/publishSource';
+import type { Result } from '../../../vendor/stacki/shared/core/result';
+import type { ReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
+import { parsePublishConnection } from '../../shared/publishConnection';
 import { publicAssetTree } from '../storage/publicAssetTree';
 import { treeChanges } from './treeChanges';
 import { independentlyDeployed } from './syncPaths';
@@ -15,18 +18,9 @@ export interface GitHubConfig {
   readonly repository: string;
   readonly branch: string;
 }
-export interface RepositoryFile {
-  readonly path: string;
-  readonly content: string;
-  readonly encoding?: 'utf-8' | 'base64';
-  readonly deleted?: boolean;
-}
 export interface RepositoryAccess {
-  commit(
-    files: readonly RepositoryFile[],
-    expectedHead: string,
-    message: string,
-  ): Promise<{ sha: string; url: string }>;
+  review?(source: PublishSource, expectedHead: string): Promise<Result<ReviewReceipt>>;
+  commit(source: PublishSource, expectedHead: string): Promise<Result<PublishReceipt>>;
   incoming(base: string): Promise<IncomingChanges>;
   acceptBase(sha: string): Promise<void>;
 }
@@ -62,7 +56,7 @@ export class GitHubRepository {
       this.config.branch,
     );
   }
-  async installationToken(): Promise<string> {
+  async installationToken(workflow: 'direct' | 'pull-request' = 'direct'): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
     const body = Buffer.from(
@@ -79,7 +73,10 @@ export class GitHubRepository {
         'POST',
         {
           repositories: [this.config.repository.split('/')[1]],
-          permissions: { contents: 'write' },
+          permissions: {
+            contents: 'write',
+            ...(workflow === 'pull-request' ? { pull_requests: 'write' } : {}),
+          },
         },
       ),
     );
@@ -177,6 +174,7 @@ export class GitHubRepository {
         !/^src\/.+\.(astro|json|md|mdx|css|ts|js)$/.test(file) &&
         ![
           '.stacki/components.json',
+          '.stacki/component-sources.json',
           '.stacki/guide.json',
           '.stacki/publish.json',
           '.stacki/pages.json',
@@ -194,85 +192,19 @@ export class GitHubRepository {
     }
     return files;
   }
-  async commit(files: readonly RepositoryFile[], expectedHead: string, message: string) {
-    if (!files.length || files.length > 1000) {
-      throw new Error('Publish requires between 1 and 1000 files');
-    }
-    const token = await this.installationToken();
-    if ((await this.head(token)) !== expectedHead) {
-      throw new GitHubChangedError();
-    }
-    const parent = record(
-      await this.call(`/repos/${this.config.repository}/git/commits/${expectedHead}`, token),
-    );
-    const baseTree = string(record(parent['tree'])['sha'], 64);
-    const changes = changedPublishFiles(
-      files,
-      await this.call(`/repos/${this.config.repository}/git/trees/${baseTree}?recursive=1`, token),
-    );
-    if (!changes.length) {
-      return {
-        sha: expectedHead,
-        url: `https://github.com/${this.config.repository}/commit/${expectedHead}`,
-      };
-    }
-    const entries = [];
-    for (const file of changes) {
-      if (file.deleted) {
-        entries.push({ path: file.path, mode: '100644', type: 'blob', sha: null });
-      } else if (file.encoding === 'base64') {
-        const blob = record(
-          await this.call(`/repos/${this.config.repository}/git/blobs`, token, 'POST', {
-            content: file.content,
-            encoding: 'base64',
-          }),
-        );
-        entries.push({
-          path: file.path,
-          mode: '100644',
-          type: 'blob',
-          sha: string(blob['sha'], 64),
-        });
-      } else {
-        entries.push({ path: file.path, mode: '100644', type: 'blob', content: file.content });
-      }
-    }
-    const tree = record(
-      await this.call(`/repos/${this.config.repository}/git/trees`, token, 'POST', {
-        base_tree: baseTree,
-        tree: entries,
-      }),
-    );
-    const commit = record(
-      await this.call(`/repos/${this.config.repository}/git/commits`, token, 'POST', {
-        message,
-        tree: string(tree['sha'], 64),
-        parents: [expectedHead],
-      }),
-    );
-    const sha = string(commit['sha'], 64);
-    await this.advanceRef(token, sha, expectedHead);
-    return { sha, url: `https://github.com/${this.config.repository}/commit/${sha}` };
+  async publishConnection() {
+    return parsePublishConnection({
+      repository: this.config.repository,
+      branch: this.config.branch,
+      token: await this.installationToken(),
+    });
   }
-  private async advanceRef(token: string, sha: string, expectedHead: string) {
-    try {
-      await this.call(
-        `/repos/${this.config.repository}/git/refs/heads/${this.config.branch}`,
-        token,
-        'PATCH',
-        { sha, force: false },
-      );
-    } catch (error) {
-      // Retry only a confirmed rejected ref update, never an ambiguous network failure.
-      if (
-        error instanceof GitHubRequestError &&
-        [409, 422].includes(error.status) &&
-        (await this.head(token)) !== expectedHead
-      ) {
-        throw new GitHubChangedError();
-      }
-      throw error;
-    }
+  async reviewConnection() {
+    return parsePublishConnection({
+      repository: this.config.repository,
+      branch: this.config.branch,
+      token: await this.installationToken('pull-request'),
+    });
   }
   private async call(
     endpoint: string,

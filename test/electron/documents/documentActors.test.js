@@ -93,8 +93,8 @@ test('a replace applies, returns the new checksum, and the actor holds it', () =
     assert.equal(line.file, hashPath(fs.realpathSync.native(file)));
     assert.equal(lines[0].includes(root), false, 'no raw path');
     assert.equal(lines[0].includes('New'), false, 'no source bytes');
-    assert.deepEqual(fs.readdirSync(root).sort(), ['.stacki-io', 'index.astro']);
-    assert.deepEqual(fs.readdirSync(path.join(root, '.stacki-io')), [], 'no save files remain');
+    assert.deepEqual(fs.readdirSync(root).sort(), ['.stacki', 'index.astro']);
+    assert.deepEqual(fs.readdirSync(path.join(root, '.stacki', 'io')), [], 'no save files remain');
   });
 });
 

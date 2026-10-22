@@ -1,6 +1,6 @@
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
 import { defaultInstance, type InsertionDefaults } from './instanceDefaults';
-import { relativeImport, resolveImport } from './imports';
+import { componentImport, resolveImport, type ComponentImport } from './imports';
 import { insertFragment, parsePage, type Edit, type TreeAction } from './source';
 
 type Insert = Extract<TreeAction, { kind: 'insert' }>;
@@ -17,11 +17,16 @@ export function componentInsertionEdits(
   if (!parsed.editable) {
     throw new Error(parsed.reason);
   }
-  const imports = insertionImports(parsed.model.imports, file);
-  const resolved = resolveImport(file, action.importPath);
+  const components = settings?.imports ?? [];
+  const imports = insertionImports(parsed.model.imports, file, components);
+  const resolved = resolveImport(file, action.importPath, components);
   const rootName = imports.resolve(resolved, action.name, action.importPath);
   const node = defaultInstance(resolved, settings, (child, name) =>
-    imports.resolve(child, name, relativeImport(file, child)),
+    imports.resolve(
+      child,
+      name,
+      componentImport(file, components.find((item) => item.file === child) ?? { file: child }),
+    ),
   );
   const fragment = node
     ? serializeNodes([node])
@@ -45,6 +50,7 @@ function insertionImports(
     readonly imported?: string;
   }[],
   file: string,
+  components: readonly ComponentImport[],
 ) {
   const available = [...imports];
   const statements: string[] = [];
@@ -53,7 +59,8 @@ function insertionImports(
       (item) =>
         !item.typeOnly &&
         !item.imported &&
-        (item.path === specifier || (resolved && resolveImport(file, item.path) === resolved)),
+        (item.path === specifier ||
+          (resolved && resolveImport(file, item.path, components) === resolved)),
     );
     if (existing) {
       return existing.name;

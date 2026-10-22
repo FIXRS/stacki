@@ -22,6 +22,10 @@ const {
   windowsFilesystem,
 } = require('../../helpers/platformSupport.js');
 
+const load = require('../../helpers/rendererModule');
+const { sendPageEditWithRetry } = load('src/ipc/saveRetry.ts');
+const { pageEditError } = require('#dist/electron/documents/pageRequests.js');
+
 const windows = windowsFilesystem();
 const onWindows = { skip: windows.skip ?? false, timeout: 60_000 };
 
@@ -93,3 +97,47 @@ test('on a case-insensitive disk every spelling is one actor and one lock', onWi
     assert.deepEqual(protocolLeftovers(root), []);
   });
 });
+
+test(
+  'the renderer retries a native sharing failure after the Windows handle closes',
+  onWindows,
+  async () => {
+    await scratch(windows.directory, async (root) => {
+      const file = path.join(root, 'page.astro');
+      fs.writeFileSync(file, 'old\n');
+      const documents = realHost();
+      const release = await holdFromWindows(windows, file, 'Read');
+      let releasePromise;
+      const releaseOnce = () => (releasePromise ??= release());
+      let attempts = 0;
+      try {
+        const request = {
+          pagePath: file,
+          authoredChecksum: sha256('old\n'),
+          edit: { tag: 'code-patch', hunks: [] },
+        };
+        const result = await sendPageEditWithRetry(request, {
+          send: async (attempt) => {
+            attempts += 1;
+            const report = documents.writeText(attempt.pagePath, 'new\n', attempt.authoredChecksum);
+            if (report.tag !== 'applied') {
+              assert.equal(attempts, 1);
+              assert.equal(report.tag, 'rejected');
+              assert.equal(report.reason, 'write-failed');
+              assert.equal(fs.readFileSync(file, 'utf8'), 'old\n');
+              await releaseOnce();
+              return { ok: false, error: pageEditError(file, report) };
+            }
+            return { ok: true, value: report };
+          },
+        });
+        assert.equal(result.ok, true);
+        assert.equal(attempts, 2);
+        assert.equal(fs.readFileSync(file, 'utf8'), 'new\n');
+        assert.deepEqual(protocolLeftovers(root), []);
+      } finally {
+        await releaseOnce();
+      }
+    });
+  },
+);

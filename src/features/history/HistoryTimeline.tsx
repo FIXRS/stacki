@@ -4,8 +4,10 @@ import { assert } from '../../../shared/core/assert';
 import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
 import { readHistoryLog } from './historyBridge';
 import { commitAuthor, relativeTime } from './historyModel';
-import { BranchIcon, PreviewIcon, RefreshIcon } from '../../ui/Icons';
+import { BranchIcon, PreviewIcon } from '../../ui/Icons';
 import HistoryCommitFiles from './HistoryCommitFiles';
+import { createCoalescedRun } from '../../lib/coalescedRun';
+import { onWindowReturn } from '../../lib/windowReturn';
 import MoreMenu from '../../ui/MoreMenu';
 import Tooltip from '../../ui/Tooltip';
 import HistoryGraphLane, { HISTORY_ROW_HEIGHT, historyGraphWidth } from './HistoryGraphLane';
@@ -40,9 +42,8 @@ interface HistoryTimelineProps {
 
 export default function HistoryTimeline(props: HistoryTimelineProps) {
   const [scope, setScope] = useState<'all' | 'current'>('all');
-  const [revision, setRevision] = useState(0);
   const reference = scope === 'current' ? 'HEAD' : undefined;
-  const timeline = useTimeline(props, reference, revision);
+  const timeline = useTimeline(props, reference);
   const graph = useMemo(() => buildHistoryGraph(timeline.state.commits), [timeline.state.commits]);
   const [expanded, setExpanded] = useState<string | undefined>(undefined);
   useEffect(() => {
@@ -64,15 +65,6 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
             <option value="current">Current branch ({props.branch ?? 'HEAD'})</option>
           </select>
         </label>
-        <button
-          className="history-graph-refresh"
-          onClick={() => setRevision((value) => value + 1)}
-          disabled={timeline.state.kind === 'loading'}
-          title="Refresh commit graph"
-          aria-label="Refresh commit graph"
-        >
-          <RefreshIcon size={14} />
-        </button>
       </div>
       {timeline.state.kind === 'loading' && <p className="history-empty">Reading history…</p>}
       {timeline.state.kind === 'error' && <ErrorToast message={timeline.state.message} />}
@@ -114,27 +106,53 @@ function parseHistoryScope(value: string): 'all' | 'current' {
 function useTimeline(
   { projectPath, branch, head }: HistoryTimelineProps,
   reference: string | undefined,
-  revision: number,
 ) {
   const [state, setState] = useState<TimelineState>({ kind: 'loading', commits: [], atEnd: false });
   const requestRef = useRef(0);
   useEffect(() => {
-    const request = ++requestRef.current;
+    let closed = false;
     setState({ kind: 'loading', commits: [], atEnd: false });
-    void readHistoryLog(projectPath, 0, reference).then((result) => {
-      if (requestRef.current !== request) {
+    const reader = createCoalescedRun(async () => {
+      if (closed) {
         return;
       }
-      setState(
-        result.ok
-          ? { kind: 'ready', commits: result.value.commits, atEnd: result.value.atEnd }
-          : { kind: 'error', commits: [], atEnd: false, message: result.error },
-      );
+      const request = ++requestRef.current;
+      const result = await readHistoryLog(projectPath, 0, reference);
+      if (closed || requestRef.current !== request) {
+        return;
+      }
+      setState((previous) => {
+        if (!result.ok) {
+          return { ...previous, kind: 'error', message: result.error };
+        }
+        // Keep expanded rows and older pages when the newest commits have not changed.
+        const prefix = previous.commits.slice(0, result.value.commits.length);
+        if (
+          previous.kind === 'ready' &&
+          (!result.value.atEnd || previous.commits.length === result.value.commits.length) &&
+          JSON.stringify(prefix) === JSON.stringify(result.value.commits)
+        ) {
+          return previous;
+        }
+        return { kind: 'ready', commits: result.value.commits, atEnd: result.value.atEnd };
+      });
     });
-    return () => {
-      requestRef.current += 1;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        void reader.request();
+      }
     };
-  }, [branch, head, projectPath, reference, revision]);
+    void reader.request();
+    // Git refs can move without a source-file event, including commits on other branches.
+    const timer = window.setInterval(refresh, 15_000);
+    const offReturn = onWindowReturn(refresh);
+    return () => {
+      closed = true;
+      requestRef.current += 1;
+      window.clearInterval(timer);
+      offReturn();
+    };
+  }, [branch, head, projectPath, reference]);
   const loadOlder = useCallback(() => {
     if (state.kind === 'loading' || state.commits.length >= HISTORY_COMMITS_MAX) {
       return;

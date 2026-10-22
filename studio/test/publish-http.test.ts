@@ -1,3 +1,6 @@
+// Goal: publish jobs return promptly and reject duplicate work.
+// Method: block the repository boundary and inspect HTTP progress without external services.
+import { ok } from '../vendor/stacki/shared/core/result';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -9,7 +12,7 @@ import { Publisher, type PublishState } from '../src/features/publishing/publish
 import { publishRoute } from '../src/features/publishing/publishRoutes';
 import { parsePublishState } from '../src/features/publishing/publishClient';
 
-test('publish HTTP returns a job before the build finishes and duplicate starts share it', async () => {
+test('publish HTTP returns a job before the commit finishes and duplicate starts share it', async () => {
   const root = await publishFixture();
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -22,8 +25,9 @@ test('publish HTTP returns a job before the build finishes and duplicate starts 
     {
       async commit() {
         stages.push(publisher.state);
+        await gate;
         commits++;
-        return { sha: 'b'.repeat(40), url: 'https://example.test/commit' };
+        return ok({ sha: 'b'.repeat(40), url: 'https://example.test/commit' });
       },
       async incoming() {
         throw new Error('Unexpected sync');
@@ -102,7 +106,7 @@ async function publishServer(publisher: Publisher) {
 }
 
 function expectedStages(id: string | undefined) {
-  return ['building', 'committing', 'cleanup', 'deploying'].map((stage) => ({
+  return ['committing', 'cleanup', 'deploying'].map((stage) => ({
     kind: 'building',
     id,
     stage,

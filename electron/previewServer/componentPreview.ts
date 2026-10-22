@@ -15,6 +15,7 @@ const PREVIEW_LIMITS = {
 
 export interface ComponentPreviewInputs {
   readonly props: Readonly<Record<string, string | boolean>>;
+  readonly missing: readonly string[];
 }
 
 export function componentPreviewInputs(source: unknown, name: unknown): ComponentPreviewInputs {
@@ -41,7 +42,15 @@ export function componentPreviewInputs(source: unknown, name: unknown): Componen
       }
     }
   }
-  return { props };
+  // Imported objects and page-scoped values cannot be invented safely. Do not execute
+  // a standalone component when its declared required inputs are unavailable.
+  const missing = schema
+    .filter((field) => !field.optional)
+    .filter((field) => field.default === undefined && !field.defaultExpr)
+    .filter((field) => !Object.hasOwn(props, field.name))
+    .map((field) => field.name);
+  assert(missing.length <= schema.length, 'Missing preview inputs belong to the prop schema');
+  return { props, missing };
 }
 
 export function componentPreviewPath(
@@ -64,7 +73,7 @@ export function componentPreviewPath(
   const name = requestedName;
   if (selected) {
     const key = '/' + selected.replace(/^\/+/, '');
-    if (/^\/src\/(components|layouts)\/.+\.astro$/.test(key)) {
+    if (/^\/(src\/(components|layouts)|node_modules)\/.+\.astro$/.test(key)) {
       return paths.find((candidate) => candidate === key);
     }
     return undefined;
@@ -75,7 +84,10 @@ export function componentPreviewPath(
   return undefined;
 }
 
-export function componentPreviewPlugin(projectDirectories: readonly string[]) {
+export function componentPreviewPlugin(
+  projectDirectories: readonly string[],
+  packages: (root: string) => readonly PackagePreviewSource[] = () => [],
+) {
   assert(projectDirectories.length > 0, 'Preview plugin requires a project root');
   assert(projectDirectories.length <= PREVIEW_LIMITS.rootsMax, 'Preview root count exceeds limit');
   const roots = projectDirectories.map((directory) => path.resolve(directory));
@@ -83,9 +95,19 @@ export function componentPreviewPlugin(projectDirectories: readonly string[]) {
     name: 'avb-component-preview',
     enforce: 'pre' as const,
     resolveId(id: string): string | undefined {
-      return id === 'virtual:stacki-component-preview-styles' ? '\0' + id : undefined;
+      return [
+        'virtual:stacki-component-preview-styles',
+        'virtual:stacki-package-components',
+      ].includes(id)
+        ? '\0' + id
+        : undefined;
     },
     load(id: string): string | undefined {
+      if (id === '\0virtual:stacki-package-components') {
+        const root = roots[0];
+        assert(root !== undefined, 'Package preview requires a project root');
+        return packagePreviewModule(packages(root));
+      }
       if (id === '\0virtual:stacki-component-preview-styles') {
         const root = roots[0];
         assert(root !== undefined, 'Preview styles require a project root');
@@ -118,6 +140,30 @@ export function renderComponentPreviewPage(): string {
   return PREVIEW_PAGE.replace('__STACKI_PREVIEW_PATH__', () => componentPreviewPath.toString());
 }
 
+interface PackagePreviewSource {
+  readonly file: string;
+  readonly importPath: string;
+  readonly source: string;
+}
+
+function packagePreviewModule(sources: readonly PackagePreviewSource[]): string {
+  assert(sources.length <= 10000, 'Package previews are bounded');
+  const entries = sources.map(({ file, importPath, source }) => {
+    const inputs = componentPreviewInputs(source, path.basename(file, '.astro'));
+    return { key: JSON.stringify('/' + file), specifier: JSON.stringify(importPath), inputs };
+  });
+  return (
+    'export const packageModules = {' +
+    entries.map((entry) => `${entry.key}: () => import(${entry.specifier})`).join(',') +
+    '};\n' +
+    'export const packageInputs = {' +
+    entries
+      .map((entry) => `${entry.key}: async () => (${JSON.stringify(entry.inputs)})`)
+      .join(',') +
+    '};'
+  );
+}
+
 function previewText(input: unknown, maximum: number, label: string): string {
   assert(typeof input === 'string', label + ': expected string');
   assert(input.length <= maximum, label + ': exceeds length limit');
@@ -133,24 +179,30 @@ const PREVIEW_PAGE = `---
 export const prerender = false;
 __STACKI_PREVIEW_PATH__
 import 'virtual:stacki-component-preview-styles';
-const mods = import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro']);
+import { packageModules, packageInputs } from 'virtual:stacki-package-components';
+const mods = {
+  ...import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro']), ...packageModules,
+};
 const canvasId = Astro.url.searchParams.get('defaults') || '';
 const canvasKey = '/.stacki/canvas/' + canvasId + '.astro';
 // Resolve on demand: a new canvas can be created after this route was compiled.
 const DefaultCanvas = /^[a-f0-9-]{36}$/.test(canvasId)
   ? (await import(/* @vite-ignore */ canvasKey)).default : null;
-const inputs = import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro'], {
+const inputs = { ...import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro'], {
   query: '?raw&stacki-preview-props', import: 'default',
-});
+}), ...packageInputs };
 const selected = componentPreviewPath(
   Object.keys(mods), Astro.url.searchParams.get('p') || '', Astro.url.searchParams.get('c') || '',
 );
 const name = selected ? selected.split('/').pop().replace(/\\.astro$/, '') : '';
 let C = null;
 let props = {};
+let missing = [];
 if (selected) {
-  ({ props } = await inputs[selected]());
-  C = (await mods[selected]()).default;
+  ({ props, missing } = await inputs[selected]());
+  if (missing.length === 0) {
+    C = (await mods[selected]()).default;
+  }
 }
 ---
 {DefaultCanvas ? <DefaultCanvas /> : <html>
@@ -183,7 +235,9 @@ if (selected) {
   </head>
   <body>
     <div id="avb-stage">{C ? <C {...props}>{name}</C> : null}</div>
-    <div id="avb-empty">Nothing to preview — this component needs props or slot content.</div>
+    <div id="avb-empty">{missing.length > 0
+      ? 'Preview needs data for: ' + missing.join(', ') + '. Open an instance on a page.'
+      : 'Nothing to preview — this component needs props or slot content.'}</div>
     <script is:inline>
       (function () {
         var stage = document.getElementById('avb-stage');

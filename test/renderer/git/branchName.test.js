@@ -1,4 +1,5 @@
-// The name a new branch is given.
+// Goal: branch names are sanitized and rejected before Git receives invalid input.
+// Methodology: exercise the pure name helpers; historyBranches tests the real editor.
 //
 //   node test/renderer/git/branchName.test.js
 //
@@ -106,25 +107,6 @@ const check = (what, condition, detail) => {
     ok('feature/logout', existing) && !ok('main', existing),
   );
   check('and an empty field is never valid', !ok('', existing) && !ok('   ', existing));
-
-  // --- the field really asks ---------------------------------------------------
-  const chip = fs.readFileSync(repoPath('src/features/git/GitChipView.tsx'), 'utf8');
-  check(
-    'the field cleans what is typed',
-    /onChange=\{\(event\) => onNewBranch\(sanitizeBranchName\(/.test(chip),
-  );
-  check(
-    'and Enter waits for a name that works',
-    /event\.key === 'Enter' && name && !branchError/.test(chip),
-  );
-  check(
-    'with the reason shown while it waits',
-    /branchError && <div className="git-hint">/.test(chip),
-  );
-  check(
-    'checked against the branches that exist',
-    /branchNameError\(newBranch, info\.branches\)/.test(chip),
-  );
 
   if (failures.length) {
     console.error(

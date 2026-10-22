@@ -81,8 +81,13 @@ the rules that remain for review.
   file before you finish. Fix what they report; do not work around them.
 - `npm run check:changed` runs the finish check by hand. Run it before you
   say you are done.
+- `npm run check:local` runs fast repository-wide checks before `npm run dev`.
+  All Desktop compiler targets and test source paths also run at agent finish,
+  because config changes and deleted files can break unchanged callers.
 - Git hooks check staged files, commit messages, and pushes. Never skip them
   (`--no-verify`); the agent hooks refuse it, and CI runs the same checks.
+- Pushes run the full clean-build and regression gate locally so passing
+  TypeScript alone cannot send a known test failure to GitHub.
 - The files that define the gates (this file, lint and compiler configs,
   `scripts/{eslintPlugin,policy,agent}/`, hook configs, `shared/core/limits.ts`)
   change only with a human's approval.

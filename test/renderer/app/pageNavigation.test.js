@@ -123,7 +123,9 @@ test('out-of-order page reads and external reads cannot replace the current edit
   const edits = [];
   const previews = [];
   let editError;
-  let onFsChanged;
+  // The real preload supports independent subscribers for navigation and publishing status.
+  const fileListeners = new Set();
+  const onFsChanged = (event) => Promise.all([...fileListeners].map((listener) => listener(event)));
   const refused = (reason, diskChecksum) => ({
     ok: false,
     error: { code: 'rejected', reason, message: reason, diskChecksum },
@@ -179,10 +181,12 @@ test('out-of-order page reads and external reads cannot replace the current edit
         return { ok: true, ...page, inverse: applied.inverse };
       },
       onFsChanged: (callback) => {
-        onFsChanged = callback;
-        return () => {};
+        assert.ok(fileListeners.size < 8, 'The fixture has at most eight file subscribers');
+        fileListeners.add(callback);
+        return () => fileListeners.delete(callback);
       },
       gitInfo: async () => ({ isRepo: false }),
+      publishAvailability: async () => ({ github: 'unknown', hosting: 'unconfigured' }),
       onCssChanged: () => () => {},
     },
     {

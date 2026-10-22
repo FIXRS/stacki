@@ -1,4 +1,3 @@
-import { GitHubChangedError } from '../features/github/githubErrors';
 import { modelConfiguration } from '../features/ai/chatContracts';
 import { parseAssetState, emptyAssetState } from '../features/assets/assetStateTypes';
 import { authorizeConnection } from '../features/auth/connectionAuthorization';
@@ -38,10 +37,11 @@ const routes: Readonly<
   '/studio/internal/assets': internalAssets,
   '/studio/internal/asset-state': internalAssetState,
   '/studio/internal/asset': internalAsset,
-  '/studio/internal/commit': internalCommit,
+  '/studio/internal/publish-connection': internalPublishConnection,
+  '/studio/internal/review-connection': internalPublishConnection,
   '/studio/internal/state': internalState,
   '/studio/internal/files': internalFiles,
-  '/studio/internal/archive': internalArchive,
+  '/studio/internal/bootstrap': internalBootstrap,
 };
 
 async function internalBase(
@@ -169,52 +169,27 @@ async function internalAsset(
   return new Response('Not found', { status: 404 });
 }
 
-async function internalCommit(
+async function internalPublishConnection(
   request: Request,
   environment: Environment,
-  url: URL,
 ): Promise<Response> {
-  if (url.pathname === '/studio/internal/commit' && request.method === 'POST') {
-    try {
-      const input = record(await request.json());
-      const rawFiles = input['files'];
-      if (!Array.isArray(rawFiles) || rawFiles.length > 1000) {
-        throw new Error('Invalid publish files');
-      }
-      const files = rawFiles.map((value) => {
-        const item = record(value);
-        return {
-          path: filePath(item['path']),
-          content: string(item['content'], 28_000_000),
-          encoding: item['encoding'] === 'base64' ? ('base64' as const) : ('utf-8' as const),
-          deleted: item['deleted'] === true,
-        };
-      });
-      const repository = new GitHubRepository({
-        appId: environment.GITHUB_APP_ID,
-        installationId: environment.GITHUB_INSTALLATION_ID,
-        privateKey: environment.GITHUB_PRIVATE_KEY,
-        repository: environment.GITHUB_REPOSITORY,
-        branch: environment.GITHUB_BRANCH,
-      });
-      const result = await repository.commit(
-        files,
-        string(input['expectedHead'], 64),
-        string(input['message'], 300),
-      );
-      await environment.DRAFTS.put('metadata/base-sha', result.sha);
-      return Response.json(result);
-    } catch (error) {
-      return Response.json(
-        {
-          error: error instanceof Error ? error.message : 'Publish failed',
-          ...(error instanceof GitHubChangedError ? { code: 'github_changed' } : {}),
-        },
-        { status: 409 },
-      );
-    }
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 });
   }
-  return new Response('Not found', { status: 404 });
+  const repository = new GitHubRepository({
+    appId: environment.GITHUB_APP_ID,
+    installationId: environment.GITHUB_INSTALLATION_ID,
+    privateKey: environment.GITHUB_PRIVATE_KEY,
+    repository: environment.GITHUB_REPOSITORY,
+    branch: environment.GITHUB_BRANCH,
+  });
+  const connection =
+    new URL(request.url).pathname === '/studio/internal/review-connection'
+      ? await repository.reviewConnection()
+      : await repository.publishConnection();
+  return connection.ok
+    ? Response.json(connection.value, { headers: { 'Cache-Control': 'no-store' } })
+    : Response.json({ error: connection.error.message }, { status: 400 });
 }
 
 async function internalState(
@@ -262,38 +237,30 @@ async function internalFiles(
   return new Response('Not found', { status: 404 });
 }
 
-async function internalArchive(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
-  if (url.pathname === '/studio/internal/archive') {
-    const repository = new GitHubRepository({
-      appId: environment.GITHUB_APP_ID,
-      installationId: environment.GITHUB_INSTALLATION_ID,
-      privateKey: environment.GITHUB_PRIVATE_KEY,
-      repository: environment.GITHUB_REPOSITORY,
-      branch: environment.GITHUB_BRANCH,
-    });
-    const token = await repository.installationToken();
-    const existing = await environment.DRAFTS.get('metadata/base-sha');
-    const sha = existing ? await existing.text() : await repository.head(token);
-    if (!existing) {
-      await environment.DRAFTS.put('metadata/base-sha', sha);
-    }
-    const archive = await fetch(
-      `https://api.github.com/repos/${environment.GITHUB_REPOSITORY}/tarball/${sha}`,
-      {
-        headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'Astro-Studio' },
-        redirect: 'follow',
-      },
-    );
-    if (!archive.ok) {
-      throw new Error('Could not fetch repository archive');
-    }
-    return new Response(archive.body, { headers: { 'x-studio-git-sha': sha } });
+async function internalBootstrap(request: Request, environment: Environment): Promise<Response> {
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 });
   }
-  return new Response('Not found', { status: 404 });
+  const repository = new GitHubRepository({
+    appId: environment.GITHUB_APP_ID,
+    installationId: environment.GITHUB_INSTALLATION_ID,
+    privateKey: environment.GITHUB_PRIVATE_KEY,
+    repository: environment.GITHUB_REPOSITORY,
+    branch: environment.GITHUB_BRANCH,
+  });
+  const connection = await repository.publishConnection();
+  if (!connection.ok) {
+    return Response.json({ error: connection.error.message }, { status: 400 });
+  }
+  const existing = await environment.DRAFTS.get('metadata/base-sha');
+  const sha = existing ? await existing.text() : await repository.head(connection.value.token);
+  if (!/^[a-f0-9]{40}$/.test(sha)) {
+    throw new Error('Invalid repository baseline.');
+  }
+  if (!existing) {
+    await environment.DRAFTS.put('metadata/base-sha', sha);
+  }
+  return Response.json({ ...connection.value, sha }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 async function internalAssetState(request: Request, environment: Environment): Promise<Response> {

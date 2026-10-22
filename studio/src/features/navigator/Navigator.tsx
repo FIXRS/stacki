@@ -57,6 +57,7 @@ export function Navigator(props: NavigatorProps) {
   return (
     <div className="studio-navigator" ref={wrapper}>
       <StructurePanel
+        key={props.document?.ready ? props.document.file : 'loading'}
         {...studioElementActions(props, client ? 'client' : 'designer')}
         pageState={pageState}
         layouts={[]}

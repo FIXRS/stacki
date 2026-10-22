@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { repositoryState } from '../vendor/stacki/electron/project/publishRepositories';
+import { parseDiscoveryRequest } from '../vendor/stacki/shared/properties/publishDiscovery';
 import { sharedPublishingFixture } from './sharedPublishingFixture';
 
 const fixture = await sharedPublishingFixture();
@@ -17,29 +18,43 @@ try {
   const first = await browser.newPage();
   const second = await browser.newPage();
   const pages = [first, second];
+  let releaseSettings = () => {};
+  const settingsGate = new Promise<void>((resolve) => {
+    releaseSettings = resolve;
+  });
+  let releaseLinked = () => {};
+  const linkedGate = new Promise<void>((resolve) => {
+    releaseLinked = resolve;
+  });
+  await first.route('**/studio/api/publish/discover', async (route) => {
+    await settingsGate;
+    const request: unknown = route.request().postDataJSON();
+    if (parseDiscoveryRequest(request).provider === 'linked') {
+      await linkedGate;
+    }
+    await route.continue();
+  });
+  // The menu also discovers hosting on load; intercept before navigation to test pending discovery.
   await first.goto(fixture.url);
   await second.goto(fixture.url + '?file=src/pages/other.astro');
   for (const page of pages) {
     await page.getByTestId('ready').filter({ hasText: 'Ready' }).waitFor();
   }
-  let releaseSettings = () => {};
-  const settingsGate = new Promise<void>((resolve) => {
-    releaseSettings = resolve;
-  });
-  await first.route('**/studio/api/publish/discover', async (route) => {
-    await settingsGate;
-    await route.continue();
-  });
-  // First publish configures the project instead of failing or deploying implicitly.
-  await first.getByRole('button', { name: 'Publish', exact: true }).click();
+  // Explicit settings remains usable while automatic hosting discovery is still pending.
+  await first.getByRole('button', { name: 'More publish options', exact: true }).click();
+  await first.getByRole('button', { name: 'Publish settings…', exact: true }).click();
   await first.getByRole('dialog', { name: 'Publish settings' }).waitFor();
   const loadingPanel = first.locator('.publish-settings[data-popup-phase="open"]');
   await loadingPanel.waitFor();
   await loadingPanel.evaluate(async (element) => {
     await Promise.all(element.getAnimations().map((animation) => animation.finished));
   });
-  const loadingFields = loadingPanel.locator('fieldset[aria-busy="true"] .dd-trigger');
+  const loadingFields = loadingPanel.locator('.publish-fields .dd-trigger');
   assert.equal(await loadingFields.count(), 4);
+  assert.equal(
+    await loadingPanel.getByRole('button', { name: 'Hosting provider', exact: true }).isEnabled(),
+    true,
+  );
   assert.equal(
     await loadingPanel.getByRole('button', { name: 'Save', exact: true }).isDisabled(),
     true,
@@ -62,6 +77,13 @@ try {
   await firstAccount.locator('.dd-label').filter({ hasText: 'flowtricks' }).waitFor();
   const repositoryChoice = first.getByRole('button', { name: 'GitHub repository', exact: true });
   await repositoryChoice.locator('.dd-label').filter({ hasText: 'flowtricks/site' }).waitFor();
+  assert.equal(
+    await loadingPanel.getByRole('button', { name: 'Hosting provider', exact: true }).innerText(),
+    'Checking hosting…',
+    'GitHub finishes while linked hosting is still pending',
+  );
+  releaseLinked();
+  await first.locator('.publish-settings-loading').waitFor({ state: 'hidden' });
   await first.locator('.publish-settings[data-popup-phase="open"]').waitFor();
   const panel = first.getByRole('dialog', { name: 'Publish settings' });
   await panel.evaluate(async (element) => {
@@ -123,7 +145,7 @@ try {
   await first.locator('.publish-dropdown .dd-option').filter({ hasText: 'Cloudflare' }).click();
   await first.locator('.publish-dropdown').waitFor({ state: 'hidden' });
   await first.getByText('Advanced', { exact: true }).click();
-  await first.getByLabel('Cloudflare account ID', { exact: true }).fill('account123');
+  assert.equal(await first.getByLabel('Cloudflare account ID', { exact: true }).count(), 0);
   await first.getByLabel('Pages project name', { exact: true }).fill('website');
   await first.getByRole('button', { name: 'Hosting provider', exact: true }).click();
   await first.locator('.publish-dropdown .dd-option').filter({ hasText: 'Vercel' }).click();

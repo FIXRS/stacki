@@ -9,7 +9,7 @@ source distribution does not create resources or claim that an account is config
 ### Cost controls
 
 - Website dependencies are installed into the deployment image and reused when the repository lockfile matches. Changed lockfiles use a cached install fallback. Ordinary cold starts restore drafts and start Astro without reinstalling packages.
-- One shared basic Container; three-minute sleep timeout after connections close.
+- One shared standard-2 Container (1 vCPU, 6 GiB RAM, 12 GB disk); three-minute sleep timeout after connections close.
 - The editor pauses when its tab is hidden, or after five minutes without interaction,
   once saves and requests finish. Pausing removes preview iframes and closes collaboration
   connections before background tabs can freeze their timers. Resume reconnects the draft
@@ -20,7 +20,7 @@ source distribution does not create resources or claim that an account is config
 - GitHub sync checks are sequential, at most once per minute per active editor, and skipped in hidden tabs.
 - Collaboration broadcasts and local previews update immediately. Durable snapshots batch over two seconds; unchanged snapshots are not uploaded again. Saved is acknowledged only after persistence succeeds.
 - Reconnection uses exponential backoff up to a minute; edit queues are bounded.
-- Uploads are limited to 20 MB each, 200 public asset files, and 100 MB total. Publish additionally has its existing 24 MB snapshot limit and three-minute build timeout.
+- Uploads are limited to 20 MB each, 200 public asset files, and 100 MB total. Publishing reads existing repository assets separately: up to 100,000 files / 8 GiB for GitHub and 2 GiB of source for isolated hosting builds, with a ten-minute command timeout. These budgets do not raise the separate draft-upload limits.
 - Workers have 50 ms CPU limits; paid request logging/tracing stays disabled. Unauthenticated requests cannot start the Container. Public site assets stay separate from editor compute.
 
 These reduce accidental use; they are not a monthly spending cap. Active editors, abusive traffic, other account resources, storage operations, and subscription fees can still increase the bill. Check any other account resources and subscriptions separately.
@@ -57,7 +57,7 @@ Edit `cloudflare/wrangler.jsonc`:
 - For a manually managed studio allowlist instead, omit `EDITOR_ACCESS` and set `EDITOR_GITHUB_IDS` to comma-separated numeric GitHub IDs.
 - Choose a private R2 bucket name and create it. This bucket stores shared draft state and draft assets; it is not the default published-content database.
 - Route `example.com/studio*` to this Worker while retaining the existing website's normal routing. Route the preview hostname to this Worker for all paths. Configure these routes/custom domains in your Cloudflare zone according to the website's existing Pages/Workers hosting setup.
-- Keep one Container instance for the shared project. The supplied `basic` instance and three-minute sleep timeout are starting values to measure with your site's dependencies.
+- Keep one Container instance for the shared project. The supplied `standard-2` instance and three-minute sleep timeout are starting values to measure with your site's dependencies.
 - Opening the authenticated Studio page starts preview restoration and homepage compilation while the editor assets download. Drafts and uploaded assets restore in batches of four. The canvas shows a loading state and retry control while waiting, then appears when its editing bridge is ready without waiting for every image. Sleeping containers still incur a cold start.
 - Studio startup shows an animated progress bar, the current loading stage, and elapsed time after ten seconds. Workspace requests retry up to three times with a twenty-second limit per attempt; a visible Retry control recovers from stalled or failed startup without reloading the whole site.
 
@@ -150,11 +150,32 @@ short requests. Repeated clicks share the running job. Temporary server failures
 retry status checks without resubmitting the publish. A container restart can
 interrupt an in-progress job; Studio reports that its outcome is unconfirmed and
 asks the editor to check GitHub before retrying. Deploy Studio while publishing
-is idle. Publishing compares the snapshot with the complete GitHub tree and
-uploads only changed files.
+is idle. Publishing captures Git objects and pushes only objects missing from the destination.
+GitHub-only publishing skips builds and hooks; it never sends a full base64 payload through the Worker.
 
 API authentication failures return JSON with HTTP 401, access failures use 403,
 and server outages use 503. An unexpected upstream response no longer instructs
 users to sign out. Valid, authorized sessions can return to Studio during an
 OAuth cooldown; a genuine GitHub rate limit still must expire before a new
 OAuth exchange.
+
+## Large repositories and upgrades
+
+Startup fetches the witnessed Git revision directly to disk instead of buffering an archive.
+Publishing reads file lists incrementally and keeps blob bodies out of JavaScript memory. GitHub
+App installation tokens are scoped to the configured repository and given only to the authenticated
+container for Git operations; the App private key stays in the Worker. Tokens are not persisted in
+Git config, and build/hook processes do not inherit them.
+
+Deploy the updated Worker and container together because the internal publish/bootstrap protocol
+changed. Existing `cloudflare/wrangler.jsonc` files are preserved during updates. For a photo-heavy
+1.3 GB site, select `standard-2` as a starting size, rebuild and redeploy; measure the actual build.
+Hosting requires capacity for source, temporary Git objects, a build copy, output and dependencies.
+Preflight disk checks retain a 1 GiB reserve, but arbitrary build tools still need their own limits.
+The default build caps the Node heap at 2 GiB. Larger instances cost more while awake; the idle
+sleep policy and one-instance limit remain unchanged. Small sites can retain a smaller instance
+when measured memory and disk requirements fit. GitHub-only pushes avoid the extra build cost.
+
+Limits enforced by GitHub and hosting providers still apply independently. Cloudflare static
+assets must fit its file count and per-file limits. A passing local test is not a production
+Cloudflare deployment or a measured bill.

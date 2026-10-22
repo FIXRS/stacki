@@ -4,6 +4,7 @@ import { request } from '../project/projectClient';
 import { StudioRequestError } from '../project/responseError';
 import { beginOperation } from '../session/activity';
 import { record, string } from '../../shared/validation';
+import { parseReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
 
 export function parsePublishState(value: unknown): PublishState {
   const data = record(value);
@@ -12,6 +13,9 @@ export function parsePublishState(value: unknown): PublishState {
     return { kind };
   }
   const id = string(data['id'] ?? '', 64);
+  if (kind === 'review-open') {
+    return { kind, id, ...parseReviewReceipt(data) };
+  }
   const deployment = data['deployment'];
   if (deployment !== undefined && deployment !== 'pending' && deployment !== 'live') {
     throw new Error('Invalid deployment status');

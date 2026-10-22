@@ -1,7 +1,8 @@
+import { parseAccountRequest } from './publishAccount';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
-import { parsePublishTarget } from '../properties/publishConfig';
+import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
 import { parseImageFormat, parseImagePath } from './assetConversion';
 import { parseGitHubRepository } from './githubRepository';
@@ -201,12 +202,21 @@ export const IPC_PAYLOADS = {
   'git:repositories': nothing,
   'git:clone': object({ repository: parseGitHubRepository }),
   'git:connect': object({ ...project, repository: parseGitHubRepository }),
-  'publish:start': object({ ...project, target: parsePublishTarget }),
+  'publish:start': object({
+    ...project,
+    target: parsePublishTarget,
+    commitMessage: optional(parsePublishCommitMessage),
+  }),
   'publish:state': pathText,
+  'publish:availability': pathText,
+  'publish:siteURL': pathText,
   'publish:repository': object({ ...project, request: parseRepositoryRequest }),
   'publish:discover': object({ ...project, request: parseDiscoveryRequest }),
+  'publish:account': object({ ...project, request: parseAccountRequest }),
   'git:publish': object({ ...project, repoName: text, isPrivate: boolean }),
   'git:push': object({ ...branch }),
+  'git:pull': object({ ...branch }),
+  'git:incoming': object({ ...branch }),
   'git:resolveMerge': object({ ...branch, choices: optional(dictionary(data)) }),
   'git:restoreFile': object({ ...reference, path: pathText }),
   'git:restoreProject': object({ ...reference }),

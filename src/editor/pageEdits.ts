@@ -270,6 +270,7 @@ function typedBaseline(shown: TypedFrom): CodeBaseline {
   switch (save.tag) {
     case 'clean':
     case 'dirty':
+    case 'failed':
     case 'saving': {
       // Visual edits change the model, never `source`: it is the text of the
       // origin, the bytes the page's edits were stated against.

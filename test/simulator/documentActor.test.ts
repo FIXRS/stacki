@@ -250,14 +250,10 @@ function digestOf(text: string): Digest {
   return sha256(encodeUtf8(text));
 }
 
-// The app's projector derives a snapshot's projection only when something
-// reads it (shared/page/snapshot.ts): once, memoized, measured against its bytes.
-// Found by the step-8 long run (seed 139), reduced by line: outside edits left a
-// comment inside two tags, which the parser reads as bare attributes. The
-// planner appends an attribute where it sees the <img>'s tag end — inside the
-// comment's `-->` — and the candidate still parses, but the loop around the
-// target now reads as code: the node is gone. That crashed the actor on an
-// assertion; outside bytes are input, so it is a refusal (plan §5.2 step 6).
+// Found by the step-8 long run (seed 139): external edits put comments inside
+// unfinished tags. The old parser exposed a fake image and later lost it during
+// an attribute edit. Balanced tag scanning rejects that target before editing;
+// the valid enclosing expression remains opaque and its bytes stay untouched.
 const COMMENTS_IN_TAGS = [
   '<ul class="filter_content_list">',
   '  {items.map((item) => {',
@@ -307,33 +303,15 @@ const COMMENTS_IN_TAGS = [
   '</ul>',
 ].join('\n');
 
-test('an edit that parses but loses its target is refused, not an assertion', () => {
+test('malformed tags inside expressions never expose a false native edit target', () => {
   const disk = fakeWith(COMMENTS_IN_TAGS);
   const snapshot = SIMULATOR_PROJECTOR.snapshot(PAGE, encodeUtf8(COMMENTS_IN_TAGS));
   assert.equal(snapshot.projection.tag, 'valid');
-  const image =
-    snapshot.projection.tag === 'valid'
-      ? snapshot.projection.nodes.find(
-          (node) => node.span.start === COMMENTS_IN_TAGS.indexOf('<img'),
-        )
-      : undefined;
-  assert.ok(image !== undefined, 'the parser reads an <img> element there');
-  intents += 1;
-  const intent = toIntent({
-    id: toIntentId(`actor-test-${intents}`),
-    file: PAGE,
-    authoredChecksum: snapshot.checksum,
-    anchor: { span: image.span, path: image.path, expectedKind: image.kind },
-    operation: {
-      tag: 'set-attribute',
-      name: 'data-absent',
-      value: { type: 'string', value: 'New' },
-    },
-  });
-  const { outcomes } = run(submitted(intent), setup(disk));
-  assert.deepEqual(outcomes, [
-    { tag: 'rejected', intentId: intent.id, reason: 'unsupported-operation' },
-  ]);
+  assert.ok(snapshot.projection.tag === 'valid');
+  const image = snapshot.projection.nodes.find(
+    (node) => node.span.start === COMMENTS_IN_TAGS.indexOf('<img'),
+  );
+  assert.equal(image, undefined, 'an unfinished tag cannot become an editable image');
   const held = disk.read(PAGE);
   assert.ok(held.ok);
   assert.equal(new TextDecoder().decode(held.value.bytes), COMMENTS_IN_TAGS, 'nothing written');

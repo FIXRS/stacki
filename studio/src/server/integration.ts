@@ -1,4 +1,5 @@
 import { createAstroNotifications } from '../features/notifications/astroNotificationServer';
+import { readPackagePreviews } from '../../vendor/stacki/electron/lib/componentSources';
 import { METADATA_FILES } from '../../vendor/stacki/shared/properties/projectMetadata';
 import { isDefaultsCanvas } from '../../vendor/stacki/shared/properties/defaultsCanvas';
 import { pushWrittenSource } from '../features/preview/pushWrittenSource';
@@ -32,14 +33,28 @@ interface Options {
   readonly port: number;
   readonly editing?: 'source' | 'draft';
 }
+interface PreviewOptions extends Options {
+  readonly trailingSlash: 'always' | 'never' | 'ignore';
+}
 import type { ViteDevServer, HMRPayload, Plugin } from 'vite';
 export default function studio(options: Options): AstroIntegration {
+  let prioritizeRequests = () => {};
   const rooms = createRooms(options.root);
   const features = featureRoutes(options.root, rooms);
   return {
     name: 'astro-studio-cms',
     hooks: {
-      'astro:config:setup': async ({ updateConfig, addMiddleware, injectRoute, command }) => {
+      'astro:server:setup': ({ server }) => {
+        prioritizeRequests = () => prioritizeStudioRequests(server);
+      },
+      'astro:server:start': () => prioritizeRequests(),
+      'astro:config:setup': async ({
+        updateConfig,
+        addMiddleware,
+        injectRoute,
+        command,
+        config,
+      }) => {
         if (command === 'dev') {
           const entrypoint = path.join(options.root, '.studio-state/component-preview.astro');
           await writeFile(entrypoint, renderComponentPreviewPage());
@@ -52,8 +67,8 @@ export default function studio(options: Options): AstroIntegration {
         updateConfig({
           vite: {
             plugins: [
-              componentPreviewPlugin([options.root]),
-              previewPlugin(options, features, rooms),
+              componentPreviewPlugin([options.root], readPackagePreviews),
+              previewPlugin({ ...options, trailingSlash: config.trailingSlash }, features, rooms),
             ],
           },
         });
@@ -61,8 +76,22 @@ export default function studio(options: Options): AstroIntegration {
     },
   };
 }
+function prioritizeStudioRequests(server: ViteDevServer): void {
+  // Astro prepends route policy after Vite configureServer and server:setup.
+  // At server:start, move only our authenticated namespace ahead of site routing.
+  const index = server.middlewares.stack.findIndex(
+    (entry) => typeof entry.handle === 'function' && entry.handle.name === 'studioRequests',
+  );
+  if (index >= 0) {
+    const [entry] = server.middlewares.stack.splice(index, 1);
+    if (entry) {
+      server.middlewares.stack.unshift(entry);
+    }
+  }
+}
+
 function previewPlugin(
-  options: Options,
+  options: PreviewOptions,
   features: ReturnType<typeof featureRoutes>,
   rooms: ReturnType<typeof createRooms>,
 ): Plugin {
@@ -226,7 +255,7 @@ async function bodyBytes(request: IncomingMessage, maximum: number) {
 
 function configureStudioServer(
   server: ViteDevServer,
-  options: Options,
+  options: PreviewOptions,
   features: ReturnType<typeof featureRoutes>,
   rooms: ReturnType<typeof createRooms>,
 ) {
@@ -400,13 +429,22 @@ async function sendAsset(response: ServerResponse, root: string, url: URL) {
 
 function configureStudioRequests(
   server: ViteDevServer,
-  options: Options,
+  options: PreviewOptions,
   features: ReturnType<typeof featureRoutes>,
   rooms: ReturnType<typeof createRooms>,
   subscribe: ReturnType<typeof createAstroNotifications>,
 ) {
-  server.middlewares.use((request, response, next) => {
-    if (!request.url?.startsWith('/studio')) {
+  server.middlewares.use(function studioRequests(request, response, next) {
+    const url = new URL(request.url ?? '/', 'http://studio');
+    const pathname = url.pathname;
+    if (pathname === '/__avb/preview' || pathname === '/__avb/preview/') {
+      // Internal preview links remain stable while Astro enforces the site's route policy.
+      url.pathname = options.trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';
+      request.url = url.pathname + url.search;
+      next();
+      return;
+    }
+    if (pathname !== '/studio' && !pathname.startsWith('/studio/')) {
       next();
       return;
     }

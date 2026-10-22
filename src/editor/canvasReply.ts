@@ -10,6 +10,8 @@ import {
   text,
 } from '../../shared/core/boundary';
 import { parseStyleSource } from '../../shared/properties/styleSource';
+import { parsePageImage, parsePageType } from '../../shared/properties/pageMetadata';
+import { parsePageText, type PageText } from '../../shared/properties/pageText';
 import { err, ok, type Result } from '../../shared/core/result';
 
 const identity = object({
@@ -22,6 +24,9 @@ const reply = object({
   id: count,
   found: boolean,
   ready: optional(boolean),
+  pageImage: optional(parsePageImage),
+  pageType: optional(parsePageType),
+  pageText: optional(parsePageText),
   identity: optional(identity),
   matched: optional(dictionary(optional(boolean))),
   computed: optional(dictionary(optional(text))),
@@ -33,6 +38,9 @@ export type CanvasReply = ReturnType<typeof reply>;
 // An answer's maps are the reply's own: a value the page could not resolve
 // arrives absent (`undefined`), as everywhere in the app (AGENTS.md §6).
 export type CanvasAnswer = {
+  readonly pageText?: PageText | undefined;
+  readonly pageImage?: string | undefined;
+  readonly pageType?: string | undefined;
   readonly identity: CanvasReply['identity'];
   readonly matched: NonNullable<CanvasReply['matched']>;
   readonly computed: NonNullable<CanvasReply['computed']>;

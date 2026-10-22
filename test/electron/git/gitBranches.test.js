@@ -26,6 +26,14 @@ const {
   switchBranch,
   resolveMerge,
 } = require('#dist/electron/git/gitBranches.js');
+const { parkBranch, unparkBranch } = require('#dist/electron/git/gitParking.js');
+const { setToolPathHome } = require('#dist/electron/lib/nodeTools.js');
+setToolPathHome(os.homedir());
+
+const parking = (projectPath) => ({
+  park: (branch) => parkBranch(projectPath, branch),
+  unpark: (branch) => unparkBranch(projectPath, branch),
+});
 
 const failures = [];
 let checked = 0;
@@ -682,10 +690,8 @@ const caught = async (callback) => {
 
   // --- Switching with work in progress -------------------------------------
   //
-  // What every other editor does, and what this used to get wrong: it asked
-  // what to do with uncommitted changes BEFORE trying, so the ordinary case —
-  // a file that is the same on both branches — became a dialog about a problem
-  // that was never going to happen.
+  // Even compatible edits belong to the original branch, so previews show
+  // the destination's files rather than a mixture of two branches.
   {
     const directory = await repo('switch');
     cleanup.push(directory);
@@ -695,18 +701,22 @@ const caught = async (callback) => {
     await sh(directory, 'branch', 'feature');
 
     fs.writeFileSync(path.join(directory, 'shared.txt'), 'work in progress\n');
-    const result = await switchBranch(git, { projectPath: directory, branch: 'feature' });
+    const result = await switchBranch(git, {
+      projectPath: directory,
+      branch: 'feature',
+      ...parking(directory),
+    });
     check('a switch with unsaved work just happens', result.ok === true, JSON.stringify(result));
     check(
       'landing on the branch',
       (await sh(directory, 'rev-parse', '--abbrev-ref', 'HEAD')) === 'feature',
     );
     check(
-      'with the work carried across',
-      fs.readFileSync(path.join(directory, 'shared.txt'), 'utf8') === 'work in progress\n',
+      'with only the destination version visible',
+      fs.readFileSync(path.join(directory, 'shared.txt'), 'utf8') === 'same on both\n',
       fs.readFileSync(path.join(directory, 'shared.txt'), 'utf8'),
     );
-    check('nothing was parked', result.parked === false, JSON.stringify(result));
+    check('the edits were parked', result.parked === true, JSON.stringify(result));
     check(
       'and nothing was committed',
       (await sh(directory, 'log', '-1', '--format=%s')) === 'shared',
@@ -724,29 +734,25 @@ const caught = async (callback) => {
     await sh(directory, 'checkout', '-q', 'main');
     fs.writeFileSync(path.join(directory, 'a.txt'), 'unsaved work\n');
 
-    const result = await switchBranch(git, { projectPath: directory, branch: 'feature' });
-    // A question, not an error — returned with the files git named so the UI
-    // can ask about those rather than about "uncommitted changes" in general.
+    const result = await switchBranch(git, {
+      projectPath: directory,
+      branch: 'feature',
+      ...parking(directory),
+    });
     check(
-      'a switch that would destroy work is refused',
-      result.ok === false,
+      'overlapping edits are parked without requiring a commit',
+      result.ok === true,
       JSON.stringify(result),
     );
-    check('and flagged as the question it is', result.blocked === true, JSON.stringify(result));
+    check('the source edits were parked', result.parked === true, JSON.stringify(result));
+    check('the destination is clean', (await sh(directory, 'status', '--porcelain')) === '');
     check(
-      'naming the file in the way',
-      (result.files || []).includes('a.txt'),
-      JSON.stringify(result.files),
-    );
-    // HEAD must not move: an editor that believes it switched when it did not
-    // writes every later edit onto the wrong branch.
-    check(
-      'you are still where you were',
-      (await sh(directory, 'rev-parse', '--abbrev-ref', 'HEAD')) === 'main',
+      'the branch switched',
+      (await sh(directory, 'rev-parse', '--abbrev-ref', 'HEAD')) === 'feature',
     );
     check(
-      'and the work is untouched',
-      fs.readFileSync(path.join(directory, 'a.txt'), 'utf8') === 'unsaved work\n',
+      'the destination content is visible',
+      fs.readFileSync(path.join(directory, 'a.txt'), 'utf8') === 'feature version\n',
     );
   }
 
@@ -760,6 +766,7 @@ const caught = async (callback) => {
       projectPath: directory,
       branch: 'idea',
       create: true,
+      ...parking(directory),
     });
     check('a new branch is made', result.ok === true, JSON.stringify(result));
     check('and checked out', (await sh(directory, 'rev-parse', '--abbrev-ref', 'HEAD')) === 'idea');

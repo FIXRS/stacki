@@ -95,8 +95,9 @@ test('publishing removes identical stored copies but preserves the project and n
       [
         {
           path: 'public/published.png',
-          content: Buffer.from('committed').toString('base64'),
-          encoding: 'base64',
+          sha: gitBlob(Buffer.from('committed')),
+          mode: '100644',
+          size: 9,
         },
       ],
       'a'.repeat(40),
@@ -124,7 +125,7 @@ test('a published path with different draft bytes is never treated as an unused 
     );
     assert.deepEqual((await cleanup.inspect()).candidates, []);
     const result = await cleanup.afterPublish(
-      [{ path: 'public/photo.png', content: 'older' }],
+      [{ path: 'public/photo.png', sha: gitBlob(Buffer.from('older')), mode: '100644', size: 5 }],
       'a'.repeat(40),
     );
     assert.equal(result.removed, 0);

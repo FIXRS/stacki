@@ -17,6 +17,7 @@ export const studioDefaultsHost = {
     const [project, stored] = await Promise.all([loadProject(), readMetadata('', 'components')]);
     const catalog: readonly DefaultComponent[] = project.components.map((component) => ({
       file: component.file,
+      ...(component.importPath === undefined ? {} : { importPath: component.importPath }),
       name: component.name,
       props: component.fields.map((field) => field.name),
       slots: component.slots,

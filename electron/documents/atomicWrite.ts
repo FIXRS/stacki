@@ -5,7 +5,7 @@
 //
 // Why atomic: a plain writeFileSync truncates the target first, so a crash, a
 // full disk or a concurrent reader can observe a half-written page. Here the
-// bytes go to a temporary file in a stable hidden child directory (same filesystem,
+// bytes go to a temporary file in a project’s .stacki/io directory (same filesystem,
 // so the rename is atomic), are flushed, and replace the target in one rename.
 // The target holds the old bytes or the new ones, never a mixture.
 //
@@ -44,7 +44,7 @@ import { assert } from '../../shared/core/assert';
 import { toDigest, type Digest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
-import { ATOMIC_DIRECTORY, prepareAtomicDirectory } from './atomicDirectory';
+import { prepareAtomicDirectory } from './atomicDirectory';
 
 /** Why a write did not happen, or did without a durability promise. */
 export type AtomicWriteError =
@@ -71,7 +71,11 @@ export function digestOf(bytes: Uint8Array | string): Digest {
 /** True for the temporary and lock files the write protocol creates, so the
  * project watcher can ignore them instead of reporting an outside edit. */
 export function isAtomicTemporary(name: string): boolean {
-  if (name.split(/[\\/]/).includes(ATOMIC_DIRECTORY)) {
+  if (/(?:^|[\\/])\.stacki[\\/]io(?:[\\/]|$)/.test(name)) {
+    return true;
+  }
+  // Recognize older staging folders until projects have removed them.
+  if (name.split(/[\\/]/).includes('.stacki-io')) {
     return true;
   }
   const base = path.basename(name);

@@ -34,6 +34,7 @@ export interface ComponentDefaults {
   readonly components: Readonly<Record<string, ComponentRecipe>>;
 }
 export interface DefaultComponent {
+  readonly importPath?: string;
   readonly file: string;
   readonly name: string;
   readonly props: readonly string[];
@@ -48,8 +49,11 @@ export interface DefaultsSnapshot {
 
 export function componentFile(input: unknown): string {
   const value = text(input);
-  if (value.length > 500 || !/^src\/[\w./ -]+\.astro$/.test(value)) {
-    throw new Error('Component defaults: expected a project-relative .astro path under src/');
+  if (
+    value.length > 500 ||
+    !/^(src\/|node_modules\/(?:@[\w.-]+\/)?[\w.-]+\/)[\w./ -]+\.astro$/.test(value)
+  ) {
+    throw new Error('Component defaults: expected a project-relative component .astro path');
   }
   if (value.split('/').some((part) => part.startsWith('.') || part === '')) {
     throw new Error('Component defaults: invalid path segment');
@@ -97,6 +101,7 @@ export function parseDefaultsSource(source: string): Result<ComponentDefaults> {
 }
 
 export const parseDefaultComponent = object({
+  importPath: optional(text),
   file: componentFile,
   name: text,
   props: list(text),

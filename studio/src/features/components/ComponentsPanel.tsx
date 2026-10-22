@@ -38,6 +38,7 @@ export function ComponentsPanel({
           return {
             name: component.name,
             path: component.file,
+            ...(component.origin === undefined ? {} : { origin: component.origin }),
             folder: component.file
               .replace(/^src\/components\//, '')
               .split('/')

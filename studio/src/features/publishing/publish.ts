@@ -8,23 +8,26 @@ import {
   runPublishScripts,
 } from '../../../vendor/stacki/electron/project/publishCommands';
 import { readMetadataSource } from '../settings/projectMetadata';
-import { metadataFiles } from '../settings/projectMetadata';
-import { GitHubChangedError } from '../github/githubErrors';
-import { readAssetState } from '../assets/assetState';
 import { deploymentFromEnvironment } from './deployment';
-import { cp, readFile, writeFile, symlink, rm, stat, realpath } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { GitHubRepository, type RepositoryFile, type RepositoryAccess } from '../github/github';
+import { GitHubRepository, type RepositoryAccess } from '../github/github';
 import { RemoteRepository } from '../github/remoteRepository';
-import { walk, safePath } from '../project/projectServer';
+import { ok } from '../../../vendor/stacki/shared/core/result';
+import type { PublishReceipt } from '../github/nativePublish';
+import { NativeRepository } from '../github/nativeRepository';
+import { capturePublishSource, type PublishedFile } from './publishSource';
+import { createHostingSnapshot } from './publishHostingSnapshot';
+import { published, publishFailure, PublishFailure } from './publishFailure';
 import { record, string } from '../../shared/validation';
 import { SerialQueue } from '../../shared/serialQueue';
+import type { ReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
 
 export type PublishStage = 'preparing' | 'building' | 'committing' | 'cleanup' | 'deploying';
 export type PublishState =
+  | ({ readonly kind: 'review-open'; readonly id: string } & ReviewReceipt)
   | { readonly kind: 'idle' }
   | {
       readonly kind: 'building';
@@ -66,7 +69,7 @@ export class Publisher {
     readonly coordinator = new SerialQueue(),
     readonly build: (root: string) => Promise<void> = runBuild,
     readonly cleanup?: (
-      files: readonly RepositoryFile[],
+      files: readonly PublishedFile[],
       sha: string,
     ) => Promise<{ readonly warning?: string }>,
     readonly deploy:
@@ -80,7 +83,11 @@ export class Publisher {
     if (!this.running) {
       // Respond before building. The browser polls this job instead of holding
       // one request open through a build, GitHub commit, and storage cleanup.
-      void this.publish(target).catch(() => console.error('Publish snapshot cleanup failed'));
+      void this.publish(target).catch((error: unknown) => {
+        queueMicrotask(() => {
+          throw error;
+        });
+      });
     }
     return this.state;
   }
@@ -99,39 +106,33 @@ export class Publisher {
       ...(this.deploy ? { deployment: 'pending' as const } : {}),
     };
     this.state = { ...progress, stage: 'preparing' };
-    const snapshot = path.join(tmpdir(), 'astro-studio-publish-' + id);
+    const temporary = path.join(tmpdir(), 'astro-studio-publish-' + id);
+    const snapshot = path.join(temporary, 'site');
     let savedToGitHub = false;
     try {
-      const config = parsePublishSource((await readMetadataSource(this.root, 'publish')).source);
+      const config = published(
+        await readMetadataSource(this.root, 'publish')
+          .then((stored) => parsePublishSource(stored.source))
+          .then(ok, publishFailure),
+      );
+      if (config.githubWorkflow?.kind === 'pull-request') {
+        if (target === 'hosting') {
+          throw new PublishFailure(
+            'Submit changes for review and deploy the merged branch through your repository workflow.',
+          );
+        }
+        return await this.submitReview(temporary, progress);
+      }
       if (target === 'hosting') {
         return await this.publishHosting(snapshot, progress, config);
       }
       const { files, result } = await this.buildAndCommit(snapshot, progress, config, target);
       savedToGitHub = true;
-      this.state = { ...progress, stage: 'cleanup' };
-      await writeFile(
-        path.join(this.root, '.studio-state/github-base.json'),
-        JSON.stringify({ sha: result.sha }),
-      );
-      const cleanupWarning = await this.cleanPublishedAssets(files, result.sha);
-      const deployment =
-        target === 'github'
-          ? undefined
-          : config.hosting.provider !== 'none'
-            ? await this.deployConfigured(snapshot, progress, config)
-            : this.deploy
-              ? await this.confirmDeployment(result.sha, progress)
-              : undefined;
-      await afterPublish(snapshot, config, target, { hostingComplete: deployment === 'live' });
-      this.state = {
-        kind: 'committed',
-        id,
-        ...result,
-        ...(cleanupWarning ? { cleanupWarning } : {}),
-        ...(deployment ? { deployment } : {}),
-      };
-      return this.state;
+      return await this.completePublish(snapshot, progress, config, target, files, result);
     } catch (error) {
+      if (!(error instanceof PublishFailure)) {
+        throw error;
+      }
       this.state = {
         kind: 'failed',
         id,
@@ -142,8 +143,83 @@ export class Publisher {
       return this.state;
     } finally {
       this.running = false;
-      await rm(snapshot, { recursive: true, force: true });
+      const cleanup = await rm(temporary, { recursive: true, force: true }).then(
+        ok,
+        publishFailure,
+      );
+      if (!cleanup.ok) {
+        console.error('Publish temporary directory cleanup failed.');
+      }
     }
+  }
+  private async completePublish(
+    snapshot: string,
+    progress: Extract<PublishState, { kind: 'building' }>,
+    config: PublishConfig,
+    target: PublishTarget,
+    files: readonly PublishedFile[],
+    result: PublishReceipt,
+  ): Promise<PublishState> {
+    this.state = { ...progress, stage: 'cleanup' };
+    if (this.github) {
+      published(await this.github.acceptBase(result.sha).then(ok, publishFailure));
+    }
+    published(
+      await writeFile(
+        path.join(this.root, '.studio-state/github-base.json'),
+        JSON.stringify({ sha: result.sha }),
+      ).then(ok, publishFailure),
+    );
+    const cleanupWarning = await this.cleanPublishedAssets(files, result.sha);
+    const deployment =
+      target === 'github'
+        ? undefined
+        : config.hosting.provider !== 'none'
+          ? await this.deployConfigured(snapshot, progress, config)
+          : this.deploy
+            ? await this.confirmDeployment(result.sha, progress)
+            : undefined;
+    if (target !== 'github' && config.hosting.provider !== 'none') {
+      await afterPublish(snapshot, config, target, { hostingComplete: deployment === 'live' });
+    }
+    this.state = {
+      kind: 'committed',
+      id: progress.id,
+      ...result,
+      ...(cleanupWarning ? { cleanupWarning } : {}),
+      ...(deployment ? { deployment } : {}),
+    };
+    return this.state;
+  }
+  private async submitReview(
+    temporary: string,
+    progress: Extract<PublishState, { kind: 'building' }>,
+  ): Promise<PublishState> {
+    if (!this.github?.review) {
+      throw new PublishFailure('This repository connection does not support pull request review.');
+    }
+    if (this.refresh) {
+      published(await this.refresh().then(ok, publishFailure));
+    }
+    const captured = await this.coordinator.run(async () => {
+      const expectedHead = published(
+        await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')
+          .then((body) => {
+            const baseline: unknown = JSON.parse(body);
+            const sha = string(record(baseline)['sha'], 40);
+            if (!/^[a-f0-9]{40}$/.test(sha)) {
+              throw new Error('Invalid review baseline.');
+            }
+            return sha;
+          })
+          .then(ok, publishFailure),
+      );
+      return { expectedHead, source: published(await capturePublishSource(this.root, temporary)) };
+    });
+    this.state = { ...progress, stage: 'committing' };
+    const receipt = published(await this.github.review(captured.source, captured.expectedHead));
+    this.state = { kind: 'review-open', id: progress.id, ...receipt };
+    return this.state;
   }
   private async buildAndCommit(
     snapshot: string,
@@ -157,38 +233,60 @@ export class Publisher {
     }
     for (let attempt = 0; attempt < 3; attempt++) {
       this.state = { ...progress, stage: 'preparing' };
-      await this.refresh?.();
-      const { files, expectedHead } = await this.coordinator.run(async () => {
-        const baseline = record(
-          JSON.parse(
-            await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8'),
-          ),
+      if (this.refresh) {
+        published(await this.refresh().then(ok, publishFailure));
+      }
+      const { source, expectedHead } = await this.coordinator.run(async () => {
+        const expectedHead = published(
+          await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')
+            .then((body) => {
+              const baseline: unknown = JSON.parse(body);
+              const sha = string(record(baseline)['sha'], 40);
+              if (!/^[a-f0-9]{40}$/.test(sha)) {
+                throw new Error('Invalid publish baseline.');
+              }
+              return sha;
+            })
+            .then(ok, publishFailure),
         );
-        return { expectedHead: string(baseline['sha'], 64), files: await this.snapshot(snapshot) };
+        if (target !== 'github' && config.hosting.provider !== 'none') {
+          published(await createHostingSnapshot(this.root, snapshot));
+        }
+        const sourceRoot =
+          target !== 'github' && config.hosting.provider !== 'none' ? snapshot : this.root;
+        const source = published(
+          await capturePublishSource(sourceRoot, path.dirname(snapshot), { assetRoot: this.root }),
+        );
+        return { source, expectedHead };
       });
-      this.state = { ...progress, stage: 'building' };
-      await runPublishScripts(snapshot, config.beforePublish, { STACKI_PUBLISH_TARGET: target });
-      if (config.buildScript === 'build') {
-        await this.build(snapshot);
-      } else {
-        await runPublishScripts(snapshot, [config.buildScript]);
+      if (target !== 'github' && config.hosting.provider !== 'none') {
+        this.state = { ...progress, stage: 'building' };
+        published(
+          await runPublishScripts(snapshot, config.beforePublish, {
+            STACKI_PUBLISH_TARGET: target,
+          }).then(ok, publishFailure),
+        );
+        if (config.buildScript === 'build') {
+          published(await this.build(snapshot).then(ok, publishFailure));
+        } else {
+          published(
+            await runPublishScripts(snapshot, [config.buildScript]).then(ok, publishFailure),
+          );
+        }
       }
       this.state = { ...progress, stage: 'committing' };
-      try {
-        const result = await github.commit(
-          files,
-          expectedHead,
-          'Publish website from Astro Studio',
-        );
-        return { files, result };
-      } catch (error) {
-        if (!(error instanceof GitHubChangedError) || !this.refresh || attempt === 2) {
-          throw error;
-        }
-        await rm(snapshot, { recursive: true, force: true });
+      const result = await github.commit(source, expectedHead);
+      if (result.ok) {
+        return { files: source.files, result: result.value };
       }
+      if (result.error.code !== 'github_changed' || !this.refresh || attempt === 2) {
+        published(result);
+      }
+      published(
+        await rm(path.dirname(snapshot), { recursive: true, force: true }).then(ok, publishFailure),
+      );
     }
-    throw new Error('GitHub is changing too quickly. Try publishing again.');
+    throw new PublishFailure('GitHub is changing too quickly. Try publishing again.');
   }
   private async deployConfigured(
     snapshot: string,
@@ -196,7 +294,7 @@ export class Publisher {
     config: PublishConfig,
   ): Promise<'live'> {
     this.state = { ...progress, stage: 'deploying', deployment: 'pending' };
-    await deployHosting(snapshot, config);
+    published(await deployHosting(snapshot, config).then(ok, publishFailure));
     return 'live';
   }
   private async publishHosting(
@@ -205,15 +303,21 @@ export class Publisher {
     config: PublishConfig,
   ): Promise<PublishState> {
     if (config.hosting.provider === 'none') {
-      throw new Error('Choose a hosting provider in Publish settings.');
+      throw new PublishFailure('Choose a hosting provider in Publish settings.');
     }
-    await this.coordinator.run(() => this.snapshot(snapshot));
+    await this.coordinator.run(async () => {
+      published(await createHostingSnapshot(this.root, snapshot));
+    });
     this.state = { ...progress, stage: 'building', deployment: 'pending' };
-    await runPublishScripts(snapshot, config.beforePublish, { STACKI_PUBLISH_TARGET: 'hosting' });
+    published(
+      await runPublishScripts(snapshot, config.beforePublish, {
+        STACKI_PUBLISH_TARGET: 'hosting',
+      }).then(ok, publishFailure),
+    );
     if (config.buildScript === 'build') {
-      await this.build(snapshot);
+      published(await this.build(snapshot).then(ok, publishFailure));
     } else {
-      await runPublishScripts(snapshot, [config.buildScript]);
+      published(await runPublishScripts(snapshot, [config.buildScript]).then(ok, publishFailure));
     }
     await this.deployConfigured(snapshot, progress, config);
     await afterPublish(snapshot, config, 'hosting', { hostingComplete: true });
@@ -234,121 +338,30 @@ export class Publisher {
     this.state = { ...progress, stage: 'deploying' };
     try {
       return (await this.deploy?.(sha)) ?? 'pending';
-    } catch {
+    } catch (error: unknown) {
+      publishFailure(error);
       return 'pending';
     }
   }
-  private async cleanPublishedAssets(files: readonly RepositoryFile[], sha: string) {
+  private async cleanPublishedAssets(files: readonly PublishedFile[], sha: string) {
     try {
       return (await this.cleanup?.(files, sha))?.warning;
-    } catch {
+    } catch (error: unknown) {
+      publishFailure(error);
       return 'Published successfully. Storage cleanup could not finish; retry from Assets.';
     }
   }
-  private async snapshot(destination: string): Promise<RepositoryFile[]> {
-    const files = [
-      ...(await walk(this.root, 'src')),
-      ...(await walk(this.root, 'public')),
-      ...(await metadataFiles(this.root)),
-    ];
-    if (files.length > 1000) {
-      throw new Error('Publish exceeds the 1,000-file limit');
-    }
-    const sizes = await Promise.all(
-      files.map(async (file) => (await stat(await safePath(this.root, file))).size),
-    );
-    if (
-      sizes.some((size) => size > 20_000_000) ||
-      sizes.reduce((total, size) => total + size, 0) > 24_000_000
-    ) {
-      throw new Error(
-        'Publish exceeds 20 MB per asset or 24 MB total. Optimize assets before publishing.',
-      );
-    }
-    await cp(this.root, destination, {
-      recursive: true,
-      filter: (file) =>
-        path.relative(this.root, file) !== path.join('.stacki', 'preview') &&
-        path.relative(this.root, file) !== path.join('.stacki', 'canvas') &&
-        ![
-          'node_modules',
-          '.studio-state',
-          '.astro',
-          'dist',
-          '.git',
-          'astro.studio.config.mjs',
-          'astro.studio.config.ts',
-        ].includes(path.basename(file)),
-    });
-    // Astro closes its configuration module runner before this callback runs.
-    // Keep runtime dependencies statically imported so publishing still works.
-    await symlink(
-      await realpath(path.join(this.root, 'node_modules')),
-      path.join(destination, 'node_modules'),
-      'dir',
-    );
-    const assets = await readAssetState(this.root);
-    const contents = await Promise.all(
-      files.map(async (file) => {
-        const bytes = await readFile(await safePath(destination, file));
-        if (bytes.length > 20_000_000) {
-          throw new Error('Asset exceeds publish size limit');
-        }
-        return { path: file, content: bytes.toString('base64'), encoding: 'base64' as const };
-      }),
-    );
-    return [
-      ...contents,
-      ...assets.deleted
-        .filter((file) => !files.includes(file))
-        .map((file) => ({ path: file, content: '', encoding: 'base64' as const, deleted: true })),
-    ];
-  }
 }
+
 export async function runBuild(root: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'], {
-      // Windows executes npm's command shim through its shell; arguments are fixed.
-      shell: process.platform === 'win32',
-      cwd: root,
-      env: {
-        PATH: process.env['PATH'],
-        HOME: process.env['HOME'],
-        SystemRoot: process.env['SystemRoot'],
-        ComSpec: process.env['ComSpec'],
-        TEMP: process.env['TEMP'],
-        TMP: process.env['TMP'],
-        USERPROFILE: process.env['USERPROFILE'],
-        NODE_ENV: 'production',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let log = '';
-    const collect = (chunk: Buffer) => {
-      log = (log + chunk.toString()).slice(-12_000);
-    };
-    child.stdout.on('data', collect);
-    child.stderr.on('data', collect);
-    const timeout = setTimeout(() => child.kill('SIGKILL'), 180_000);
-    child.on('error', (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on('close', (code) => {
-      clearTimeout(timeout);
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Build failed; the live site was not changed.\n${log}`));
-      }
-    });
-  });
+  // A bounded child heap leaves room for the preview and Git on the standard-2 container.
+  await runPublishScripts(root, ['build'], { NODE_OPTIONS: '--max-old-space-size=2048' });
 }
 export function githubFromEnvironment() {
   const backend = process.env['STUDIO_BACKEND_URL'];
   const token = process.env['STUDIO_CONTAINER_TOKEN'];
   if (backend && token) {
-    return new RemoteRepository(backend, token);
+    return new NativeRepository(new RemoteRepository(backend, token));
   }
   const appId = process.env['GITHUB_APP_ID'];
   const installationId = process.env['GITHUB_INSTALLATION_ID'];
@@ -357,13 +370,15 @@ export function githubFromEnvironment() {
   if (!appId || !installationId || !privateKey || !repository) {
     return undefined;
   }
-  return new GitHubRepository({
-    appId,
-    installationId,
-    privateKey,
-    repository,
-    branch: process.env['GITHUB_BRANCH'] ?? 'main',
-  });
+  return new NativeRepository(
+    new GitHubRepository({
+      appId,
+      installationId,
+      privateKey,
+      repository,
+      branch: process.env['GITHUB_BRANCH'] ?? 'main',
+    }),
+  );
 }
 
 async function afterPublish(
@@ -375,7 +390,10 @@ async function afterPublish(
   try {
     await runPublishScripts(snapshot, config.afterPublish, { STACKI_PUBLISH_TARGET: target });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'After-publish scripts failed.';
-    throw new Error((options.hostingComplete ? 'Hosting deployment completed. ' : '') + message);
+    const failure = publishFailure(error);
+    const message = failure.ok ? '' : failure.error.message;
+    throw new PublishFailure(
+      (options.hostingComplete ? 'Hosting deployment completed. ' : '') + message,
+    );
   }
 }

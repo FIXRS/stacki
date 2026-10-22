@@ -82,7 +82,30 @@ button:hover:not(:disabled):where(:not(.style-panel-host *, .style-panel-surface
 }
 button:disabled {
   opacity: 0.4;
-  cursor: default;
+}
+/* Disabled controls keep the same cursor over labels and icons, even when
+   individual features supply their own cursor styles. */
+button:is(:disabled, [aria-disabled='true']),
+button:is(:disabled, [aria-disabled='true']) * {
+  cursor: not-allowed !important;
+}
+/* A selected option is already in effect, rather than an unavailable action. */
+button:is(:disabled, [aria-disabled='true']):is(
+    [aria-current]:not([aria-current='false']),
+    [aria-selected='true'],
+    [aria-pressed='true'],
+    .active,
+    .on
+  ),
+button:is(:disabled, [aria-disabled='true']):is(
+    [aria-current]:not([aria-current='false']),
+    [aria-selected='true'],
+    [aria-pressed='true'],
+    .active,
+    .on
+  )
+  * {
+  cursor: default !important;
 }
 button.primary {
   background: var(--accent);
@@ -1703,6 +1726,15 @@ html[data-platform='win32'] .titlebar {
   align-items: center;
   justify-content: center;
   color: var(--text-faint);
+}
+/* The field owns the checkerboard and frame; its preview fills that single surface. */
+.af-thumb > .asset-thumb {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .af-thumb img {
   width: 100%;
@@ -7078,12 +7110,6 @@ body > .embed-editor_provenance {
   font: inherit;
   font-size: 11px;
 }
-.history-graph-refresh {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  flex-shrink: 0;
-}
 
 .history-commit {
   display: grid;
@@ -7297,9 +7323,43 @@ body > .embed-editor_provenance {
 .history-files-dialog .history-files {
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding: 8px 12px 12px;
   border-top: 1px solid var(--border);
+}
+.history-files-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 0 16px 12px;
+}
+.history-file-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.history-file-filters button {
+  padding: 5px 7px;
+  font-size: 11px;
+}
+.history-file-filters button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.history-file-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.history-file-sort .dd-trigger {
+  min-width: 90px;
+  font-size: 11px;
 }
 .history-files-dialog .history-file {
   padding: 8px 4px;
@@ -7450,11 +7510,16 @@ body > .embed-editor_provenance {
   display: flex;
   align-items: center;
   gap: 2px;
-  border-radius: 4px;
-  padding-right: 3px;
+  border-radius: 6px;
+  padding: 3px;
 }
-.history-branch-row.active {
-  background: var(--accent-soft);
+.history-branch-row.active,
+.history-branch-row:hover {
+  background: var(--bg-active);
+}
+/* Paint the whole row once so switching and merge actions share its highlight. */
+.history-branch-row > button:hover:not(:disabled) {
+  background: transparent;
 }
 .history-branch-switch {
   display: flex;
@@ -7463,32 +7528,45 @@ body > .embed-editor_provenance {
   flex: 1;
   min-width: 0;
   gap: 7px;
-  padding: 7px 5px;
+  padding: 6px 4px;
   background: none;
   border: none;
   text-align: left;
   font-size: 11px;
 }
 .history-branch-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.history-branch-current {
-  margin-left: auto;
-  color: var(--accent);
-  font-size: 9px;
 }
 .history-branch-row.active .history-branch-switch:disabled {
   opacity: 1;
   color: var(--text);
 }
 .history-branch-row .row-action {
-  opacity: 0.6;
+  width: 24px;
+  height: 26px;
+  padding: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 1;
   flex-shrink: 0;
 }
 .history-branch-row .row-action:disabled {
-  opacity: 0.2;
+  opacity: 0.3;
+}
+.history-branch-row .row-action.merge:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.history-branch-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.history-branch-row .branch-action:hover:not(:disabled) {
+  color: var(--red);
 }
 .history-file-open {
   width: 100%;
@@ -8487,11 +8565,104 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .git-panel-controls button {
   font-size: 11px;
 }
-.git-create-branch input {
+.git-pull {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+}
+.git-pull > svg {
+  pointer-events: none;
+}
+/* One hover target avoids native disabled-button cursor changes over its children.
+   The wrapper also owns the tooltip, since the disabled button is not hit-tested. */
+.git-pull-control:has(> .git-pull:disabled) {
+  cursor: not-allowed;
+}
+.git-pull:disabled,
+.git-pull:disabled * {
+  pointer-events: none;
+}
+.git-pull-label {
   flex: 1;
+  text-align: left;
+}
+.git-branches {
+  padding: 0 4px 4px;
+}
+.git-branches .history-branches-heading {
+  padding: 6px 0 8px;
+}
+/* Keep branch lists bounded so creation and commit controls remain reachable. */
+.git-branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 192px;
+  overflow-y: auto;
+}
+.git-create-branch-label {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 500;
+}
+.git-branch-editor .git-create-branch {
+  display: flex;
+  gap: 6px;
+  padding: 0;
+}
+.git-branch-editor .git-create-branch input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-size: 11px;
 }
 .git-create-branch button {
-  padding: 5px 9px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.git-create-branch button:disabled {
+  background: var(--bg-input);
+  color: var(--text-dim);
+  opacity: 0.65;
+}
+.git-panel-controls .git-add-branch {
+  justify-content: flex-start;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.git-panel-controls .git-add-branch:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.git-branch-editor {
+  position: fixed;
+  z-index: 1000;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-panel-2);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.git-branch-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 500;
 }
 .git-panel-controls .git-pick {
   width: 100%;

@@ -134,7 +134,7 @@ export function readCmsSource(
   }
   const scan = options.page ? PAGE_SCAN : undefined;
   const collections = findCollections(source, scan);
-  // Source files outside src/data still need an exported record list before
+  // Source files outside recognized settings locations need an exported record list before
   // they count as CMS content. Otherwise every constants module in the project
   // would appear as a content file merely because it exports a string.
   if (!options.page) {

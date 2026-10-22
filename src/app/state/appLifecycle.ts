@@ -33,6 +33,7 @@ import {
   probeProjectPreview,
   readProjectClasses,
   startProjectPreview,
+  stopProjectPreview,
   editProjectPage,
 } from '../../ipc/appBridge';
 import { type OpenFileOptions, openFileSelection, parseTrailingSlash } from '../model/nodeFactory';
@@ -358,6 +359,7 @@ export function usePreviewStart(
   const startPreview = useCallback(
     async (projectPath: string) => {
       setDevStatus('starting');
+      setDevUrl(undefined);
       try {
         const started = await startProjectPreview(projectPath);
         const { url, trailingSlash: resolved } = started;
@@ -376,6 +378,7 @@ export function usePreviewStart(
         }
       } catch (error: unknown) {
         setDevStatus('off');
+        setDevUrl(undefined);
         setBusy(undefined);
         const message = cleanError(error);
         showToast(`Preview failed to start: ${message}`, 'error');
@@ -397,6 +400,33 @@ export function usePreviewStart(
     ],
   );
   return { startPreview };
+}
+
+// A checkout temporarily removes drafts and may replace the Astro configuration.
+// Keep the iframe and dev watcher out of that intermediate filesystem state.
+export function useBranchPreview(
+  coreState: ReturnType<typeof useCoreState>,
+  startPreview: (projectPath: string) => Promise<void>,
+) {
+  const { projectRef, setDevStatus, setDevUrl } = coreState;
+  return useCallback(
+    async <Value>(work: () => Promise<Value>): Promise<Value> => {
+      const project = projectRef.current;
+      assert(project !== undefined, 'Switching branches requires an open project');
+      setDevUrl(undefined);
+      setDevStatus('starting');
+      try {
+        await stopProjectPreview();
+        return await work();
+      } finally {
+        // A failed checkout still needs the original branch's preview back.
+        if (projectRef.current?.path === project.path) {
+          await startPreview(project.path);
+        }
+      }
+    },
+    [projectRef, setDevStatus, setDevUrl, startPreview],
+  );
 }
 
 // The page and file savers, and the page’s unsent edit requests.

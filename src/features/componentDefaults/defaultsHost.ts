@@ -22,6 +22,9 @@ export function desktopDefaultsHost(projectPath: string): DefaultsHost {
       const catalog: readonly DefaultComponent[] = [...project.components, ...project.layouts].map(
         (component) => ({
           file: relativeComponentPath(projectPath, component.path),
+          ...(component.origin?.kind === 'package'
+            ? { importPath: component.origin.importPath }
+            : {}),
           name: component.name,
           props: (component.schema ?? []).map((field) => field.name),
           slots: component.slots ?? [],

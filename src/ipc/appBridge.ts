@@ -1,3 +1,4 @@
+import { sendPageEditWithRetry } from './saveRetry';
 import {
   parseAstroFileChanges,
   type AstroFileChange,
@@ -75,6 +76,10 @@ export function startProjectPreview(projectPath: string): Promise<IpcResults['de
   return window.avb.startDevServer(payload).then(parseDevStart);
 }
 
+export function stopProjectPreview(): Promise<IpcResults['dev:stop']> {
+  return window.avb.stopDevServer().then(parseOkResult);
+}
+
 export function probeProjectPreview(url: string): Promise<IpcResults['dev:probe']> {
   const payload = parseIpcPayload('dev:probe', url);
   return window.avb.probeDevPage(payload).then(parseDevProbe);
@@ -123,7 +128,9 @@ export function watchProject(projectPath: string): Promise<boolean> {
 /** A visual edit (step 6), stated against the checksum of the page shown. */
 export function editProjectPage(request: EditRequest): Promise<Result<PageEdited, PageEditError>> {
   const payload = parseIpcPayload('page:edit', request);
-  return window.avb.editPage(payload).then(parsePageEditResult);
+  return sendPageEditWithRetry(payload, {
+    send: (attempt) => window.avb.editPage(attempt).then(parsePageEditResult),
+  });
 }
 
 /** The page `request` would leave, planned against `source` (the bytes at its

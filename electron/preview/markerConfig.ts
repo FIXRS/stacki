@@ -156,9 +156,14 @@ const require = createRequire(import.meta.url);
 // files and returns strings, and nothing it returns is ever written back.
 const { markSourceFile, markChunkFile } = require(`,
   `);
-const { componentPreviewPlugin } = require(`,
-  `);
+const componentPreviewModule = `,
+  `;
+const { componentPreviewPlugin } = require(componentPreviewModule);
+const { readPackagePreviews } = require(require('node:path').join(
+  require('node:path').dirname(componentPreviewModule), '../lib/componentSources.js'));
 const { studioEntryPlugin } = require(`,
+  `);
+const { previewWarmupIntegration } = require(`,
   `);
 const PROJECT_DIRS = `,
   `;
@@ -489,7 +494,8 @@ export default {
   // so the canvas shows the spacing the source actually has; the project's
   // own dev server and build keep whatever it configured.
   compressHTML: false,
-  integrations: [...(base.integrations || []), avbPreviewRoute],
+  integrations: [...(base.integrations || []), avbPreviewRoute,
+    previewWarmupIntegration(PROJECT_DIRS[0])],
   markdown: {
     ...(base.markdown || {}),
     ...(avbMarkdownProcessor && !(base.markdown && base.markdown.processor)
@@ -498,7 +504,8 @@ export default {
   },
   vite: {
     ...(base.vite || {}),
-    plugins: [studioEntryPlugin(PROJECT_DIRS[0]), componentPreviewPlugin(PROJECT_DIRS),
+    plugins: [studioEntryPlugin(PROJECT_DIRS[0]),
+      componentPreviewPlugin(PROJECT_DIRS, readPackagePreviews),
       avbMarkers, avbMorph,
       ...((base.vite && base.vite.plugins) || [])],
   },

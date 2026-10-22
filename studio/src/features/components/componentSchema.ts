@@ -23,7 +23,10 @@ export async function componentSchema(
     const target = specifier.startsWith('@/')
       ? 'src/' + specifier.slice(2)
       : path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
-    if (!target.startsWith('src/') || (/\.\w+$/.test(target) && !/\.(ts|js)$/.test(target))) {
+    if (
+      (!target.startsWith('src/') && !target.startsWith('node_modules/')) ||
+      (/\.\w+$/.test(target) && !/\.(ts|js)$/.test(target))
+    ) {
       continue;
     }
     let text: string | undefined;

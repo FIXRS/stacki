@@ -118,13 +118,18 @@ interface InvokeChannels {
   readonly gitRestoreFile: 'git:restoreFile';
   readonly gitRestoreProject: 'git:restoreProject';
   readonly gitPush: 'git:push';
+  readonly gitPull: 'git:pull';
+  readonly gitIncoming: 'git:incoming';
   readonly gitRepositories: 'git:repositories';
   readonly gitClone: 'git:clone';
   readonly gitConnect: 'git:connect';
   readonly publishStart: 'publish:start';
   readonly publishState: 'publish:state';
+  readonly publishAvailability: 'publish:availability';
+  readonly publishedSiteURL: 'publish:siteURL';
   readonly publishingRepositories: 'publish:repository';
   readonly discoverPublishing: 'publish:discover';
+  readonly publishingAccount: 'publish:account';
   readonly gitPublish: 'git:publish';
   readonly openExternal: 'shell:openExternal';
   readonly pendingProject: 'project:pending';
