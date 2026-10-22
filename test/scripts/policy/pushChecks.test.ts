@@ -1,6 +1,6 @@
 // Goal: a push cannot pass on compilation alone or run stale tests.
 // Method: execute the real push wrapper against temporary compiler and gate
-// programs, checking order, failure propagation, and Electron's environment.
+// programs, checking order, failure propagation, and isolation from hook environment variables.
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,6 +26,10 @@ process.exit(${options.compilerStatus});`,
     path.join(gate, 'runTests.js'),
     `const assert = require('node:assert/strict');
 assert.equal(process.env.ELECTRON_RUN_AS_NODE, undefined);
+assert.equal(process.env.GIT_COMMON_DIR, undefined);
+assert.equal(process.env.GIT_DIR, undefined);
+assert.equal(process.env.GIT_WORK_TREE, undefined);
+assert.equal(process.env.GIT_INDEX_FILE, undefined);
 assert.deepEqual(process.argv.slice(2), []);
 require('node:fs').appendFileSync('trace', 'full gate\\n');
 process.exit(${options.gateStatus});`,
@@ -33,19 +37,32 @@ process.exit(${options.gateStatus});`,
   return root;
 }
 
-test('push runs the full gate after compiling and clears Electron Node mode', () => {
+test('push isolates the full gate from Electron mode and worktree hook variables', () => {
   const root = pushFixture({ compilerStatus: 0, gateStatus: 0 });
-  const inherited = process.env['ELECTRON_RUN_AS_NODE'];
-  process.env['ELECTRON_RUN_AS_NODE'] = '1';
+  const keys = [
+    'ELECTRON_RUN_AS_NODE',
+    'GIT_COMMON_DIR',
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_INDEX_FILE',
+  ];
+  const inherited = keys.map((key) => [key, process.env[key]] as const);
+  for (const key of keys) {
+    process.env[key] = 'inherited-hook-value';
+  }
   try {
     assert.equal(runPushChecks(root), 0);
     assert.equal(readFileSync(path.join(root, 'trace'), 'utf8'), 'compile\nfull gate\n');
-    assert.equal(process.env['ELECTRON_RUN_AS_NODE'], '1');
+    for (const key of keys) {
+      assert.equal(process.env[key], 'inherited-hook-value');
+    }
   } finally {
-    if (inherited === undefined) {
-      delete process.env['ELECTRON_RUN_AS_NODE'];
-    } else {
-      process.env['ELECTRON_RUN_AS_NODE'] = inherited;
+    for (const [key, value] of inherited) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
     }
     rmSync(root, { recursive: true, force: true });
   }

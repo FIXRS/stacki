@@ -23,16 +23,18 @@ const TARGETS = [
 for (const [manifest, lockfile] of INPUTS) {
   test(`${manifest} has a clean npm install plan for every release target`, () => {
     const npmCLI = process.env['npm_execpath'];
-    assert.ok(npmCLI, 'Run through npm test so the probe uses the same npm as the build');
+    // Git hooks invoke the gate directly, outside npm's environment. In that case
+    // use the npm on PATH, which is the same entry a manual npm test would launch.
+    const executable = npmCLI === undefined ? 'npm' : process.execPath;
     const directory = mkdtempSync(join(tmpdir(), 'stacki-clean-install-'));
     try {
       copyFileSync(manifest, join(directory, 'package.json'));
       copyFileSync(lockfile, join(directory, 'package-lock.json'));
       for (const target of TARGETS) {
         const result: SpawnSyncReturns<string> = spawnSync(
-          process.execPath,
+          executable,
           [
-            npmCLI,
+            ...(npmCLI === undefined ? [] : [npmCLI]),
             'ci',
             '--dry-run',
             '--ignore-scripts',
@@ -44,7 +46,13 @@ for (const [manifest, lockfile] of INPUTS) {
             `--os=${target.os}`,
             `--cpu=${target.cpu}`,
           ],
-          { cwd: directory, encoding: 'utf8', timeout: 60000, maxBuffer: 2_000_000, shell: false },
+          {
+            cwd: directory,
+            encoding: 'utf8',
+            timeout: 60000,
+            maxBuffer: 2_000_000,
+            shell: npmCLI === undefined && process.platform === 'win32',
+          },
         );
         assert.equal(result.error, undefined, `${manifest}: ${String(result.error)}`);
         assert.equal(
