@@ -82,12 +82,20 @@ test(
           logLevel: 'silent',
           trailingSlash,
           server: { port, host: '127.0.0.1' },
-          vite: { resolve: { alias: { '@/components': componentDirectory } } },
+          vite: {
+            server: { strictPort: true },
+            resolve: { alias: { '@/components': componentDirectory } },
+          },
           integrations: [studio({ root, assets, port })],
         });
         try {
+          // Authentication uses this port; a silent Vite fallback would test the wrong server.
+          assert.equal(server.address.port, port);
           const origin = `http://127.0.0.1:${port}`;
-          const project = await fetch(origin + '/studio/api/project');
+          const project = await fetch(origin + '/studio/api/project').catch((failure: unknown) => {
+            const cause = failure instanceof Error ? String(failure.cause) : String(failure);
+            assert.fail(`Studio API connection failed at ${origin}: ${cause}`);
+          });
           assert.equal(project.status, 200);
           assert.match(project.headers.get('content-type') ?? '', /application\/json/);
           const denied = await fetch(origin + '/studio/api/project', {

@@ -1,11 +1,23 @@
 // Goal: the selected Worker account wins without rewriting authored or generated configuration.
-// Method: real temporary files cover JSONC, TOML, build redirects, cleanup, and unsafe paths.
+// Method: temporary files cover formats and cleanup; Windows paths test diagnostics on every OS.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { withWorkerAccount } from '#dist/electron/project/publishWorkerConfig.js';
+import {
+  withWorkerAccount,
+  workerConfigParse,
+} from '#dist/electron/project/publishWorkerConfig.js';
+
+test('Worker configuration diagnostics accept Windows paths on every platform', () => {
+  const filename = String.raw`C:\Users\runner\site\wrangler.jsonc`;
+  assert.deepEqual(workerConfigParse(filename, '{"name":"site",}'), { name: 'site' });
+  assert.throws(
+    () => workerConfigParse(filename, '{invalid'),
+    /Cannot read Wrangler configuration/,
+  );
+});
 
 for (const filename of ['wrangler.jsonc', 'wrangler.toml']) {
   test(`Worker account overrides ${filename}, preserving paths and bindings`, async (context) => {

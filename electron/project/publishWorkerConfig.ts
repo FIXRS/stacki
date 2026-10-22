@@ -81,11 +81,12 @@ async function workerConfigSource(root: string, filename: string): Promise<strin
   return source;
 }
 
-function workerConfigParse(filename: string, source: string): Record<string, unknown> {
+export function workerConfigParse(filename: string, source: string): Record<string, unknown> {
   if (filename.endsWith('.toml')) {
     return record(parseTOML(source));
   }
-  const parsed = parseConfigFileTextToJson(filename, source);
+  // TypeScript diagnostics require slash-normalized paths, including on Windows.
+  const parsed = parseConfigFileTextToJson(filename.replaceAll('\\', '/'), source);
   if (parsed.error) {
     throw new Error('Cannot read Wrangler configuration.');
   }
