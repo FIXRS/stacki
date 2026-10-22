@@ -384,6 +384,9 @@ export class DevServers {
 
     const url = `http://127.0.0.1:${port}`;
     this.server = { proc, url, projectPath, bin: localBin };
+    // Startup failures belong to start()'s retries and final IPC reply. Only an
+    // exit after readiness should take the renderer's running preview offline.
+    let ready = false;
 
     proc.stdout.on('data', (chunk: Buffer) => this.pushLog(chunk.toString()));
     proc.stderr.on('data', (chunk: Buffer) => this.pushLog(chunk.toString()));
@@ -402,7 +405,9 @@ export class DevServers {
           this.server = { proc: undefined, url, projectPath, daemon: true, bin: localBin };
         } else {
           this.server = undefined;
-          this.host.send('dev:exit', { code, log: this.recentLog() });
+          if (ready) {
+            this.host.send('dev:exit', { code, log: this.recentLog() });
+          }
         }
       }
     });
@@ -421,7 +426,10 @@ export class DevServers {
       }
       if (await serverResponds(url)) {
         assertActive();
-        return url;
+        if (this.server) {
+          ready = true;
+          return url;
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 300));
     }

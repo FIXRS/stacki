@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { publishingAccount, openAccountSignIn } from '../../ipc/publishAccountBridge';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
-import { ACCOUNT_SIGN_IN_TIMEOUT_MS, type AccountState } from '../../../shared/ipc/publishAccount';
+import {
+  ACCOUNT_INSTALL_TIMEOUT_MS,
+  ACCOUNT_SIGN_IN_TIMEOUT_MS,
+  type AccountState,
+} from '../../../shared/ipc/publishAccount';
 
 interface Props {
   readonly projectPath: string;
@@ -11,7 +15,9 @@ interface Props {
   readonly connected: () => void;
 }
 const POLL_INTERVAL_MS = 1000;
-const POLLS_MAX = Math.ceil(ACCOUNT_SIGN_IN_TIMEOUT_MS / POLL_INTERVAL_MS);
+const POLLS_MAX = Math.ceil(
+  (ACCOUNT_INSTALL_TIMEOUT_MS + ACCOUNT_SIGN_IN_TIMEOUT_MS) / POLL_INTERVAL_MS,
+);
 
 export function AddPublishAccount(props: Props) {
   const label = props.provider === 'github' ? 'GitHub' : 'Cloudflare';
@@ -34,7 +40,11 @@ export function AddPublishAccount(props: Props) {
         <>
           <div className="modal-header">Add {label} account</div>
           <div className="modal-body publish-fields" aria-live="polite">
-            {state.kind === 'waiting' ? (
+            {state.kind === 'installing' ? (
+              <p>
+                Installing Wrangler in this project. Cloudflare sign-in will start automatically…
+              </p>
+            ) : state.kind === 'waiting' ? (
               <AccountDeviceCode code={state.code} />
             ) : state.kind === 'browser' ? (
               <AccountBrowserSignIn url={state.url} />
@@ -126,7 +136,7 @@ function useAccountSignIn(
           return;
         }
         setState(result);
-        if (!['starting', 'waiting', 'browser'].includes(result.kind)) {
+        if (!['installing', 'starting', 'waiting', 'browser'].includes(result.kind)) {
           return;
         }
         await new Promise<void>((resolve) => {

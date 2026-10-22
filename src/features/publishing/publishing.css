@@ -124,19 +124,20 @@
 .modal.publish-settings {
   position: relative;
   width: min(440px, calc(100vw - 32px));
-  /* Include the hosting account row and Advanced without clipping at desktop heights. */
-  height: min(680px, 90dvh);
-  max-height: min(720px, 90dvh);
+  /* Fit the form before scrolling, while keeping the dialog within the viewport. */
+  height: auto;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 .publish-settings .modal-header {
+  flex-shrink: 0;
   padding: 20px 20px 0;
   font-size: 14px;
 }
 .publish-settings .publish-fields {
-  flex: 1;
+  flex: 0 1 auto;
   align-content: start;
   border: 0;
   margin: 0;

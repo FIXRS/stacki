@@ -16,11 +16,9 @@ import { cleanError } from '../../lib/cleanError';
 import { toEditorPageState, carriedParse, type OpenFile } from '../../editor/pageState';
 import {
   addRecentProject,
-  installProjectDependencies,
   openProject,
   pendingProject,
   previewProjectCommit,
-  projectHasNodeModules,
   resolveProjectImport,
   stopProjectCommitPreview,
   watchProject,
@@ -70,7 +68,7 @@ export function useSelectPage(
   coreState: ReturnType<typeof useCoreState>,
 ) {
   const { openFile, rescan, showToast, startPreview } = lifecycle;
-  const { setBusy, setDevice, setLeftTab, setProject } = coreState;
+  const { setDevice, setLeftTab, setProject } = coreState;
 
   // What's typed in the URL bar while it's being edited; undefined means "show the
   // real one". Kept separate so the bar keeps tracking the canvas until you
@@ -107,19 +105,10 @@ export function useSelectPage(
         .catch((error: unknown) => {
           showToast(`Couldn’t watch project files: ${cleanError(error)}`, 'error');
         });
-      const result = await rescan(projectPath);
-
-      const hasDeps = await projectHasNodeModules(projectPath);
-      if (!hasDeps) {
-        try {
-          await installProjectDependencies(projectPath);
-        } catch (error: unknown) {
-          showToast(cleanError(error), 'error');
-        }
-        setBusy(undefined);
-      }
-      // startPreview reports its own failure in the preview area.
+      // Enter loading before the scan yields so opening never flashes offline.
+      // Main owns dependency installation and reports the final startup failure.
       void startPreview(projectPath);
+      const result = await rescan(projectPath);
 
       const first =
         result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
@@ -128,7 +117,7 @@ export function useSelectPage(
         void selectPage(first);
       }
     },
-    [rescan, startPreview, selectPage, showToast, setBusy, setDevice, setLeftTab, setProject],
+    [rescan, startPreview, selectPage, showToast, setDevice, setLeftTab, setProject],
   );
 
   // A window can come up owing a project: one was picked from the menu and the

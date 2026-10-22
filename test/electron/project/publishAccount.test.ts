@@ -16,7 +16,10 @@ const waiting =
 
 test('sign-in extracts the device code and scopes status and cancellation', async () => {
   const child = spawn(process.execPath, ['-e', waiting], { stdio: 'pipe', shell: false });
-  const account = new PublishingAccount(() => child);
+  const account = new PublishingAccount(
+    () => child,
+    () => true,
+  );
   assert.equal(account.request(root, { action: 'start', id }).kind, 'starting');
   await once(child.stderr, 'data');
   assert.deepEqual(account.request(root, { action: 'status', id }), {
@@ -40,7 +43,10 @@ test('sign-in reports success and sanitizes CLI failures', async () => {
         shell: false,
       },
     );
-    const account = new PublishingAccount(() => child);
+    const account = new PublishingAccount(
+      () => child,
+      () => true,
+    );
     account.request(root, { action: 'start', id });
     await once(child, 'close');
     const state = account.request(root, { action: 'status', id });
@@ -58,7 +64,10 @@ test('sign-in limits output before retaining it', async () => {
       shell: false,
     },
   );
-  const account = new PublishingAccount(() => child);
+  const account = new PublishingAccount(
+    () => child,
+    () => true,
+  );
   account.request(root, { action: 'start', id });
   await once(child, 'close');
   assert.deepEqual(account.request(root, { action: 'status', id }), {
@@ -70,7 +79,10 @@ test('sign-in limits output before retaining it', async () => {
 test('sign-in expires and terminates a stalled child', async (context) => {
   const child = spawn(process.execPath, ['-e', waiting], { stdio: 'pipe', shell: false });
   context.mock.timers.enable({ apis: ['setTimeout'] });
-  const account = new PublishingAccount(() => child);
+  const account = new PublishingAccount(
+    () => child,
+    () => true,
+  );
   account.request(root, { action: 'start', id });
   await once(child.stderr, 'data');
   context.mock.timers.tick(ACCOUNT_SIGN_IN_TIMEOUT_MS);
@@ -87,10 +99,13 @@ test('Cloudflare sign-in exposes a complete browser URL and isolates its session
     `process.stdout.write('Visit this link to authenticate: ${url}\\n');` +
     'setInterval(() => {}, 1000);';
   const child = spawn(process.execPath, ['-e', script], { stdio: 'pipe', shell: false });
-  const account = new PublishingAccount((_root, provider) => {
-    assert.equal(provider, 'cloudflare');
-    return child;
-  });
+  const account = new PublishingAccount(
+    (_root, provider) => {
+      assert.equal(provider, 'cloudflare');
+      return child;
+    },
+    () => true,
+  );
   const request = { id, provider: 'cloudflare' as const };
   assert.equal(account.request(root, { ...request, action: 'start' }).kind, 'starting');
   await once(child.stdout, 'data');
@@ -116,7 +131,10 @@ test(
       shell: false,
       detached: process.platform !== 'win32',
     });
-    const account = new PublishingAccount(() => child);
+    const account = new PublishingAccount(
+      () => child,
+      () => true,
+    );
     const request = { id, provider: 'cloudflare' as const };
     context.after(() => account.request(root, { ...request, action: 'cancel' }));
     account.request(root, { ...request, action: 'start' });

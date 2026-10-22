@@ -59,8 +59,13 @@ to Studio or committed to the project.
 ## Hosting
 
 Cloudflare Pages needs an existing Pages project, account ID, production branch, and build
-output directory (usually `dist`). Install Wrangler in the site's development dependencies or
-on the publishing machine. Run `wrangler login` once locally, or provide
+output directory (usually `dist`). Choosing **Add account** for Cloudflare in Desktop or local
+Studio installs a missing project Wrangler with `npm install --save-dev wrangler`, then starts
+browser sign-in automatically. The dialog shows installation progress and Cancel stops the
+installer. This updates the site's package manifest and lockfile so future deployments can use
+the same dependency. Existing project or workspace installations are reused. Installation failures
+can be retried; account discovery and deployment never install packages implicitly.
+Alternatively, install Wrangler and run `wrangler login` once locally, or provide
 `CLOUDFLARE_API_TOKEN` in the server environment. The account ID is explicitly supplied on every
 deployment, so another project's account choice does not change this project's target.
 

@@ -16,6 +16,7 @@ test('GitHub sign-in actions and states round-trip', () => {
     });
   }
   for (const state of [
+    { kind: 'installing' },
     { kind: 'starting' },
     { kind: 'waiting', code: 'ABCD-1234' },
     { kind: 'complete' },

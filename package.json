@@ -1,7 +1,7 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "0.1.70",
+  "version": "0.1.71",
   "description": "Stacki — a visual Astro builder with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
@@ -139,6 +139,7 @@
       "!node_modules/@img/sharp-libvips-darwin-*/**"
     ],
     "asarUnpack": [
+      "dist/electron/lib/componentSources.js",
       "dist/electron/parse/**",
       "dist/electron/previewServer/**",
       "dist/shared/**",

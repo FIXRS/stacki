@@ -7,6 +7,7 @@ export interface AccountRequest {
   readonly id: string;
 }
 export type AccountState =
+  | { readonly kind: 'installing' }
   | { readonly kind: 'starting' }
   | { readonly kind: 'waiting'; readonly code: string }
   | { readonly kind: 'browser'; readonly url: string }
@@ -15,6 +16,7 @@ export type AccountState =
   | { readonly kind: 'failed'; readonly message: string };
 
 export const ACCOUNT_SIGN_IN_TIMEOUT_MS = 5 * 60_000;
+export const ACCOUNT_INSTALL_TIMEOUT_MS = 10 * 60_000;
 export const GITHUB_DEVICE_URL = 'https://github.com/login/device';
 
 export function parseAccountRequest(input: unknown): AccountRequest {
@@ -38,6 +40,7 @@ export function parseAccountRequest(input: unknown): AccountRequest {
 export function parseAccountState(input: unknown): AccountState {
   const value = record(input);
   switch (value['kind']) {
+    case 'installing':
     case 'starting':
     case 'complete':
     case 'cancelled':

@@ -2,13 +2,14 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { assert } from '../../shared/core/assert';
 import {
   ACCOUNT_SIGN_IN_TIMEOUT_MS,
+  ACCOUNT_INSTALL_TIMEOUT_MS,
   parseAccountRequest,
   parseCloudflareSignInURL,
   type AccountRequest,
   type AccountState,
 } from '../../shared/ipc/publishAccount';
 import { ensureToolPath } from '../lib/nodeTools';
-import { resolvePublishExecutable } from './publishExecutable';
+import { projectHasWrangler, resolvePublishExecutable } from './publishExecutable';
 import { publishEnvironment, stopPublishProcess } from './publishCommands';
 
 interface Session {
@@ -16,18 +17,28 @@ interface Session {
   readonly root: string;
   readonly provider: 'github' | 'cloudflare';
   readonly process: ChildProcessWithoutNullStreams;
+  readonly phase: 'installing' | 'starting';
   state: AccountState;
   output: string;
+  outputChars: number;
   timer: ReturnType<typeof setTimeout> | undefined;
 }
 const OUTPUT_CHARS_MAX = 8192;
-type Launch = (root: string, provider: 'github' | 'cloudflare') => ChildProcessWithoutNullStreams;
+const INSTALL_OUTPUT_CHARS_MAX = 1_048_576;
+type Launch = (
+  root: string,
+  provider: 'github' | 'cloudflare',
+  phase: Session['phase'],
+) => ChildProcessWithoutNullStreams;
 
 // One login can own the CLI credential store at a time. Raw output never leaves this service.
 export class PublishingAccount {
   private session: Session | undefined;
 
-  constructor(private readonly launch: Launch = launchAccountSignIn) {}
+  constructor(
+    private readonly launch: Launch = launchAccountSignIn,
+    private readonly hasWrangler: (root: string) => boolean = projectHasWrangler,
+  ) {}
 
   request(root: string, input: AccountRequest): AccountState {
     const request = parseAccountRequest(input);
@@ -35,7 +46,7 @@ export class PublishingAccount {
     const provider = request.provider ?? 'github';
     if (session?.id === request.id && session.root === root && session.provider === provider) {
       if (request.action === 'cancel' && accountSignInPending(session.state)) {
-        this.finish(session.id, { kind: 'cancelled' });
+        this.finish(session, { kind: 'cancelled' });
       }
       return session.state;
     }
@@ -48,13 +59,18 @@ export class PublishingAccount {
         message: 'Finish or cancel the account sign-in already in progress.',
       };
     }
-    return this.start(root, request.id, provider);
+    const phase = provider === 'cloudflare' && !this.hasWrangler(root) ? 'installing' : 'starting';
+    return this.start(root, request.id, provider, phase);
   }
 
-  private start(root: string, id: string, provider: 'github' | 'cloudflare'): AccountState {
-    const child = this.launch(root, provider);
+  private start(
+    root: string,
+    id: string,
+    provider: 'github' | 'cloudflare',
+    phase: Session['phase'],
+  ): AccountState {
+    const child = this.launch(root, provider, phase);
     const label = provider === 'github' ? 'GitHub' : 'Cloudflare';
-    const tool = provider === 'github' ? 'gh' : 'Wrangler';
     const stop = () => {
       stopAccountSignIn(child, provider);
     };
@@ -65,48 +81,86 @@ export class PublishingAccount {
       root,
       provider,
       process: child,
-      state: { kind: 'starting' },
+      phase,
+      state: { kind: phase },
       output: '',
+      outputChars: 0,
       timer: undefined,
     };
     this.session = session;
-    session.timer = setTimeout(() => {
-      this.finish(session.id, {
-        kind: 'failed',
-        message: `${label} sign-in expired. Please try again.`,
-      });
-    }, ACCOUNT_SIGN_IN_TIMEOUT_MS);
+    session.timer = setTimeout(
+      () => {
+        this.finish(session, {
+          kind: 'failed',
+          message:
+            phase === 'installing'
+              ? 'Wrangler installation timed out. Check your connection and try again.'
+              : `${label} sign-in expired. Please try again.`,
+        });
+      },
+      phase === 'installing' ? ACCOUNT_INSTALL_TIMEOUT_MS : ACCOUNT_SIGN_IN_TIMEOUT_MS,
+    );
     session.timer.unref();
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk: unknown) => this.read(session.id, chunk));
-    child.stderr.on('data', (chunk: unknown) => this.read(session.id, chunk));
-    child.on('error', () =>
-      this.finish(session.id, {
-        kind: 'failed',
-        message: `Could not start ${label} sign-in. Install ${tool} and try again.`,
-      }),
-    );
-    child.on('close', (code) =>
-      this.finish(
-        session.id,
-        code === 0
-          ? { kind: 'complete' }
-          : {
-              kind: 'failed',
-              message: `${label} sign-in did not complete. Check CLI authentication and try again.`,
-            },
-      ),
-    );
-    // Piped input keeps gh in its device-code flow without an interactive shell or prompts.
-    child.stdin.on('error', () => {});
-    child.stdin.end();
+    this.watch(session);
     return session.state;
   }
 
-  private read(id: string, chunk: unknown): void {
+  private watch(session: Session): void {
+    const child = session.process;
+    const label = session.provider === 'github' ? 'GitHub' : 'Cloudflare';
+    const tool = session.provider === 'github' ? 'gh' : 'Wrangler';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk: unknown) => this.read(session, chunk));
+    child.stderr.on('data', (chunk: unknown) => this.read(session, chunk));
+    child.on('error', () =>
+      this.finish(session, {
+        kind: 'failed',
+        message:
+          session.phase === 'installing'
+            ? 'Could not start Wrangler installation. Install Node.js and npm, then try again.'
+            : `Could not start ${label} sign-in. Install ${tool} and try again.`,
+      }),
+    );
+    child.on('close', (code) => this.closed(session, code ?? undefined));
+    // Piped input keeps gh in its device-code flow without an interactive shell or prompts.
+    child.stdin.on('error', () => {});
+    child.stdin.end();
+  }
+
+  private closed(session: Session, code: number | undefined): void {
+    if (this.session !== session || !accountSignInPending(session.state)) {
+      return;
+    }
+    if (session.phase === 'installing') {
+      if (code === 0) {
+        clearTimeout(session.timer);
+        // Session identity prevents late installer events from completing the subsequent login.
+        this.start(session.root, session.id, session.provider, 'starting');
+      } else {
+        this.finish(session, {
+          kind: 'failed',
+          message:
+            'Could not install Wrangler. Check your connection and project access, then retry.',
+        });
+      }
+      return;
+    }
+    const label = session.provider === 'github' ? 'GitHub' : 'Cloudflare';
+    this.finish(
+      session,
+      code === 0
+        ? { kind: 'complete' }
+        : {
+            kind: 'failed',
+            message: `${label} sign-in did not complete. Check CLI authentication and try again.`,
+          },
+    );
+  }
+
+  private read(expectedSession: Session, chunk: unknown): void {
     const session = this.session;
-    if (session === undefined || session.id !== id) {
+    if (session === undefined || session !== expectedSession) {
       return;
     }
     if (!accountSignInPending(session.state)) {
@@ -114,12 +168,21 @@ export class PublishingAccount {
     }
     assert(typeof chunk === 'string', 'Account sign-in streams use UTF-8 text');
     assert(session.output.length <= OUTPUT_CHARS_MAX, 'Account sign-in output stays bounded');
-    const label = session.provider === 'github' ? 'GitHub' : 'Cloudflare';
-    if (chunk.length > OUTPUT_CHARS_MAX - session.output.length) {
-      this.finish(session.id, {
+    const label =
+      session.phase === 'installing'
+        ? 'Wrangler installation'
+        : `${session.provider === 'github' ? 'GitHub' : 'Cloudflare'} sign-in`;
+    const limit = session.phase === 'installing' ? INSTALL_OUTPUT_CHARS_MAX : OUTPUT_CHARS_MAX;
+    if (chunk.length > limit - session.outputChars) {
+      this.finish(session, {
         kind: 'failed',
-        message: `${label} sign-in returned too much output.`,
+        message: `${label} returned too much output.`,
       });
+      return;
+    }
+    session.outputChars += chunk.length;
+    // Installation logs can contain registry credentials; count them without retaining them.
+    if (session.phase === 'installing') {
       return;
     }
     session.output += chunk;
@@ -138,9 +201,9 @@ export class PublishingAccount {
     }
   }
 
-  private finish(id: string, state: AccountState): void {
+  private finish(expectedSession: Session, state: AccountState): void {
     const session = this.session;
-    if (session === undefined || session.id !== id) {
+    if (session === undefined || session !== expectedSession) {
       return;
     }
     if (!accountSignInPending(session.state)) {
@@ -159,15 +222,16 @@ export class PublishingAccount {
 }
 
 function accountSignInPending(state: AccountState): boolean {
-  return state.kind === 'starting' || state.kind === 'waiting' || state.kind === 'browser';
+  return ['installing', 'starting', 'waiting', 'browser'].includes(state.kind);
 }
 
 function launchAccountSignIn(
   root: string,
   provider: 'github' | 'cloudflare',
+  phase: Session['phase'],
 ): ChildProcessWithoutNullStreams {
   if (provider === 'cloudflare') {
-    return launchCloudflareSignIn(root);
+    return launchCloudflareSignIn(root, phase);
   }
   ensureToolPath();
   const environment: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', GH_PROMPT_DISABLED: '1' };
@@ -196,11 +260,15 @@ function launchAccountSignIn(
   );
 }
 
-function launchCloudflareSignIn(root: string): ChildProcessWithoutNullStreams {
+function launchCloudflareSignIn(
+  root: string,
+  phase: Session['phase'],
+): ChildProcessWithoutNullStreams {
   ensureToolPath();
   const command = resolvePublishExecutable(root, {
-    executable: 'wrangler',
-    arguments: ['login', '--browser=false'],
+    executable: phase === 'installing' ? 'npm' : 'wrangler',
+    arguments:
+      phase === 'installing' ? ['install', '--save-dev', 'wrangler'] : ['login', '--browser=false'],
     environment: {},
   });
   return spawn(command.executable, [...command.arguments], {

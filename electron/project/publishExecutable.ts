@@ -4,6 +4,20 @@ import path from 'node:path';
 import { record, text } from '../../shared/core/boundary';
 import type { PublishCommand } from '../../shared/properties/publishCommands';
 
+export function projectHasWrangler(root: string): boolean {
+  const resolver = createRequire(path.join(root, 'package.json'));
+  try {
+    // Resolution from the site also supports dependencies hoisted by a workspace package manager.
+    resolver.resolve('wrangler/package.json');
+    return true;
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && error.code === 'MODULE_NOT_FOUND') {
+      return false;
+    }
+    throw error;
+  }
+}
+
 export function resolvePublishExecutable(
   root: string,
   command: PublishCommand,

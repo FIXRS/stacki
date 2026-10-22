@@ -21,6 +21,8 @@
 // holds those files and nothing else — which is exactly what the packaged app
 // hands it. The component preview configuration also loads a helper outside
 // Electron, so its dependency closure must obey the same rule.
+// Load the generated config too: computed requires can escape the static closure,
+// as the package-component reader did when it stayed inside the application archive.
 
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -28,6 +30,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { renderMarkerConfig } = require('#dist/electron/preview/markerConfig.js');
 
 const failures = [];
 let checked = 0;
@@ -42,6 +45,9 @@ const ENTRIES = [
   'dist/electron/parse/astroParser.js',
   'dist/electron/previewServer/componentPreview.js',
   'dist/electron/previewServer/previewMarkers.js',
+  'dist/electron/lib/componentSources.js',
+  'dist/electron/previewServer/studioEntry.js',
+  'dist/electron/previewServer/previewWarmup.js',
 ];
 
 // Every local file the entry pulls in, transitively. Only relative requires:
@@ -103,7 +109,11 @@ const patterns = pkg.build?.asarUnpack || [];
 const files = [...ENTRIES.reduce((seen, entry) => closureOf(entry, seen), new Set())];
 // Main finds the preview's files through runtimePaths; the parser, through
 // the generated configuration main writes.
-const main = ['dist/electron/main.js', 'dist/electron/lib/runtimePaths.js']
+const main = [
+  'dist/electron/main.js',
+  'dist/electron/lib/runtimePaths.js',
+  'dist/electron/preview/markerConfig.js',
+]
   .map((file) => fs.readFileSync(repoPath(file), 'utf8'))
   .join('\n');
 
@@ -153,7 +163,39 @@ for (const rel of files) {
     }
     check(`the unpacked ${entry} copy loads on its own`, !error, error);
   }
+  checkGeneratedConfig(directory);
   fs.rmSync(directory, { recursive: true, force: true });
+}
+
+function checkGeneratedConfig(directory) {
+  const local = (file) => JSON.stringify(path.join(directory, file));
+  const source = renderMarkerConfig([
+    'const userConfig = {};',
+    local('dist/electron/previewServer/previewMarkers.js'),
+    local('dist/electron/previewServer/componentPreview.js'),
+    local('dist/electron/previewServer/studioEntry.js'),
+    local('dist/electron/previewServer/previewWarmup.js'),
+    JSON.stringify([directory]),
+    JSON.stringify(''),
+    JSON.stringify(''),
+    local('preview.astro'),
+    local('paths.js'),
+    local('data.js'),
+  ]);
+  const config = path.join(directory, 'astro.config.mjs');
+  fs.writeFileSync(config, source);
+  let error = '';
+  try {
+    execFileSync(process.execPath, [config], {
+      cwd: directory,
+      timeout: 10000,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      encoding: 'utf8',
+    });
+  } catch (thrown) {
+    error = String(thrown.stderr || thrown.message);
+  }
+  check('the generated preview config loads using only unpacked files', !error, error);
 }
 
 if (failures.length) {
