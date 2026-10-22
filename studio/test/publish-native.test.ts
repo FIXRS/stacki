@@ -22,7 +22,13 @@ const run = (cwd: string, args: readonly string[]) =>
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
-      ...process.env,
+      // Git hooks export repository paths; fixtures must never inherit the caller's repository.
+      PATH: process.env['PATH'],
+      SystemRoot: process.env['SystemRoot'],
+      HOME: cwd,
+      TMPDIR: process.env['TMPDIR'],
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
       GIT_AUTHOR_NAME: 'Test',
       GIT_AUTHOR_EMAIL: 'test@example.test',
       GIT_COMMITTER_NAME: 'Test',
