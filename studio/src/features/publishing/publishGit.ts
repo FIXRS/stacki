@@ -5,6 +5,7 @@ import { statfs } from 'node:fs/promises';
 import { ok, err, type Result } from '../../../vendor/stacki/shared/core/result';
 import { stopPublishProcess } from '../../../vendor/stacki/electron/project/publishCommands';
 import { STUDIO_PUBLISH_LIMITS as limits } from './publishLimits';
+import { finishGitInput } from './publishGitInput';
 
 import type { PublishGit } from '../../shared/publishSource';
 export type { PublishGit } from '../../shared/publishSource';
@@ -92,7 +93,6 @@ function collectPublishCommand(
     child.stdout.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
     child.stderr.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
     child.once('error', () => monitor.stop('Could not start Git. Install Git and retry.'));
-    child.stdin.on('error', () => monitor.stop('Could not write to Git.'));
     child.once('close', (code) => {
       monitor.dispose();
       const message = monitor.failure();
@@ -108,7 +108,7 @@ function collectPublishCommand(
             }),
       );
     });
-    child.stdin.end(input);
+    finishGitInput(child.stdin, input, () => monitor.stop('Could not write to Git.'));
   });
 }
 

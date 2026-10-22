@@ -115,7 +115,8 @@ test('asset deletion is included in the built publication snapshot', async () =>
         await assert.rejects(access(path.join(snapshot, 'public/old.png')));
       },
     );
-    assert.equal((await publisher.publish()).kind, 'committed');
+    const state = await publisher.publish();
+    assert.equal(state.kind, 'committed', JSON.stringify(state));
     assert.ok(committed?.deleted.includes('public/old.png'));
     assert.ok(committed?.files.some((file) => file.path === 'public/new.png'));
   } finally {

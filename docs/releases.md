@@ -15,6 +15,23 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## Learn from publishing failures
+
+Whenever a GitHub release or publishing workflow fails, inspect the failure before retrying.
+Reproduce the cause locally whenever possible, then add or improve a local regression test that
+fails for that cause and passes after the fix. Run the regression test and the required local
+release checks before pushing again. Include the regression coverage in the fix so future releases
+catch the same problem before reaching GitHub.
+
+Match the conditions that caused the failure: a clean checkout, the Git hook environment, the
+affected operating system, or the packaged installation. Prefer deterministic reproduction over
+repeated retries, longer timeouts, or weakened assertions. For timing failures, synchronize on the
+actual event or inject the failing condition instead of relying on a lucky test run.
+
+Some failures depend on external services, signing, authentication, or hosted runner infrastructure.
+When a local test cannot reasonably reproduce the cause, document why, record the verification
+that is possible, and keep the required remote check. Never skip a gate to make publishing succeed.
+
 ## Browser tests and animated popups
 
 Shared popups remain mounted while their close animation runs, and consume outside clicks during

@@ -65,7 +65,7 @@ test('GitHub-only publishes shared settings while skipping hooks and hosting', a
     },
   );
   const state = await publisher.publish('github');
-  assert.equal(state.kind, 'committed');
+  assert.equal(state.kind, 'committed', JSON.stringify(state));
   assert.equal(deployments, 0);
   assert.ok(files.some((file) => file.path === '.stacki/publish.json'));
   await assert.rejects(readFile(output), { code: 'ENOENT' });

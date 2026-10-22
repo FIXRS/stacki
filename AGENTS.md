@@ -555,6 +555,10 @@ ESLint, production builds, contract tests, and the complete regression suite.
 - Where a state machine exists, property-based tests (e.g. fast-check) hunt the
   transitions you didn't think of. A fuzzer proves the presence of bugs, never
   their absence — the mental model and its assertions come first.
+- When a GitHub release or publishing workflow fails, reproduce the cause locally and add or
+  improve a regression test whenever possible before pushing again. This prevents the same
+  failure from recurring only in GitHub. Follow [publishing failure handling](docs/releases.md).
+  If local reproduction is impractical, document why and the verification that remains remote.
 
 ## Definition of done (checklist)
 

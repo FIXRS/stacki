@@ -81,7 +81,8 @@ test('GitHub and None skip builds, dependencies and hooks', async (context) => {
         assert.fail('Git-only must not build');
       },
     );
-    assert.equal((await publisher.publish(target)).kind, 'committed');
+    const state = await publisher.publish(target);
+    assert.equal(state.kind, 'committed', JSON.stringify(state));
     assert.equal(commits, 1);
   }
 });
