@@ -14,7 +14,7 @@ const { parsePage } = require('#dist/electron/parse/astroParser.js');
 
 const SOURCE = '<main><p>Before</p></main>\n';
 
-async function fixture(context, build) {
+async function fixture(context, build, beforeEdit = async () => {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-save-recovery-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const file = path.join(root, 'src/pages/index.astro');
@@ -31,6 +31,7 @@ async function fixture(context, build) {
   const app = await mountApp(root, { scan }, build, {
     bridge: {
       editPage: async ({ pagePath, authoredChecksum, edit }) => {
+        await beforeEdit();
         const report = documents.submitEdit(
           pagePath,
           { authoredChecksum, gone: 'anchor-moved' },
@@ -55,8 +56,32 @@ async function fixture(context, build) {
   return { app, file };
 }
 
+async function waitForSave(app, ready, message) {
+  // Poll observable state with a fixed bound; runner speed must not determine correctness.
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (ready()) {
+      return;
+    }
+    await app.act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+  }
+  assert.ok(ready(), message);
+}
+
 test('an edit reaches disk after a brief file lock without another edit', async (context) => {
-  const { app, file } = await fixture(context, 'save-recovery-transient');
+  let releaseRetry;
+  const retryGate = new Promise((resolve) => {
+    releaseRetry = resolve;
+  });
+  let requests = 0;
+  let retryWaiting = false;
+  const { app, file } = await fixture(context, 'save-recovery-transient', async () => {
+    requests += 1;
+    if (requests === 2) {
+      retryWaiting = true;
+      await retryGate;
+    }
+  });
+  context.after(() => releaseRetry());
   const rename = fs.renameSync;
   let attempts = 0;
   context.mock.method(fs, 'renameSync', (from, to) => {
@@ -69,6 +94,16 @@ test('an edit reaches disk after a brief file lock without another edit', async 
     return rename(from, to);
   });
   await gesture(app, async () => __panels.PropsPanel.onSetContent('After'));
+  await waitForSave(app, () => retryWaiting, 'the automatic retry reaches the bridge');
+  // Hold the retry past the gesture wait to reproduce a slow IPC response deterministically.
+  assert.equal(fs.readFileSync(file, 'utf8'), SOURCE);
+  assert.equal(attempts, 1);
+  await app.act(async () => releaseRetry());
+  await waitForSave(
+    app,
+    () => __panels.StructurePanel.pageState.save.tag === 'clean',
+    'the released retry finishes saving',
+  );
   assert.equal(fs.readFileSync(file, 'utf8'), SOURCE.replace('Before', 'After'));
   assert.equal(attempts, 2, 'the same edit is retried after the lock releases');
   assert.equal(__panels.StructurePanel.pageState.save.tag, 'clean');
@@ -89,7 +124,11 @@ test('a failed save stays visible and Retry saves the retained edit', async (con
     return rename(from, to);
   });
   await gesture(app, async () => __panels.PropsPanel.onSetContent('After'));
-  await app.act(() => new Promise((resolve) => setTimeout(resolve, 1200)));
+  await waitForSave(
+    app,
+    () => __panels.StructurePanel.pageState.save.tag === 'failed',
+    'exhausted retries expose the failed save',
+  );
   assert.equal(attempts, 4, 'automatic retries have a fixed bound');
   assert.equal(fs.readFileSync(file, 'utf8'), SOURCE);
   assert.equal(__panels.StructurePanel.pageState.save.tag, 'failed');
@@ -105,8 +144,12 @@ test('a failed save stays visible and Retry saves the retained edit', async (con
   assert.ok(retry);
   await app.act(async () => {
     retry.click();
-    await new Promise((resolve) => setTimeout(resolve, 100));
   });
+  await waitForSave(
+    app,
+    () => __panels.StructurePanel.pageState.save.tag === 'clean',
+    'manual retry finishes saving',
+  );
   assert.equal(fs.readFileSync(file, 'utf8'), SOURCE.replace('Before', 'After'));
   assert.equal(__panels.StructurePanel.pageState.save.tag, 'clean');
   assert.doesNotMatch(document.body.textContent, /has not been saved/);
